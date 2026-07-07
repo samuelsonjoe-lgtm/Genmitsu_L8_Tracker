@@ -29,10 +29,11 @@
 | **Thickness-aware Library matching** | Library can surface the closest saved profiles for a material and thickness query |
 | **Undo delete** | Log, Library, Projects, and Test Grid deletes now show a short restore window |
 | **Test grid CSV export** | Recorded Test Grid cells can be exported with grid metadata, power/speed, rating, best flag, and notes |
+| **Machine profile selector** | Reference view defaults to L8 20W and can switch to L8 40W without showing both tables at once |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
-**Machine profile selector** — default to the user's 20W machine profile and keep 40W reference data available without cluttering the main Reference view.
+**Tag system** — add first-class tags for Projects/Library filtering without expanding the app into a full inventory system.
 
 ### 1.3 Still open from the original backlog
 
@@ -48,7 +49,7 @@
 | Test grid export (CSV / printable HTML) | Medium | Done — CSV export is available from grid detail |
 | Unit conversion on in↔mm toggle | Medium | Done — converts stored unit-bearing fields when toggled |
 | Undo delete (toast) | Medium | Done |
-| Machine profile selector (20W default, hide 40W table) | High | Not started |
+| Machine profile selector (20W default, hide 40W table) | High | Done |
 
 ### 1.4 Lower priority / later
 

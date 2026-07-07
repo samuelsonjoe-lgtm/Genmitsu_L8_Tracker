@@ -18,7 +18,7 @@ The app has five views:
 - **Log** - a quick-entry record of every job you run: material, thickness, job type (cut/engrave), power (with optional min/max ramp), speed, passes, line interval, air assist + pressure, overscan %, kerf offset, dither mode, focus height/material Z-offset, software used, settings file name, a 1-5 result rating, and free-form notes. Searchable, sortable, and filterable by material.
 - **Library** - a curated set of "best known settings" per material/thickness, promoted from log entries once you've dialed something in. This is the searchable/sortable reference sheet you check before starting a new job.
 - **Test Grids** - a power x speed test matrix planner for dialing in a brand-new material: set ranges and step sizes, get a grid, then click each cell to record a rating/notes and mark the winning combination. Any cell can be promoted straight to the Library, and recorded results can be exported as CSV.
-- **Reference** - official Genmitsu L8 20W and 40W speed/power starting points from SainSmart's resource center, plus focus, safety, maintenance, offline, and software notes pulled from the user manual. Any reference setting can be copied into the Library and tuned from there.
+- **Reference** - official Genmitsu L8 20W and 40W speed/power starting points from SainSmart's resource center, selected by machine profile, plus focus, safety, maintenance, offline, and software notes pulled from the user manual. Any reference setting can be copied into the Library and tuned from there.
 - **Projects** - a searchable/sortable gallery of finished pieces with a saved settings snapshot, tags, notes, and a copy-to-log action for repeating a past project.
 
 Other features:

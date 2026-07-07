@@ -286,15 +286,16 @@
             projectSearch: '',
             projectTagFilter: 'all',
             focusMaterialMm: '',
-            focusJobType: 'engrave'
+            focusJobType: 'engrave',
+            machineProfile: data.machineProfile || '20W'
           };
         }
       } catch (_) {}
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave' };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W' };
     }
     function persist() {
-      const { entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit } = state;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit }));
+      const { entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile } = state;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile }));
     }
     function backupObject() {
       return { schemaVersion: SCHEMA_VERSION, entries: state.entries, profiles: state.profiles, grids: state.grids, projects: state.projects, unit: state.unit };
@@ -571,14 +572,19 @@
     }
     function renderReference() {
       const focusText = focusSuggestion(state.focusJobType, num(state.focusMaterialMm, NaN));
+      const activeRows = state.machineProfile === '40W' ? reference40w : reference20w;
       return `
         <div class="toolbar" style="margin-bottom:14px">
           <div>
             <b>Reference tools</b>
-            <div class="small muted">Manual link and 20W fixed-focus helper for quick setup checks.</div>
+            <div class="small muted">Machine-specific starting points, manual link, and 20W fixed-focus helper.</div>
           </div>
-          <div class="row">
-            <a href="docs/L8_Engraving_Speed_Power_Reference_Chart_20W.pdf" target="_blank" rel="noopener"><button type="button">Open 20W Chart</button></a>
+          <div class="row" style="justify-content:flex-end">
+            <select id="machineProfile" style="width:150px">
+              <option value="20W" ${state.machineProfile === '20W' ? 'selected' : ''}>L8 20W</option>
+              <option value="40W" ${state.machineProfile === '40W' ? 'selected' : ''}>L8 40W</option>
+            </select>
+            ${state.machineProfile === '20W' ? '<a href="docs/L8_Engraving_Speed_Power_Reference_Chart_20W.pdf" target="_blank" rel="noopener"><button type="button">Open 20W Chart</button></a>' : ''}
             <a href="docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf" target="_blank" rel="noopener"><button type="button">Open Manual</button></a>
           </div>
         </div>
@@ -605,8 +611,7 @@
           <b>Official values are starting points.</b>
           <span class="small">Material color, glue, moisture, flatness, focus, lens cleanliness, and airflow can change results. Copy promising rows into Library and tune from there.</span>
         </div>
-        ${referenceTable('20W official starting points', reference20w, '20W')}
-        <details style="margin-top:16px"><summary><b>40W official starting points</b></summary>${referenceTable('', reference40w, '40W')}</details>
+        ${referenceTable(`${state.machineProfile} official starting points`, activeRows, state.machineProfile)}
       `;
     }
     function renderProjects() {
@@ -796,6 +801,8 @@
       if (focusJobType) focusJobType.onchange = e => { state.focusJobType = e.target.value; render(); };
       const focusMaterialMm = document.getElementById('focusMaterialMm');
       if (focusMaterialMm) focusMaterialMm.onchange = e => { state.focusMaterialMm = e.target.value; render(); };
+      const machineProfile = document.getElementById('machineProfile');
+      if (machineProfile) machineProfile.onchange = e => { state.machineProfile = e.target.value; persist(); render(); };
       const projectSearch = document.getElementById('projectSearch');
       if (projectSearch) projectSearch.onchange = e => { state.projectSearch = e.target.value; render(); };
       const projectTagFilter = document.getElementById('projectTagFilter');
