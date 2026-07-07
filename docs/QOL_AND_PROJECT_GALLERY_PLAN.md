@@ -27,10 +27,11 @@
 | **Full local 20W chart** | `docs/L8_Engraving_Speed_Power_Reference_Chart_20W.pdf` is linked from Reference and its rows are reflected in the 20W table |
 | **Unit conversion toggle** | Switching between `in` and `mm` converts stored thickness, focus, and material-height/Z-offset values |
 | **Thickness-aware Library matching** | Library can surface the closest saved profiles for a material and thickness query |
+| **Undo delete** | Log, Library, Projects, and Test Grid deletes now show a short restore window |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
-**Undo delete** — replace immediate permanent deletes with a short restore window so accidental taps are recoverable.
+**Test grid export** — add a CSV or printable export path for recorded power/speed matrix results.
 
 ### 1.3 Still open from the original backlog
 
@@ -43,9 +44,9 @@
 | True desktop packaging (Tauri) — app-data file persistence, auto-backups | High (blocks real durability) | Not started; still on `localStorage` |
 | Thickness-aware Library matching ("what do I use for 3mm birch?") | Medium | Done — Library has a closest saved setting helper |
 | Tag system (`gift`, `commission`, `failed`, etc.) | Medium | Not started — would also benefit the Project Gallery below |
-| Test grid export (CSV / printable HTML) | Medium | Not started |
+| Test grid export (CSV / printable HTML) | Medium | Up next — see §1.2 |
 | Unit conversion on in↔mm toggle | Medium | Done — converts stored unit-bearing fields when toggled |
-| Undo delete (toast) | Medium | Not started |
+| Undo delete (toast) | Medium | Done |
 | Machine profile selector (20W default, hide 40W table) | High | Not started |
 
 ### 1.4 Lower priority / later

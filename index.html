@@ -99,6 +99,9 @@
     .stars { display: flex; gap: 6px; }
     .star { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line); display: grid; place-items: center; font-weight: 800; background: #f3f5f8; cursor: pointer; }
     .star.on { background: var(--amber); color: white; border-color: var(--amber); }
+    .toast { position: fixed; right: 18px; bottom: 18px; z-index: 20; display: none; align-items: center; gap: 12px; max-width: 420px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: #111827; color: white; box-shadow: var(--shadow); }
+    .toast.show { display: flex; }
+    .toast button { background: white; color: #111827; border-color: white; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 720px; }
     th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
     th { background: #f3f5f8; color: #475467; font-size: 12px; text-transform: uppercase; }
@@ -117,7 +120,7 @@
     @media print {
       body { background: white; color: #111827; }
       .shell { max-width: none; padding: 0; }
-      .topbar .row, .tabs, .toolbar, .actions, .modal { display: none !important; }
+      .topbar .row, .tabs, .toolbar, .actions, .modal, .toast { display: none !important; }
       .brand { margin-bottom: 14px; }
       .mark { display: none; }
       .subtitle::after { content: " - Library print sheet"; }
@@ -157,6 +160,7 @@
   <div class="modal" id="projectModal"></div>
   <div class="modal" id="gridModal"></div>
   <div class="modal" id="cellModal"></div>
+  <div class="toast" id="undoToast"></div>
 
   <script>
   (() => {
@@ -254,6 +258,7 @@
     let editingEntryId = null;
     let editingProfileId = null;
     let editingProjectId = null;
+    let pendingUndo = null;
 
     function loadState() {
       try {
@@ -778,15 +783,15 @@
       if (delGrid) delGrid.onclick = deleteActiveGrid;
       document.querySelectorAll('[data-edit-entry]').forEach(b => b.onclick = () => openEntry(state.entries.find(e => e.id === b.dataset.editEntry)));
       document.querySelectorAll('[data-duplicate-entry]').forEach(b => b.onclick = () => duplicateEntry(b.dataset.duplicateEntry));
-      document.querySelectorAll('[data-delete-entry]').forEach(b => b.onclick = () => del('entries', b.dataset.deleteEntry, 'Delete this log entry?'));
+      document.querySelectorAll('[data-delete-entry]').forEach(b => b.onclick = () => del('entries', b.dataset.deleteEntry, 'Delete this log entry?', 'Log entry'));
       document.querySelectorAll('[data-promote-entry]').forEach(b => b.onclick = () => promoteEntry(b.dataset.promoteEntry));
       document.querySelectorAll('[data-project-entry]').forEach(b => b.onclick = () => projectFromEntry(b.dataset.projectEntry));
       document.querySelectorAll('[data-edit-profile]').forEach(b => b.onclick = () => openProfile(state.profiles.find(p => p.id === b.dataset.editProfile)));
       document.querySelectorAll('[data-duplicate-profile]').forEach(b => b.onclick = () => duplicateProfile(b.dataset.duplicateProfile));
-      document.querySelectorAll('[data-delete-profile]').forEach(b => b.onclick = () => del('profiles', b.dataset.deleteProfile, 'Remove this material from your library?'));
+      document.querySelectorAll('[data-delete-profile]').forEach(b => b.onclick = () => del('profiles', b.dataset.deleteProfile, 'Remove this material from your library?', 'Library profile'));
       document.querySelectorAll('[data-project-profile]').forEach(b => b.onclick = () => projectFromProfile(b.dataset.projectProfile));
       document.querySelectorAll('[data-edit-project]').forEach(b => b.onclick = () => openProject(state.projects.find(p => p.id === b.dataset.editProject)));
-      document.querySelectorAll('[data-delete-project]').forEach(b => b.onclick = () => del('projects', b.dataset.deleteProject, 'Delete this project?'));
+      document.querySelectorAll('[data-delete-project]').forEach(b => b.onclick = () => del('projects', b.dataset.deleteProject, 'Delete this project?', 'Project'));
       document.querySelectorAll('[data-project-to-entry]').forEach(b => b.onclick = () => projectToEntry(b.dataset.projectToEntry));
       document.querySelectorAll('[data-open-grid]').forEach(c => c.onclick = () => { activeGridId = c.dataset.openGrid; render(); });
       document.querySelectorAll('[data-cell]').forEach(c => c.onclick = () => openCell(c.dataset.cell));
@@ -1131,10 +1136,48 @@
       state.projects = mergeList(state.projects, data.projects);
       state.unit = data.unit || state.unit;
     }
-    function del(key, id, message) {
-      if (!confirm(message)) return;
-      state[key] = state[key].filter(x => x.id !== id);
-      persist(); render();
+    function hideUndoToast() {
+      const toast = document.getElementById('undoToast');
+      toast.classList.remove('show');
+      toast.innerHTML = '';
+      if (pendingUndo && pendingUndo.timer) clearTimeout(pendingUndo.timer);
+      pendingUndo = null;
+    }
+    function showUndoToast(label) {
+      const toast = document.getElementById('undoToast');
+      toast.innerHTML = `<span>${esc(label)} deleted.</span><button id="undoDelete" type="button">Undo</button>`;
+      toast.classList.add('show');
+      document.getElementById('undoDelete').onclick = restoreDeletedItem;
+      pendingUndo.timer = setTimeout(hideUndoToast, 8000);
+    }
+    function restoreDeletedItem() {
+      if (!pendingUndo) return;
+      const undo = pendingUndo;
+      if (undo.timer) clearTimeout(undo.timer);
+      pendingUndo = null;
+      state[undo.key].splice(Math.min(undo.index, state[undo.key].length), 0, undo.item);
+      if (undo.key === 'grids' && state.activeTab === 'grids') activeGridId = undo.item.id;
+      persist();
+      render();
+      const toast = document.getElementById('undoToast');
+      toast.innerHTML = `<span>${esc(undo.label)} restored.</span>`;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+        toast.innerHTML = '';
+      }, 2200);
+    }
+    function del(key, id, message, label = 'Item') {
+      if (!confirm(`${message} You can undo for a few seconds.`)) return;
+      hideUndoToast();
+      const index = state[key].findIndex(x => x.id === id);
+      if (index < 0) return;
+      const [item] = state[key].splice(index, 1);
+      pendingUndo = { key, index, item, label };
+      if (key === 'grids' && activeGridId === id) activeGridId = null;
+      persist();
+      render();
+      showUndoToast(label);
     }
     function promoteEntry(id) {
       const e = state.entries.find(x => x.id === id);
@@ -1176,9 +1219,7 @@
       });
     }
     function deleteActiveGrid() {
-      if (!confirm('Delete this test grid?')) return;
-      state.grids = state.grids.filter(g => g.id !== activeGridId);
-      activeGridId = null; persist(); render();
+      del('grids', activeGridId, 'Delete this test grid?', 'Test grid');
     }
     document.getElementById('unitIn').onclick = () => setUnit('in');
     document.getElementById('unitMm').onclick = () => setUnit('mm');

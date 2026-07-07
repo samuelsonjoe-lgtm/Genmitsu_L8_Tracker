@@ -28,6 +28,7 @@ Other features:
 - Material autocomplete includes both your saved materials and official SainSmart reference materials.
 - Library includes a closest-saved-setting helper for matching material and thickness.
 - Keyboard shortcuts: `Ctrl+N` creates a new item in the active view, `Ctrl+S` saves the open form, `Esc` closes modals or exits grid detail, and `/` focuses the active search field.
+- Delete actions show a short undo window before the removal becomes final.
 - Duplicate Log entries and Library profiles for quick tweak-and-resave runs.
 - Print a simplified Library cheat sheet for shop use.
 - All data persists automatically in the browser (localStorage) between sessions.
