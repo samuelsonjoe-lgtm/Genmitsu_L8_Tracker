@@ -26,10 +26,11 @@
 | **Keyboard shortcuts** | `Ctrl+N`, `Ctrl+S`, `Esc`, and `/` cover new-item, save-form, close/back, and search-focus flows |
 | **Full local 20W chart** | `docs/L8_Engraving_Speed_Power_Reference_Chart_20W.pdf` is linked from Reference and its rows are reflected in the 20W table |
 | **Unit conversion toggle** | Switching between `in` and `mm` converts stored thickness, focus, and material-height/Z-offset values |
+| **Thickness-aware Library matching** | Library can surface the closest saved profiles for a material and thickness query |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
-**Thickness-aware Library matching** — surface likely Library matches for a material/thickness instead of making the user manually compare every saved setting.
+**Undo delete** — replace immediate permanent deletes with a short restore window so accidental taps are recoverable.
 
 ### 1.3 Still open from the original backlog
 
@@ -40,7 +41,7 @@
 | Keyboard shortcuts (`Ctrl+N`, `Ctrl+S`, `Esc`, `/`) | High | Done |
 | Version/schema stamp in exported JSON (`schemaVersion`) | Medium | Done — `schemaVersion: 2` is now included in storage/export with `projects: []` |
 | True desktop packaging (Tauri) — app-data file persistence, auto-backups | High (blocks real durability) | Not started; still on `localStorage` |
-| Thickness-aware Library matching ("what do I use for 3mm birch?") | Medium | Not started |
+| Thickness-aware Library matching ("what do I use for 3mm birch?") | Medium | Done — Library has a closest saved setting helper |
 | Tag system (`gift`, `commission`, `failed`, etc.) | Medium | Not started — would also benefit the Project Gallery below |
 | Test grid export (CSV / printable HTML) | Medium | Not started |
 | Unit conversion on in↔mm toggle | Medium | Done — converts stored unit-bearing fields when toggled |

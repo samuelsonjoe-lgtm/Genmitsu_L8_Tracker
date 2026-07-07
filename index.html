@@ -272,6 +272,9 @@
             materialFilter: 'all',
             librarySearch: '',
             libraryFilter: 'all',
+            libraryMatchMaterial: data.libraryMatchMaterial || '',
+            libraryMatchThickness: data.libraryMatchThickness || '',
+            libraryMatchUnit: data.libraryMatchUnit || data.unit || 'in',
             entrySort: data.entrySort || 'date-desc',
             librarySort: data.librarySort || 'material-asc',
             projectSort: data.projectSort || 'date-desc',
@@ -282,11 +285,11 @@
           };
         }
       } catch (_) {}
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave' };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave' };
     }
     function persist() {
-      const { entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort } = state;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort }));
+      const { entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit } = state;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit }));
     }
     function backupObject() {
       return { schemaVersion: SCHEMA_VERSION, entries: state.entries, profiles: state.profiles, grids: state.grids, projects: state.projects, unit: state.unit };
@@ -377,6 +380,30 @@
     }
     function compareText(a, b) {
       return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
+    }
+    function normalizeText(value) {
+      return String(value || '').trim().toLowerCase();
+    }
+    function thicknessIn(value, fromUnit, toUnit) {
+      if (value === '' || value == null) return null;
+      const converted = convertUnitValue(value, fromUnit || state.unit, toUnit || state.unit);
+      const n = Number(converted);
+      return Number.isFinite(n) ? n : null;
+    }
+    function libraryMatches() {
+      const material = normalizeText(state.libraryMatchMaterial);
+      const targetThickness = thicknessIn(state.libraryMatchThickness, state.libraryMatchUnit, state.unit);
+      if (!material && targetThickness == null) return [];
+      return state.profiles.map(profile => {
+        const profileThickness = thicknessIn(profile.thicknessValue, profile.thicknessUnit, state.unit);
+        const materialName = normalizeText(profile.material);
+        const similarMaterial = material && (materialName.includes(material) || material.includes(materialName));
+        const materialScore = material && materialName === material ? 0 : similarMaterial ? 1 : material ? 3 : 0;
+        const thicknessDelta = targetThickness == null || profileThickness == null ? null : Math.abs(profileThickness - targetThickness);
+        return { profile, materialScore, thicknessDelta };
+      }).filter(match => match.materialScore < 3 || !material)
+        .sort((a, b) => a.materialScore - b.materialScore || (a.thicknessDelta ?? Infinity) - (b.thicknessDelta ?? Infinity) || compareText(a.profile.material, b.profile.material))
+        .slice(0, 4);
     }
     function sortBy(list, mode) {
       const sorted = [...list];
@@ -484,6 +511,7 @@
     function renderLibrary() {
       const materials = libraryMaterialNames();
       const q = state.librarySearch.toLowerCase();
+      const matches = libraryMatches();
       const filtered = sortBy(state.profiles.filter(p => {
         const materialOk = state.libraryFilter === 'all' || p.material === state.libraryFilter;
         const hay = [p.material, p.notes, p.software, p.jobType, p.thicknessValue, p.thicknessUnit].join(' ').toLowerCase();
@@ -508,6 +536,20 @@
             </select>
           </div>
           <span class="pill">${filtered.length}/${state.profiles.length} shown</span>
+        </div>
+        <div class="panel" style="margin-bottom:14px">
+          <div class="toolbar">
+            <div>
+              <b>Find closest saved setting</b>
+              <div class="small muted">Match by material name and nearest saved thickness.</div>
+            </div>
+            <div class="row">
+              <input id="libraryMatchMaterial" placeholder="Material" value="${esc(state.libraryMatchMaterial)}" list="materials" style="width:190px">
+              <span class="unitrow" style="width:170px"><input id="libraryMatchThickness" type="number" step="any" min="0" placeholder="Thickness" value="${esc(state.libraryMatchThickness)}"><select id="libraryMatchUnit"><option ${state.libraryMatchUnit === 'in' ? 'selected' : ''}>in</option><option ${state.libraryMatchUnit === 'mm' ? 'selected' : ''}>mm</option></select></span>
+            </div>
+          </div>
+          ${matches.length ? `<div class="grid cards" style="margin-top:12px">${matches.map(matchCard).join('')}</div>` : `<div class="small muted" style="margin-top:10px">Enter a material and optional thickness to surface nearby Library profiles.</div>`}
+          <datalist id="materials">${autocompleteMaterialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
         </div>
         ${state.profiles.length ? (filtered.length ? `<div class="grid cards">${filtered.map(profileCard).join('')}</div>` : empty('No library matches', 'Adjust the search or material filter.')) : empty('Library is empty', 'Save tuned settings here as your go-to reference.')}
       `;
@@ -635,6 +677,16 @@
         <div class="actions"><button data-edit-profile="${p.id}">Edit</button><button data-duplicate-profile="${p.id}">Duplicate</button><button data-project-profile="${p.id}">Save as project</button><button class="danger" data-delete-profile="${p.id}">Delete</button></div>
       </article>`;
     }
+    function matchCard(match) {
+      const p = match.profile;
+      const delta = match.thicknessDelta == null ? 'thickness unknown' : `within ${roundUnitValue(match.thicknessDelta)}${state.unit}`;
+      const materialNote = match.materialScore === 0 ? 'exact material' : match.materialScore === 1 ? 'similar material' : 'nearest thickness';
+      return `<article class="card">
+        <div class="spread"><div><b>${esc(p.material)}</b><div class="small muted">${fmt(p.thicknessValue, p.thicknessUnit)} - ${esc(p.jobType)}</div></div><span class="pill">${esc(materialNote)}</span></div>
+        <div class="metrics">${metric('Power', powerLabel(p))}${metric('Speed', `${p.speed} mm/min`)}${metric('Passes', p.passes)}${metric('Delta', delta)}</div>
+        <div class="actions"><button data-edit-profile="${p.id}">Edit</button><button data-duplicate-profile="${p.id}">Duplicate</button><button data-project-profile="${p.id}">Save as project</button></div>
+      </article>`;
+    }
     function projectCard(p) {
       const s = p.settings || {};
       return `<article class="card">
@@ -692,6 +744,12 @@
       if (librarySearch) librarySearch.onchange = e => { state.librarySearch = e.target.value; render(); };
       const libraryFilter = document.getElementById('libraryFilter');
       if (libraryFilter) libraryFilter.onchange = e => { state.libraryFilter = e.target.value; render(); };
+      const libraryMatchMaterial = document.getElementById('libraryMatchMaterial');
+      if (libraryMatchMaterial) libraryMatchMaterial.onchange = e => { state.libraryMatchMaterial = e.target.value; persist(); render(); };
+      const libraryMatchThickness = document.getElementById('libraryMatchThickness');
+      if (libraryMatchThickness) libraryMatchThickness.onchange = e => { state.libraryMatchThickness = e.target.value; persist(); render(); };
+      const libraryMatchUnit = document.getElementById('libraryMatchUnit');
+      if (libraryMatchUnit) libraryMatchUnit.onchange = e => { state.libraryMatchUnit = e.target.value; persist(); render(); };
       const librarySort = document.getElementById('librarySort');
       if (librarySort) librarySort.onchange = e => { state.librarySort = e.target.value; persist(); render(); };
       const focusJobType = document.getElementById('focusJobType');
