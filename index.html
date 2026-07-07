@@ -75,6 +75,9 @@
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .spread { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
     .pill { border-radius: 999px; padding: 3px 8px; background: #eef1f5; color: #425166; font-size: 12px; font-weight: 700; }
+    .pill.good { background: #eef8f1; color: var(--green); }
+    .pill.warn { background: #fff4db; color: var(--amber); }
+    .pill.softbad { background: #fbeeee; color: var(--red); }
     .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
     .metric { border-radius: 7px; padding: 8px; background: #f3f6fa; }
     .metric b { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; }
@@ -679,6 +682,8 @@
             ${field('feePercent','Marketplace / payment fee %',p.feePercent,'number','min="0" step="0.01"')}
             <label>Fixed fee basis<select name="fixedFeeMode"><option value="order" ${p.fixedFeeMode === 'order' ? 'selected' : ''}>Per order</option><option value="perItem" ${p.fixedFeeMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
             ${field('fixedFee','Fixed fee',p.fixedFee,'number','min="0" step="0.01"')}
+            ${field('targetMargin','Target margin %',p.targetMargin,'number','min="0" step="0.01"')}
+            ${field('targetProfitPerItem','Target profit per item',p.targetProfitPerItem,'number','min="0" step="0.01"')}
             <label class="span2">Notes<textarea name="notes" rows="3">${esc(p.notes)}</textarea></label>
           </form>
           <div class="panel">
@@ -690,6 +695,9 @@
               <span class="pill" id="pricingQuantityPill">${pricingQuantityLabel(p)}</span>
             </div>
             <div id="pricingResults">${pricingResultsHtml(pricingTotals(p))}</div>
+            <div class="actions"><button id="copyPricingSummary" type="button">Copy summary</button></div>
+            <textarea id="pricingCopyFallback" rows="8" readonly style="display:none;margin-top:10px"></textarea>
+            <p class="small muted">Taxes, platform-specific rules, and shipping are only included if you enter them as costs or fees.</p>
           </div>
         </div>
       `;
@@ -698,7 +706,8 @@
       return {
         name: '', quantity: '1', salePrice: '', materialCostMode: 'total', materialCost: '',
         hardwareCost: '', packagingCost: '', laserMinutes: '', laborMinutes: '',
-        machineRate: '', laborRate: '', feePercent: '', fixedFeeMode: 'order', fixedFee: '', notes: ''
+        machineRate: '', laborRate: '', feePercent: '', fixedFeeMode: 'order', fixedFee: '',
+        targetMargin: '', targetProfitPerItem: '', notes: ''
       };
     }
     function pricingQuantity(p = state.pricing) {
@@ -717,9 +726,13 @@
       const amount = Number.isFinite(value) ? value : 0;
       return `${amount.toFixed(1)}%`;
     }
+    function priceSuggestionLabel(value) {
+      return Number.isFinite(value) ? money(value) : 'Not available';
+    }
     function pricingTotals(p = state.pricing) {
       const quantity = pricingQuantity(p);
       const revenue = quantity * num(p.salePrice);
+      const feeRate = Math.max(0, num(p.feePercent)) / 100;
       const materialInput = num(p.materialCost);
       const materialCost = p.materialCostMode === 'perItem' ? materialInput * quantity : materialInput;
       const hardwareCost = num(p.hardwareCost);
@@ -727,19 +740,40 @@
       const machineCost = num(p.laserMinutes) / 60 * num(p.machineRate);
       const laborCost = num(p.laborMinutes) / 60 * num(p.laborRate);
       const fixedFeeCost = p.fixedFeeMode === 'perItem' ? num(p.fixedFee) * quantity : num(p.fixedFee);
-      const feeCost = revenue * num(p.feePercent) / 100 + fixedFeeCost;
+      const feeCost = revenue * feeRate + fixedFeeCost;
       const directCost = materialCost + hardwareCost + packagingCost;
+      const baseCost = directCost + machineCost + laborCost + fixedFeeCost;
       const totalCost = directCost + machineCost + laborCost + feeCost;
       const profit = revenue - totalCost;
+      const priceForProfit = targetProfit => {
+        const denominator = quantity * (1 - feeRate);
+        return denominator > 0 ? (baseCost + quantity * Math.max(0, targetProfit)) / denominator : NaN;
+      };
+      const priceForMargin = targetMargin => {
+        const denominator = quantity * (1 - feeRate - Math.max(0, targetMargin));
+        return denominator > 0 ? baseCost / denominator : NaN;
+      };
+      const targetMarginRate = Math.max(0, num(p.targetMargin)) / 100;
+      const targetProfitPerItem = Math.max(0, num(p.targetProfitPerItem));
       return {
         revenue, directCost, machineCost, laborCost, feeCost, totalCost, profit,
         profitPerItem: quantity ? profit / quantity : 0,
         margin: revenue ? profit / revenue * 100 : 0,
-        breakEvenPrice: quantity ? totalCost / quantity : 0
+        breakEvenPrice: priceForProfit(0),
+        targetMarginPrice: priceForMargin(targetMarginRate),
+        targetProfitPrice: priceForProfit(targetProfitPerItem)
       };
     }
+    function pricingStatus(t) {
+      const threshold = Math.max(1, Math.abs(t.revenue) * 0.02);
+      if (Math.abs(t.profit) <= threshold) return { label: 'Near break-even', tone: 'warn' };
+      if (t.profit > 0) return { label: 'Profitable estimate', tone: 'good' };
+      return { label: 'Below break-even', tone: 'softbad' };
+    }
     function pricingResultsHtml(t) {
+      const status = pricingStatus(t);
       return `
+        <div class="row" style="margin-top:12px"><span class="pill ${status.tone}">${esc(status.label)}</span></div>
         <div class="metrics" style="margin-top:12px">
           ${metric('Total revenue', money(t.revenue))}
           ${metric('Material / consumables / packaging', money(t.directCost))}
@@ -750,7 +784,9 @@
           ${metric('Profit total', money(t.profit))}
           ${metric('Profit per item', money(t.profitPerItem))}
           ${metric('Margin', percent(t.margin))}
-          ${metric('Break-even per item', money(t.breakEvenPrice))}
+          ${metric('Break-even per item', priceSuggestionLabel(t.breakEvenPrice))}
+          ${metric('Price for target margin', priceSuggestionLabel(t.targetMarginPrice))}
+          ${metric('Price for target profit', priceSuggestionLabel(t.targetProfitPrice))}
         </div>
       `;
     }
@@ -758,6 +794,50 @@
       const fd = new FormData(form);
       state.pricing = { ...pricingDefaults() };
       for (const [key, value] of fd.entries()) state.pricing[key] = value;
+    }
+    function pricingSummaryText(p = state.pricing) {
+      const t = pricingTotals(p);
+      const status = pricingStatus(t);
+      return [
+        `Pricing summary: ${p.name || 'Untitled project'}`,
+        `Quantity: ${pricingQuantity(p)}`,
+        `Sale price per item: ${money(num(p.salePrice))}`,
+        `Total revenue: ${money(t.revenue)}`,
+        `Direct costs: ${money(t.directCost)}`,
+        `Machine time cost: ${money(t.machineCost)}`,
+        `Labor cost: ${money(t.laborCost)}`,
+        `Fee cost: ${money(t.feeCost)}`,
+        `Total cost: ${money(t.totalCost)}`,
+        `Profit: ${money(t.profit)} (${money(t.profitPerItem)} per item)`,
+        `Margin: ${percent(t.margin)}`,
+        `Break-even price per item: ${priceSuggestionLabel(t.breakEvenPrice)}`,
+        `Suggested price for target margin: ${priceSuggestionLabel(t.targetMarginPrice)}`,
+        `Suggested price for target profit: ${priceSuggestionLabel(t.targetProfitPrice)}`,
+        `Status: ${status.label}`,
+        p.notes ? `Notes: ${p.notes}` : ''
+      ].filter(Boolean).join('\n');
+    }
+    function showPricingCopyFallback(text) {
+      const box = document.getElementById('pricingCopyFallback');
+      if (!box) return alert(text);
+      box.style.display = 'block';
+      box.value = text;
+      box.focus();
+      box.select();
+    }
+    function copyPricingSummary() {
+      const text = pricingSummaryText();
+      const button = document.getElementById('copyPricingSummary');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          if (!button) return;
+          const old = button.textContent;
+          button.textContent = 'Copied';
+          setTimeout(() => { button.textContent = old; }, 1800);
+        }).catch(() => showPricingCopyFallback(text));
+      } else {
+        showPricingCopyFallback(text);
+      }
     }
     function referenceTable(title, rows, watts) {
       return `
@@ -929,6 +1009,8 @@
           if (estimateName) estimateName.textContent = state.pricing.name || 'Unsaved calculator draft';
           const quantityPill = document.getElementById('pricingQuantityPill');
           if (quantityPill) quantityPill.textContent = pricingQuantityLabel(state.pricing);
+          const fallback = document.getElementById('pricingCopyFallback');
+          if (fallback && fallback.style.display !== 'none') fallback.value = pricingSummaryText();
         };
         pricingForm.onsubmit = e => e.preventDefault();
         pricingForm.oninput = refreshPricing;
@@ -936,6 +1018,8 @@
       }
       const resetPricing = document.getElementById('resetPricing');
       if (resetPricing) resetPricing.onclick = () => { state.pricing = pricingDefaults(); persist(); render(); };
+      const copyPricing = document.getElementById('copyPricingSummary');
+      if (copyPricing) copyPricing.onclick = copyPricingSummary;
       const newEntry = document.getElementById('newEntry');
       if (newEntry) newEntry.onclick = () => openEntry();
       const newProfile = document.getElementById('newProfile');

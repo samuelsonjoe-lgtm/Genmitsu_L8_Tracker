@@ -31,6 +31,7 @@
 | **Test grid CSV export** | Recorded Test Grid cells can be exported with grid metadata, power/speed, rating, best flag, and notes |
 | **Machine profile selector** | Reference view defaults to L8 20W and can switch to L8 40W without showing both tables at once |
 | **Pricing calculator MVP** | Dedicated Pricing view estimates total revenue, direct costs, machine/labor/fee costs, profit, margin, and break-even price without changing Project records |
+| **Pricing polish pack 1** | Pricing now includes target margin/profit sale-price helpers, a subtle profitability badge, a short assumptions note, and copyable plain-text summaries |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
@@ -161,7 +162,7 @@ This is the one part of the feature that's constrained by where the app is archi
 | 3 | Photo capture: file input → canvas downscale → base64 `dataUrl`, primary photo display on cards | Phase 2 |
 | 4 | Print/export niceties: include Projects in JSON export (already automatic once in `state`), optional single-project print view | Phase 2 |
 | 5 | (Later, post-Tauri) Swap `dataUrl` storage for on-disk file storage + one-time migration | Tauri desktop packaging from the standalone-offline audit |
-| 6 | Expense/sale tracking on Projects — see §2.7 | Project foundation from Phase 2 (extends the Project form/data model, no photos/Tauri dependency). A separate Pricing calculator MVP now exists as a scratch estimator, but saved per-project sale/cost fields remain open. |
+| 6 | Expense/sale tracking on Projects — see §2.7 | Project foundation from Phase 2 (extends the Project form/data model, no photos/Tauri dependency). The separate Pricing calculator now covers scratch estimates and target-price helpers, but saved per-project sale/cost fields remain open. |
 
 Phases 1–2 are now the working Projects foundation. Phases 3–4 need nothing beyond what the app already has today (still just `index.html` + `localStorage`). Phase 5 is explicitly gated on the desktop packaging work already planned in `docs/STANDALONE_OFFLINE_AUDIT.md`. Phase 6 can slot in any time now that the Projects form/cards exist — it doesn't need photos or Tauri.
 
