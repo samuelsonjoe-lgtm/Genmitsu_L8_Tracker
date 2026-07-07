@@ -255,6 +255,9 @@
             materialFilter: 'all',
             librarySearch: '',
             libraryFilter: 'all',
+            entrySort: data.entrySort || 'date-desc',
+            librarySort: data.librarySort || 'material-asc',
+            projectSort: data.projectSort || 'date-desc',
             projectSearch: '',
             projectTagFilter: 'all',
             focusMaterialMm: '',
@@ -262,11 +265,11 @@
           };
         }
       } catch (_) {}
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', librarySearch: '', libraryFilter: 'all', projectSearch: '', projectTagFilter: 'all', focusMaterialMm: '', focusJobType: 'engrave' };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave' };
     }
     function persist() {
-      const { entries, profiles, grids, projects, unit } = state;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit }));
+      const { entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort } = state;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort }));
     }
     function backupObject() {
       return { schemaVersion: SCHEMA_VERSION, entries: state.entries, profiles: state.profiles, grids: state.grids, projects: state.projects, unit: state.unit };
@@ -296,6 +299,22 @@
     }
     function tagString(tags) {
       return (tags || []).join(', ');
+    }
+    function compareText(a, b) {
+      return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
+    }
+    function sortBy(list, mode) {
+      const sorted = [...list];
+      sorted.sort((a, b) => {
+        if (mode === 'date-asc') return compareText(a.date || a.dateCreated, b.date || b.dateCreated) || compareText(a.material || a.name, b.material || b.name);
+        if (mode === 'date-desc') return compareText(b.date || b.dateCreated, a.date || a.dateCreated) || compareText(a.material || a.name, b.material || b.name);
+        if (mode === 'material-asc') return compareText(a.material, b.material) || compareText(a.thicknessValue, b.thicknessValue) || compareText(a.name || a.date, b.name || b.date);
+        if (mode === 'rating-desc') return (Number(b.rating) || 0) - (Number(a.rating) || 0) || compareText(a.material || a.name, b.material || b.name);
+        if (mode === 'speed-asc') return (Number(a.speed || a.settings?.speed) || 0) - (Number(b.speed || b.settings?.speed) || 0) || compareText(a.material || a.name, b.material || b.name);
+        if (mode === 'name-asc') return compareText(a.name || a.material, b.name || b.material);
+        return 0;
+      });
+      return sorted;
     }
     function settingsFromSetting(o) {
       return {
@@ -355,11 +374,11 @@
     function renderLog() {
       const materials = materialNames();
       const q = state.search.toLowerCase();
-      const filtered = state.entries.filter(e => {
+      const filtered = sortBy(state.entries.filter(e => {
         const materialOk = state.materialFilter === 'all' || e.material === state.materialFilter;
         const hay = [e.material, e.notes, e.software, e.settingsFile].join(' ').toLowerCase();
         return materialOk && (!q || hay.includes(q));
-      });
+      }), state.entrySort);
       return `
         <div class="grid stats">
           ${stat('Entries logged', state.entries.length, 'blue')}
@@ -374,6 +393,13 @@
               <option value="all">All materials</option>
               ${materials.map(m => `<option ${state.materialFilter === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}
             </select>
+            <select id="entrySort" style="max-width:190px">
+              <option value="date-desc" ${state.entrySort === 'date-desc' ? 'selected' : ''}>Newest first</option>
+              <option value="date-asc" ${state.entrySort === 'date-asc' ? 'selected' : ''}>Oldest first</option>
+              <option value="material-asc" ${state.entrySort === 'material-asc' ? 'selected' : ''}>Material A-Z</option>
+              <option value="rating-desc" ${state.entrySort === 'rating-desc' ? 'selected' : ''}>Rating high-low</option>
+              <option value="speed-asc" ${state.entrySort === 'speed-asc' ? 'selected' : ''}>Speed low-high</option>
+            </select>
           </div>
           <button class="primary" id="newEntry">New Entry</button>
         </div>
@@ -383,11 +409,11 @@
     function renderLibrary() {
       const materials = libraryMaterialNames();
       const q = state.librarySearch.toLowerCase();
-      const filtered = state.profiles.filter(p => {
+      const filtered = sortBy(state.profiles.filter(p => {
         const materialOk = state.libraryFilter === 'all' || p.material === state.libraryFilter;
         const hay = [p.material, p.notes, p.software, p.jobType, p.thicknessValue, p.thicknessUnit].join(' ').toLowerCase();
         return materialOk && (!q || hay.includes(q));
-      });
+      }), state.librarySort);
       return `
         <div class="toolbar" style="margin-bottom:14px">
           <div class="muted">Curated best-known settings per material. Promote from a log entry, grid cell, or reference row.</div>
@@ -399,6 +425,11 @@
             <select id="libraryFilter" style="max-width:220px">
               <option value="all">All library materials</option>
               ${materials.map(m => `<option ${state.libraryFilter === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}
+            </select>
+            <select id="librarySort" style="max-width:190px">
+              <option value="material-asc" ${state.librarySort === 'material-asc' ? 'selected' : ''}>Material A-Z</option>
+              <option value="rating-desc" ${state.librarySort === 'rating-desc' ? 'selected' : ''}>Rating high-low</option>
+              <option value="speed-asc" ${state.librarySort === 'speed-asc' ? 'selected' : ''}>Speed low-high</option>
             </select>
           </div>
           <span class="pill">${filtered.length}/${state.profiles.length} shown</span>
@@ -456,11 +487,11 @@
     function renderProjects() {
       const tags = projectTags();
       const q = state.projectSearch.toLowerCase();
-      const filtered = state.projects.filter(p => {
+      const filtered = sortBy(state.projects.filter(p => {
         const tagOk = state.projectTagFilter === 'all' || (p.tags || []).includes(state.projectTagFilter);
         const hay = [p.name, p.material, p.notes, ...(p.tags || [])].join(' ').toLowerCase();
         return tagOk && (!q || hay.includes(q));
-      });
+      }), state.projectSort);
       return `
         <div class="toolbar" style="margin-bottom:14px">
           <div>
@@ -475,6 +506,13 @@
             <select id="projectTagFilter" style="max-width:220px">
               <option value="all">All tags</option>
               ${tags.map(t => `<option ${state.projectTagFilter === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}
+            </select>
+            <select id="projectSort" style="max-width:190px">
+              <option value="date-desc" ${state.projectSort === 'date-desc' ? 'selected' : ''}>Newest first</option>
+              <option value="date-asc" ${state.projectSort === 'date-asc' ? 'selected' : ''}>Oldest first</option>
+              <option value="name-asc" ${state.projectSort === 'name-asc' ? 'selected' : ''}>Name A-Z</option>
+              <option value="material-asc" ${state.projectSort === 'material-asc' ? 'selected' : ''}>Material A-Z</option>
+              <option value="rating-desc" ${state.projectSort === 'rating-desc' ? 'selected' : ''}>Rating high-low</option>
             </select>
           </div>
           <span class="pill">${filtered.length}/${state.projects.length} shown</span>
@@ -570,10 +608,14 @@
       if (search) search.oninput = e => { state.search = e.target.value; render(); };
       const filter = document.getElementById('materialFilter');
       if (filter) filter.onchange = e => { state.materialFilter = e.target.value; render(); };
+      const entrySort = document.getElementById('entrySort');
+      if (entrySort) entrySort.onchange = e => { state.entrySort = e.target.value; persist(); render(); };
       const librarySearch = document.getElementById('librarySearch');
       if (librarySearch) librarySearch.onchange = e => { state.librarySearch = e.target.value; render(); };
       const libraryFilter = document.getElementById('libraryFilter');
       if (libraryFilter) libraryFilter.onchange = e => { state.libraryFilter = e.target.value; render(); };
+      const librarySort = document.getElementById('librarySort');
+      if (librarySort) librarySort.onchange = e => { state.librarySort = e.target.value; persist(); render(); };
       const focusJobType = document.getElementById('focusJobType');
       if (focusJobType) focusJobType.onchange = e => { state.focusJobType = e.target.value; render(); };
       const focusMaterialMm = document.getElementById('focusMaterialMm');
@@ -582,6 +624,8 @@
       if (projectSearch) projectSearch.onchange = e => { state.projectSearch = e.target.value; render(); };
       const projectTagFilter = document.getElementById('projectTagFilter');
       if (projectTagFilter) projectTagFilter.onchange = e => { state.projectTagFilter = e.target.value; render(); };
+      const projectSort = document.getElementById('projectSort');
+      if (projectSort) projectSort.onchange = e => { state.projectSort = e.target.value; persist(); render(); };
       const newEntry = document.getElementById('newEntry');
       if (newEntry) newEntry.onclick = () => openEntry();
       const newProfile = document.getElementById('newProfile');

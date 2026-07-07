@@ -21,16 +21,17 @@
 | **Duplicate entry button** | Clone a Log entry or Library profile into a new draft with the same settings, ready for a quick tweak-and-resave (`e481745`) |
 | **Print-friendly Library view** | Print Library button + dedicated print stylesheet renders a clean shop cheat sheet (`e481745`) |
 | **Import merge mode** | Import now prompts: OK = merge into current data by `id`, Cancel = replace everything (with a second confirmation) (`e481745`) |
+| **Sort controls** | Log, Library, and Projects now have sort dropdowns with locally remembered preferences |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
-**Sort controls** for Log, Library, and Projects (once the Projects tab exists) — newest-first for Log, by material/rating for Library. Low-risk, high-payoff next bite.
+**Reference-seeded material autocomplete** — fold the official SainSmart reference rows into the existing material datalist so known manual materials appear before the user has logged them.
 
 ### 1.3 Still open from the original backlog
 
 | Item | Priority (orig. audit) | Status |
 |------|------------------------|--------|
-| Sort options (Log by date, Library by material/rating) | High | Up next — see §1.2 |
+| Sort options (Log by date, Library by material/rating) | High | Done — Log, Library, and Projects have dropdown controls |
 | Material presets/autocomplete seeded from the **Reference** table specifically | High | Partial — datalist exists but only draws from Log/Library, not the SainSmart reference rows |
 | Keyboard shortcuts (`Ctrl+N`, `Ctrl+S`, `Esc`, `/`) | High | Not started |
 | Version/schema stamp in exported JSON (`schemaVersion`) | Medium | Done — `schemaVersion: 2` is now included in storage/export with `projects: []` |
@@ -147,7 +148,7 @@ This is the one part of the feature that's constrained by where the app is archi
 | Phase | Work | Depends on |
 |-------|------|------------|
 | 1 | Data model + `schemaVersion: 2`, `projects: []` added to state/load/save, migration for old exports (missing `projects`/`schemaVersion` defaults to `[]`/`1`) | Done in `d73220f` |
-| 2 | Projects tab: card grid, search/filter, create/edit/delete, "Save as Project" from Log & Library, "Copy to Log" from Projects | Mostly done in `d73220f`; shared sort controls still open |
+| 2 | Projects tab: card grid, search/filter/sort, create/edit/delete, "Save as Project" from Log & Library, "Copy to Log" from Projects | Done across `d73220f` and the sort-control follow-up |
 | 3 | Photo capture: file input → canvas downscale → base64 `dataUrl`, primary photo display on cards | Phase 2 |
 | 4 | Print/export niceties: include Projects in JSON export (already automatic once in `state`), optional single-project print view | Phase 2 |
 | 5 | (Later, post-Tauri) Swap `dataUrl` storage for on-disk file storage + one-time migration | Tauri desktop packaging from the standalone-offline audit |
