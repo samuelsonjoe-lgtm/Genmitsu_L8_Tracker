@@ -171,7 +171,8 @@
       ['library', 'Library'],
       ['grids', 'Test Grids'],
       ['reference', 'Reference'],
-      ['projects', 'Projects']
+      ['projects', 'Projects'],
+      ['pricing', 'Pricing']
     ];
     const reference20w = [
       ['MDF board','engrave',0.1,60,30000,1,''],
@@ -287,15 +288,16 @@
             projectTagFilter: 'all',
             focusMaterialMm: '',
             focusJobType: 'engrave',
-            machineProfile: data.machineProfile || '20W'
+            machineProfile: data.machineProfile || '20W',
+            pricing: { ...pricingDefaults(), ...(data.pricing || {}) }
           };
         }
       } catch (_) {}
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W' };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults() };
     }
     function persist() {
-      const { entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile } = state;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile }));
+      const { entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing } = state;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing }));
     }
     function backupObject() {
       return { schemaVersion: SCHEMA_VERSION, entries: state.entries, profiles: state.profiles, grids: state.grids, projects: state.projects, unit: state.unit };
@@ -474,6 +476,7 @@
       if (state.activeTab === 'grids') root.innerHTML = renderGrids();
       if (state.activeTab === 'reference') root.innerHTML = renderReference();
       if (state.activeTab === 'projects') root.innerHTML = renderProjects();
+      if (state.activeTab === 'pricing') root.innerHTML = renderPricing();
       bindPage();
     }
     function renderTabs() {
@@ -650,6 +653,112 @@
         ${state.projects.length ? (filtered.length ? `<div class="grid cards">${filtered.map(projectCard).join('')}</div>` : empty('No project matches', 'Adjust the search or tag filter.')) : empty('No projects yet', 'Save a finished piece here with its settings snapshot.')}
       `;
     }
+    function renderPricing() {
+      const p = state.pricing || pricingDefaults();
+      return `
+        <div class="toolbar" style="margin-bottom:14px">
+          <div>
+            <b>Pricing calculator</b>
+            <div class="small muted">Quick project estimate for revenue, costs, profit, margin, and break-even price.</div>
+          </div>
+          <button id="resetPricing" type="button">Reset</button>
+        </div>
+        <div class="grid refgrid">
+          <form id="pricingForm" class="panel formgrid">
+            <label class="span2">Project / item name<input name="name" value="${esc(p.name)}" placeholder="Walnut coaster set"></label>
+            ${field('quantity','Quantity',p.quantity,'number','min="0" step="1"')}
+            ${field('salePrice','Sale price per item',p.salePrice,'number','min="0" step="0.01"')}
+            <label>Material cost basis<select name="materialCostMode"><option value="total" ${p.materialCostMode === 'total' ? 'selected' : ''}>Total</option><option value="perItem" ${p.materialCostMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
+            ${field('materialCost','Material cost',p.materialCost,'number','min="0" step="0.01"')}
+            ${field('hardwareCost','Hardware / consumables cost',p.hardwareCost,'number','min="0" step="0.01"')}
+            ${field('packagingCost','Packaging cost',p.packagingCost,'number','min="0" step="0.01"')}
+            ${field('laserMinutes','Laser / job time, minutes',p.laserMinutes,'number','min="0" step="0.1"')}
+            ${field('laborMinutes','Labor time, minutes',p.laborMinutes,'number','min="0" step="0.1"')}
+            ${field('machineRate','Machine rate per hour',p.machineRate,'number','min="0" step="0.01"')}
+            ${field('laborRate','Labor rate per hour',p.laborRate,'number','min="0" step="0.01"')}
+            ${field('feePercent','Marketplace / payment fee %',p.feePercent,'number','min="0" step="0.01"')}
+            <label>Fixed fee basis<select name="fixedFeeMode"><option value="order" ${p.fixedFeeMode === 'order' ? 'selected' : ''}>Per order</option><option value="perItem" ${p.fixedFeeMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
+            ${field('fixedFee','Fixed fee',p.fixedFee,'number','min="0" step="0.01"')}
+            <label class="span2">Notes<textarea name="notes" rows="3">${esc(p.notes)}</textarea></label>
+          </form>
+          <div class="panel">
+            <div class="spread">
+              <div>
+                <b>Estimate</b>
+                <div class="small muted" id="pricingEstimateName">${esc(p.name || 'Unsaved calculator draft')}</div>
+              </div>
+              <span class="pill" id="pricingQuantityPill">${pricingQuantityLabel(p)}</span>
+            </div>
+            <div id="pricingResults">${pricingResultsHtml(pricingTotals(p))}</div>
+          </div>
+        </div>
+      `;
+    }
+    function pricingDefaults() {
+      return {
+        name: '', quantity: '1', salePrice: '', materialCostMode: 'total', materialCost: '',
+        hardwareCost: '', packagingCost: '', laserMinutes: '', laborMinutes: '',
+        machineRate: '', laborRate: '', feePercent: '', fixedFeeMode: 'order', fixedFee: '', notes: ''
+      };
+    }
+    function pricingQuantity(p = state.pricing) {
+      return Math.max(0, Math.round(num(p.quantity, 0)));
+    }
+    function pricingQuantityLabel(p = state.pricing) {
+      const quantity = pricingQuantity(p);
+      return `${quantity} item${quantity === 1 ? '' : 's'}`;
+    }
+    function money(value) {
+      const amount = Number.isFinite(value) ? value : 0;
+      const sign = amount < 0 ? '-' : '';
+      return `${sign}$${Math.abs(amount).toFixed(2)}`;
+    }
+    function percent(value) {
+      const amount = Number.isFinite(value) ? value : 0;
+      return `${amount.toFixed(1)}%`;
+    }
+    function pricingTotals(p = state.pricing) {
+      const quantity = pricingQuantity(p);
+      const revenue = quantity * num(p.salePrice);
+      const materialInput = num(p.materialCost);
+      const materialCost = p.materialCostMode === 'perItem' ? materialInput * quantity : materialInput;
+      const hardwareCost = num(p.hardwareCost);
+      const packagingCost = num(p.packagingCost);
+      const machineCost = num(p.laserMinutes) / 60 * num(p.machineRate);
+      const laborCost = num(p.laborMinutes) / 60 * num(p.laborRate);
+      const fixedFeeCost = p.fixedFeeMode === 'perItem' ? num(p.fixedFee) * quantity : num(p.fixedFee);
+      const feeCost = revenue * num(p.feePercent) / 100 + fixedFeeCost;
+      const directCost = materialCost + hardwareCost + packagingCost;
+      const totalCost = directCost + machineCost + laborCost + feeCost;
+      const profit = revenue - totalCost;
+      return {
+        revenue, directCost, machineCost, laborCost, feeCost, totalCost, profit,
+        profitPerItem: quantity ? profit / quantity : 0,
+        margin: revenue ? profit / revenue * 100 : 0,
+        breakEvenPrice: quantity ? totalCost / quantity : 0
+      };
+    }
+    function pricingResultsHtml(t) {
+      return `
+        <div class="metrics" style="margin-top:12px">
+          ${metric('Total revenue', money(t.revenue))}
+          ${metric('Material / consumables / packaging', money(t.directCost))}
+          ${metric('Machine time cost', money(t.machineCost))}
+          ${metric('Labor cost', money(t.laborCost))}
+          ${metric('Fee cost', money(t.feeCost))}
+          ${metric('Total cost', money(t.totalCost))}
+          ${metric('Profit total', money(t.profit))}
+          ${metric('Profit per item', money(t.profitPerItem))}
+          ${metric('Margin', percent(t.margin))}
+          ${metric('Break-even per item', money(t.breakEvenPrice))}
+        </div>
+      `;
+    }
+    function updatePricingDraft(form) {
+      const fd = new FormData(form);
+      state.pricing = { ...pricingDefaults() };
+      for (const [key, value] of fd.entries()) state.pricing[key] = value;
+    }
     function referenceTable(title, rows, watts) {
       return `
         ${title ? `<h2>${esc(title)}</h2>` : ''}
@@ -809,6 +918,24 @@
       if (projectTagFilter) projectTagFilter.onchange = e => { state.projectTagFilter = e.target.value; render(); };
       const projectSort = document.getElementById('projectSort');
       if (projectSort) projectSort.onchange = e => { state.projectSort = e.target.value; persist(); render(); };
+      const pricingForm = document.getElementById('pricingForm');
+      if (pricingForm) {
+        const refreshPricing = () => {
+          updatePricingDraft(pricingForm);
+          persist();
+          const results = document.getElementById('pricingResults');
+          if (results) results.innerHTML = pricingResultsHtml(pricingTotals(state.pricing));
+          const estimateName = document.getElementById('pricingEstimateName');
+          if (estimateName) estimateName.textContent = state.pricing.name || 'Unsaved calculator draft';
+          const quantityPill = document.getElementById('pricingQuantityPill');
+          if (quantityPill) quantityPill.textContent = pricingQuantityLabel(state.pricing);
+        };
+        pricingForm.onsubmit = e => e.preventDefault();
+        pricingForm.oninput = refreshPricing;
+        pricingForm.onchange = refreshPricing;
+      }
+      const resetPricing = document.getElementById('resetPricing');
+      if (resetPricing) resetPricing.onclick = () => { state.pricing = pricingDefaults(); persist(); render(); };
       const newEntry = document.getElementById('newEntry');
       if (newEntry) newEntry.onclick = () => openEntry();
       const newProfile = document.getElementById('newProfile');
