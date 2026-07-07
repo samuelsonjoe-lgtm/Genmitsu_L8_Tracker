@@ -680,6 +680,57 @@
     }
     function closeModal(id) { document.getElementById(id).classList.remove('open'); document.getElementById(id).innerHTML = ''; }
     function openModal(id, html) { const m = document.getElementById(id); m.innerHTML = html; m.classList.add('open'); }
+    function activeModal() {
+      const openModals = [...document.querySelectorAll('.modal.open')];
+      return openModals[openModals.length - 1] || null;
+    }
+    function isTypingTarget(target) {
+      return target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+    }
+    function openActiveNewItem() {
+      if (state.activeTab === 'log') return openEntry();
+      if (state.activeTab === 'library') return openProfile();
+      if (state.activeTab === 'grids') return openGridForm();
+      if (state.activeTab === 'projects') return openProject();
+      return false;
+    }
+    function activeSearchInput() {
+      if (state.activeTab === 'log') return document.getElementById('search');
+      if (state.activeTab === 'library') return document.getElementById('librarySearch');
+      if (state.activeTab === 'projects') return document.getElementById('projectSearch');
+      return null;
+    }
+    function handleShortcuts(e) {
+      const modal = activeModal();
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && modal) {
+        const form = modal.querySelector('form');
+        if (form) { e.preventDefault(); form.requestSubmit(); }
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n' && !modal && !isTypingTarget(e.target)) {
+        if (openActiveNewItem() !== false) e.preventDefault();
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (modal) {
+          e.preventDefault();
+          closeModal(modal.id);
+        } else if (activeGridId) {
+          e.preventDefault();
+          activeGridId = null;
+          render();
+        }
+        return;
+      }
+      if (e.key === '/' && !modal && !isTypingTarget(e.target) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const search = activeSearchInput();
+        if (search) {
+          e.preventDefault();
+          search.focus();
+          search.select();
+        }
+      }
+    }
     function field(name, label, value = '', type = 'text', attrs = '') { return `<label>${label}<input name="${name}" type="${type}" value="${esc(value)}" ${attrs}></label>`; }
     function select(name, label, value, options) { return `<label>${label}<select name="${name}">${options.map(o => `<option value="${esc(o)}" ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`; }
     function modalFields(kind, data) {
@@ -1044,6 +1095,7 @@
       };
       reader.readAsText(file); e.target.value = '';
     };
+    document.addEventListener('keydown', handleShortcuts);
     render();
   })();
   </script>
