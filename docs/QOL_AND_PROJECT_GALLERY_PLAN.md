@@ -28,10 +28,11 @@
 | **Unit conversion toggle** | Switching between `in` and `mm` converts stored thickness, focus, and material-height/Z-offset values |
 | **Thickness-aware Library matching** | Library can surface the closest saved profiles for a material and thickness query |
 | **Undo delete** | Log, Library, Projects, and Test Grid deletes now show a short restore window |
+| **Test grid CSV export** | Recorded Test Grid cells can be exported with grid metadata, power/speed, rating, best flag, and notes |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
-**Test grid export** — add a CSV or printable export path for recorded power/speed matrix results.
+**Machine profile selector** — default to the user's 20W machine profile and keep 40W reference data available without cluttering the main Reference view.
 
 ### 1.3 Still open from the original backlog
 
@@ -44,7 +45,7 @@
 | True desktop packaging (Tauri) — app-data file persistence, auto-backups | High (blocks real durability) | Not started; still on `localStorage` |
 | Thickness-aware Library matching ("what do I use for 3mm birch?") | Medium | Done — Library has a closest saved setting helper |
 | Tag system (`gift`, `commission`, `failed`, etc.) | Medium | Not started — would also benefit the Project Gallery below |
-| Test grid export (CSV / printable HTML) | Medium | Up next — see §1.2 |
+| Test grid export (CSV / printable HTML) | Medium | Done — CSV export is available from grid detail |
 | Unit conversion on in↔mm toggle | Medium | Done — converts stored unit-bearing fields when toggled |
 | Undo delete (toast) | Medium | Done |
 | Machine profile selector (20W default, hide 40W table) | High | Not started |

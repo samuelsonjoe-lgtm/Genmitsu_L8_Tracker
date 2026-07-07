@@ -17,7 +17,7 @@ The app has five views:
 
 - **Log** - a quick-entry record of every job you run: material, thickness, job type (cut/engrave), power (with optional min/max ramp), speed, passes, line interval, air assist + pressure, overscan %, kerf offset, dither mode, focus height/material Z-offset, software used, settings file name, a 1-5 result rating, and free-form notes. Searchable, sortable, and filterable by material.
 - **Library** - a curated set of "best known settings" per material/thickness, promoted from log entries once you've dialed something in. This is the searchable/sortable reference sheet you check before starting a new job.
-- **Test Grids** - a power x speed test matrix planner for dialing in a brand-new material: set ranges and step sizes, get a grid, then click each cell to record a rating/notes and mark the winning combination. Any cell can be promoted straight to the Library.
+- **Test Grids** - a power x speed test matrix planner for dialing in a brand-new material: set ranges and step sizes, get a grid, then click each cell to record a rating/notes and mark the winning combination. Any cell can be promoted straight to the Library, and recorded results can be exported as CSV.
 - **Reference** - official Genmitsu L8 20W and 40W speed/power starting points from SainSmart's resource center, plus focus, safety, maintenance, offline, and software notes pulled from the user manual. Any reference setting can be copied into the Library and tuned from there.
 - **Projects** - a searchable/sortable gallery of finished pieces with a saved settings snapshot, tags, notes, and a copy-to-log action for repeating a past project.
 
@@ -35,11 +35,11 @@ Other features:
 
 ## Current storage model
 
-The current `.dc.html` version saves live data in the browser's `localStorage` under `genmitsu-l8-tracker-v1`. That means data is tied to the browser/profile that opened the app. Use Export regularly for portable JSON backups until the planned standalone version writes to a real app data file.
+The standalone `index.html` app saves live data in the browser's `localStorage` under `genmitsu-l8-tracker-v1`. That means data is tied to the browser/profile that opened the app. Use Export regularly for portable JSON backups until a future desktop build writes to a real app data file.
 
-## Fields tracked (per entry/profile/grid)
+## Fields tracked
 
-Material, thickness, job type, power (min/max), speed, passes, line interval, air assist (on/off + pressure), overscan %, kerf offset, dither mode (for photo engraves), focus height / material Z-offset, software (e.g. LightBurn), settings file reference, result rating, and notes.
+Log entries, Library profiles, Test Grids, and Projects track material, thickness, job type, power (min/max), speed, passes, line interval, air assist (on/off + pressure), overscan %, kerf offset, dither mode (for photo engraves), focus height / material Z-offset, software (e.g. LightBurn), settings file reference, result rating, and notes where applicable.
 
 ## Official source material
 
@@ -50,4 +50,4 @@ Material, thickness, job type, power (min/max), speed, passes, line interval, ai
 
 ## Status
 
-Actively being built out as the laser is set up and put through its first material tests. Intended to be pushed to GitHub for version history and backup: https://github.com/samuelsonjoe-lgtm/Genmitsu_L8_Tracker
+Actively being built out as the laser is set up and put through its first material tests. The repo is pushed to GitHub for version history and backup: https://github.com/samuelsonjoe-lgtm/Genmitsu_L8_Tracker

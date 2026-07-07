@@ -718,12 +718,47 @@
       for (let v = mn; v <= mx + 1e-6 && out.length < 60; v += st) out.push(Math.round(v * 100) / 100);
       return out.length ? out : [mn];
     }
+    function csvValue(value) {
+      const text = String(value ?? '');
+      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    }
+    function csvRows(rows) {
+      return rows.map(row => row.map(csvValue).join(',')).join('\r\n') + '\r\n';
+    }
+    function fileSlug(value) {
+      return String(value || 'grid').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'grid';
+    }
+    function downloadTextFile(filename, text, type) {
+      const blob = new Blob([text], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+    function gridCsv(g) {
+      const headers = [
+        'grid_id', 'grid_name', 'material', 'thickness', 'thickness_unit', 'job_type', 'created_date', 'updated_date',
+        'power_min', 'power_max', 'power_step', 'speed_min', 'speed_max', 'speed_step',
+        'passes', 'line_interval_mm', 'air_assist', 'air_pressure_psi', 'dither_mode', 'software',
+        'power_percent', 'speed_mm_min', 'rating', 'best', 'notes'
+      ];
+      const rows = Object.entries(g.cells || {}).map(([key, cell]) => {
+        const [power, speed] = key.split('_');
+        return [
+          g.id, g.name, g.material, g.thicknessValue, g.thicknessUnit, g.jobType, g.createdDate || '', g.updatedDate || '',
+          g.powerMin, g.powerMax, g.powerStep, g.speedMin, g.speedMax, g.speedStep,
+          g.passes, g.lineInterval, g.airAssist ? 'yes' : 'no', g.airPressure, g.ditherMode, g.software,
+          power, speed, cell.rating ?? '', cell.best ? 'yes' : 'no', cell.notes || ''
+        ];
+      }).sort((a, b) => Number(a[20]) - Number(b[20]) || Number(a[21]) - Number(b[21]));
+      return csvRows([headers, ...rows]);
+    }
     function renderGridDetail() {
       const g = state.grids.find(x => x.id === activeGridId);
       if (!g) { activeGridId = null; return renderGrids(); }
       const powers = range(g.powerMin, g.powerMax, g.powerStep);
       const speeds = range(g.speedMin, g.speedMax, g.speedStep);
-      let html = `<div class="toolbar" style="margin-bottom:12px"><div class="row"><button id="backGrids">Back</button><div><b>${esc(g.name)}</b><div class="small muted">${esc(g.material)} - ${fmt(g.thicknessValue, g.thicknessUnit)} - ${esc(g.jobType)} - ${g.passes} pass(es)</div></div></div><button class="danger" id="deleteGrid">Delete grid</button></div>`;
+      let html = `<div class="toolbar" style="margin-bottom:12px"><div class="row"><button id="backGrids">Back</button><div><b>${esc(g.name)}</b><div class="small muted">${esc(g.material)} - ${fmt(g.thicknessValue, g.thicknessUnit)} - ${esc(g.jobType)} - ${g.passes} pass(es)</div></div></div><div class="row"><button id="exportGridCsv">Export CSV</button><button class="danger" id="deleteGrid">Delete grid</button></div></div>`;
       html += '<div class="grid-table"><div class="matrix" style="grid-template-columns:70px ' + speeds.map(() => '76px').join(' ') + '">';
       html += '<div></div>' + speeds.map(s => `<div class="axis">${s}<br>mm/min</div>`).join('');
       powers.forEach(p => {
@@ -781,6 +816,8 @@
       if (back) back.onclick = () => { activeGridId = null; render(); };
       const delGrid = document.getElementById('deleteGrid');
       if (delGrid) delGrid.onclick = deleteActiveGrid;
+      const exportGridCsv = document.getElementById('exportGridCsv');
+      if (exportGridCsv) exportGridCsv.onclick = exportActiveGridCsv;
       document.querySelectorAll('[data-edit-entry]').forEach(b => b.onclick = () => openEntry(state.entries.find(e => e.id === b.dataset.editEntry)));
       document.querySelectorAll('[data-duplicate-entry]').forEach(b => b.onclick = () => duplicateEntry(b.dataset.duplicateEntry));
       document.querySelectorAll('[data-delete-entry]').forEach(b => b.onclick = () => del('entries', b.dataset.deleteEntry, 'Delete this log entry?', 'Log entry'));
@@ -1217,6 +1254,12 @@
         airAssist: g.airAssist, airPressure: g.airPressure, ditherMode: g.ditherMode, software: g.software,
         notes: `Promoted from test grid "${g.name}" at ${power}% / ${speed} mm/min.${cell.notes ? ' ' + cell.notes : ''}`
       });
+    }
+    function exportActiveGridCsv() {
+      const g = state.grids.find(x => x.id === activeGridId);
+      if (!g) return;
+      if (!Object.keys(g.cells || {}).length) return alert('Record at least one grid cell before exporting CSV.');
+      downloadTextFile(`l8-grid-${fileSlug(g.name)}-${today()}.csv`, gridCsv(g), 'text/csv;charset=utf-8');
     }
     function deleteActiveGrid() {
       del('grids', activeGridId, 'Delete this test grid?', 'Test grid');
