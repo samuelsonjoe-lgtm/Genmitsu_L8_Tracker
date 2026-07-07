@@ -127,7 +127,8 @@
       .topbar .row, .tabs, .toolbar, .actions, .modal, .toast { display: none !important; }
       .brand { margin-bottom: 14px; }
       .mark { display: none; }
-      .subtitle::after { content: " - Library print sheet"; }
+      body[data-active-tab="library"] .subtitle::after { content: " - Library print sheet"; }
+      body[data-active-tab="pricing"] .subtitle::after { content: " - Pricing summary"; }
       .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
       .card, .panel, .metric { break-inside: avoid; border-color: #9ca3af; box-shadow: none; }
       .card { padding: 10px; }
@@ -475,6 +476,7 @@
       return base;
     }
     function render() {
+      document.body.dataset.activeTab = state.activeTab;
       renderTabs();
       document.getElementById('unitIn').className = state.unit === 'in' ? 'primary' : '';
       document.getElementById('unitMm').className = state.unit === 'mm' ? 'primary' : '';
@@ -780,6 +782,8 @@
         const denominator = quantity * (1 - feeRate - Math.max(0, targetMargin));
         return denominator > 0 ? baseCost / denominator : NaN;
       };
+      const hasTargetMargin = String(p.targetMargin ?? '').trim() !== '';
+      const hasTargetProfit = String(p.targetProfitPerItem ?? '').trim() !== '';
       const targetMarginRate = Math.max(0, num(p.targetMargin)) / 100;
       const targetProfitPerItem = Math.max(0, num(p.targetProfitPerItem));
       return {
@@ -787,8 +791,8 @@
         profitPerItem: quantity ? profit / quantity : 0,
         margin: revenue ? profit / revenue * 100 : 0,
         breakEvenPrice: priceForProfit(0),
-        targetMarginPrice: priceForMargin(targetMarginRate),
-        targetProfitPrice: priceForProfit(targetProfitPerItem)
+        targetMarginPrice: hasTargetMargin ? priceForMargin(targetMarginRate) : NaN,
+        targetProfitPrice: hasTargetProfit ? priceForProfit(targetProfitPerItem) : NaN
       };
     }
     function pricingStatus(t) {
