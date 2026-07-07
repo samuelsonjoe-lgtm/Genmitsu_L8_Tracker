@@ -279,6 +279,28 @@
     function materialNames() {
       return [...new Set([...state.entries, ...state.profiles, ...state.projects].map(x => x.material).filter(Boolean))].sort();
     }
+    function referenceMaterialNames() {
+      const names = [...reference20w, ...reference40w].flatMap(row => {
+        const material = row[0];
+        return [material, splitMaterialThickness(material).material];
+      });
+      const seen = new Set();
+      return names.filter(name => {
+        const key = String(name || '').trim().toLowerCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+    function autocompleteMaterialNames() {
+      const seen = new Set();
+      return [...materialNames(), ...referenceMaterialNames()].filter(name => {
+        const key = String(name || '').trim().toLowerCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).sort((a, b) => compareText(a, b));
+    }
     function libraryMaterialNames() {
       return [...new Set(state.profiles.map(x => x.material).filter(Boolean))].sort();
     }
@@ -682,7 +704,7 @@
         ${kind === 'entry' ? `<label class="span2">Settings file / profile name<input name="settingsFile" value="${esc(data.settingsFile)}"></label><div class="span2"><b class="small">Result quality</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating)}" hidden></div>` : ''}
         <label class="span2">Notes<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>
         <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
-        <datalist id="materials">${materialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>`;
+        <datalist id="materials">${autocompleteMaterialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>`;
     }
     function unitField(valueName, unitName, label, value, unit) {
       return `<label>${label}<span class="unitrow"><input name="${valueName}" type="number" step="any" value="${esc(value)}"><select name="${unitName}"><option ${unit === 'in' ? 'selected' : ''}>in</option><option ${unit === 'mm' ? 'selected' : ''}>mm</option></select></span></label>`;
@@ -772,7 +794,7 @@
         <input name="sourceEntryId" value="${esc(data.sourceEntryId || '')}" hidden>
         <input name="sourceProfileId" value="${esc(data.sourceProfileId || '')}" hidden>
         <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
-        <datalist id="materials">${materialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
+        <datalist id="materials">${autocompleteMaterialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
         <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save project</button></div></form></div>`);
       bindModal('projectModal');
       document.querySelectorAll('#projectModal .star').forEach(s => s.onclick = () => { document.querySelector('#projectModal [name=rating]').value = s.dataset.rating; document.querySelectorAll('#projectModal .star').forEach(x => x.classList.toggle('on', Number(x.dataset.rating) <= Number(s.dataset.rating))); });
@@ -874,7 +896,7 @@
         ${field('airPressure','Air pressure (psi)',data.airPressure,'number','step="any"')}
         <label>Software<input name="software" value="${esc(data.software)}" list="software"></label>
         <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
-        <datalist id="materials">${materialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
+        <datalist id="materials">${autocompleteMaterialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
         <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Create grid</button></div></form></div>`);
       bindModal('gridModal');
       document.getElementById('gridForm').onsubmit = e => {

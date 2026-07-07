@@ -22,17 +22,18 @@
 | **Print-friendly Library view** | Print Library button + dedicated print stylesheet renders a clean shop cheat sheet (`e481745`) |
 | **Import merge mode** | Import now prompts: OK = merge into current data by `id`, Cancel = replace everything (with a second confirmation) (`e481745`) |
 | **Sort controls** | Log, Library, and Projects now have sort dropdowns with locally remembered preferences |
+| **Reference-seeded material autocomplete** | Material fields now suggest both saved user materials and official SainSmart reference materials |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
-**Reference-seeded material autocomplete** — fold the official SainSmart reference rows into the existing material datalist so known manual materials appear before the user has logged them.
+**Keyboard shortcuts** — add `Ctrl+N` for the active tab's new item, `Esc` to close modals/back out of grid detail, and `/` to focus the active search field.
 
 ### 1.3 Still open from the original backlog
 
 | Item | Priority (orig. audit) | Status |
 |------|------------------------|--------|
 | Sort options (Log by date, Library by material/rating) | High | Done — Log, Library, and Projects have dropdown controls |
-| Material presets/autocomplete seeded from the **Reference** table specifically | High | Partial — datalist exists but only draws from Log/Library, not the SainSmart reference rows |
+| Material presets/autocomplete seeded from the **Reference** table specifically | High | Done — autocomplete draws from saved records plus official 20W/40W reference rows |
 | Keyboard shortcuts (`Ctrl+N`, `Ctrl+S`, `Esc`, `/`) | High | Not started |
 | Version/schema stamp in exported JSON (`schemaVersion`) | Medium | Done — `schemaVersion: 2` is now included in storage/export with `projects: []` |
 | True desktop packaging (Tauri) — app-data file persistence, auto-backups | High (blocks real durability) | Not started; still on `localStorage` |

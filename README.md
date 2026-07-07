@@ -25,6 +25,7 @@ Other features:
 
 - Toggle between imperial and metric units.
 - Export/import your data as a JSON backup file, with merge or replace import modes.
+- Material autocomplete includes both your saved materials and official SainSmart reference materials.
 - Duplicate Log entries and Library profiles for quick tweak-and-resave runs.
 - Print a simplified Library cheat sheet for shop use.
 - All data persists automatically in the browser (localStorage) between sessions.
