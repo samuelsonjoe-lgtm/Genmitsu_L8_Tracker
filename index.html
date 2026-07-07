@@ -141,17 +141,20 @@
 
   <div class="modal" id="entryModal"></div>
   <div class="modal" id="profileModal"></div>
+  <div class="modal" id="projectModal"></div>
   <div class="modal" id="gridModal"></div>
   <div class="modal" id="cellModal"></div>
 
   <script>
   (() => {
     const STORAGE_KEY = 'genmitsu-l8-tracker-v1';
+    const SCHEMA_VERSION = 2;
     const tabs = [
       ['log', 'Log'],
       ['library', 'Library'],
       ['grids', 'Test Grids'],
-      ['reference', 'Reference']
+      ['reference', 'Reference'],
+      ['projects', 'Projects']
     ];
     const reference20w = [
       ['MDF board','engrave',0.1,60,30000,1,''],
@@ -220,6 +223,7 @@
     let activeCellKey = null;
     let editingEntryId = null;
     let editingProfileId = null;
+    let editingProjectId = null;
 
     function loadState() {
       try {
@@ -228,35 +232,42 @@
           const data = JSON.parse(raw);
           return {
             activeTab: 'log',
+            schemaVersion: data.schemaVersion || 1,
             unit: data.unit || 'in',
             entries: data.entries || [],
             profiles: data.profiles || [],
             grids: data.grids || [],
+            projects: data.projects || [],
             search: '',
             materialFilter: 'all',
             librarySearch: '',
             libraryFilter: 'all',
+            projectSearch: '',
+            projectTagFilter: 'all',
             focusMaterialMm: '',
             focusJobType: 'engrave'
           };
         }
       } catch (_) {}
-      return { activeTab: 'log', unit: 'in', entries: [], profiles: [], grids: [], search: '', materialFilter: 'all', librarySearch: '', libraryFilter: 'all', focusMaterialMm: '', focusJobType: 'engrave' };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', librarySearch: '', libraryFilter: 'all', projectSearch: '', projectTagFilter: 'all', focusMaterialMm: '', focusJobType: 'engrave' };
     }
     function persist() {
-      const { entries, profiles, grids, unit } = state;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ entries, profiles, grids, unit }));
+      const { entries, profiles, grids, projects, unit } = state;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit }));
     }
     function backupObject() {
-      return { entries: state.entries, profiles: state.profiles, grids: state.grids, unit: state.unit };
+      return { schemaVersion: SCHEMA_VERSION, entries: state.entries, profiles: state.profiles, grids: state.grids, projects: state.projects, unit: state.unit };
     }
     function setTab(tab) { state.activeTab = tab; render(); }
     function setUnit(unit) { state.unit = unit; persist(); render(); }
     function materialNames() {
-      return [...new Set([...state.entries, ...state.profiles].map(x => x.material).filter(Boolean))].sort();
+      return [...new Set([...state.entries, ...state.profiles, ...state.projects].map(x => x.material).filter(Boolean))].sort();
     }
     function libraryMaterialNames() {
       return [...new Set(state.profiles.map(x => x.material).filter(Boolean))].sort();
+    }
+    function projectTags() {
+      return [...new Set(state.projects.flatMap(p => p.tags || []).filter(Boolean))].sort();
     }
     function powerLabel(o) { return o.maxPower != null && o.maxPower !== o.minPower ? `${o.minPower}-${o.maxPower}%` : `${o.minPower}%`; }
     function stars(r) { return `<span class="small">${'●'.repeat(Number(r) || 0)}${'○'.repeat(5 - (Number(r) || 0))}</span>`; }
@@ -266,6 +277,21 @@
     function splitMaterialThickness(material) {
       const m = material.match(/^(.*)\s+([0-9.]+)mm$/i);
       return m ? { material: m[1], thicknessValue: m[2], thicknessUnit: 'mm' } : { material, thicknessValue: '', thicknessUnit: state.unit };
+    }
+    function tagArray(value) {
+      return String(value || '').split(',').map(x => x.trim()).filter(Boolean);
+    }
+    function tagString(tags) {
+      return (tags || []).join(', ');
+    }
+    function settingsFromSetting(o) {
+      return {
+        minPower: o.minPower ?? '', maxPower: o.maxPower ?? '', speed: o.speed ?? '', passes: o.passes ?? 1,
+        lineInterval: o.lineInterval ?? '', airAssist: !!o.airAssist, airPressure: o.airPressure ?? '',
+        overscanPercent: o.overscanPercent ?? '', kerfOffset: o.kerfOffset ?? '', ditherMode: o.ditherMode || 'none',
+        focusValue: o.focusValue ?? '', focusUnit: o.focusUnit || state.unit,
+        software: o.software || '', settingsFile: o.settingsFile || ''
+      };
     }
     function focusSuggestion(jobType, thicknessMm) {
       if (jobType === 'engrave') return '7mm fixed focus for 20W engraving';
@@ -283,6 +309,11 @@
         software: '', notes: ''
       };
       if (kind === 'entry') return { ...base, date: today(), settingsFile: '', rating: 0 };
+      if (kind === 'project') return {
+        name: '', material: '', thicknessValue: '', thicknessUnit: state.unit, jobType: 'engrave',
+        dateCreated: today(), tags: '', rating: 0, notes: '', sourceEntryId: '', sourceProfileId: '',
+        settings: settingsFromSetting({ ...base, settingsFile: '' })
+      };
       if (kind === 'grid') return {
         name: '', material: '', thicknessValue: '', thicknessUnit: state.unit, jobType: 'engrave',
         powerMin: '20', powerMax: '100', powerStep: '20',
@@ -302,6 +333,7 @@
       if (state.activeTab === 'library') root.innerHTML = renderLibrary();
       if (state.activeTab === 'grids') root.innerHTML = renderGrids();
       if (state.activeTab === 'reference') root.innerHTML = renderReference();
+      if (state.activeTab === 'projects') root.innerHTML = renderProjects();
       bindPage();
     }
     function renderTabs() {
@@ -408,6 +440,35 @@
         <details style="margin-top:16px"><summary><b>40W official starting points</b></summary>${referenceTable('', reference40w, '40W')}</details>
       `;
     }
+    function renderProjects() {
+      const tags = projectTags();
+      const q = state.projectSearch.toLowerCase();
+      const filtered = state.projects.filter(p => {
+        const tagOk = state.projectTagFilter === 'all' || (p.tags || []).includes(state.projectTagFilter);
+        const hay = [p.name, p.material, p.notes, ...(p.tags || [])].join(' ').toLowerCase();
+        return tagOk && (!q || hay.includes(q));
+      });
+      return `
+        <div class="toolbar" style="margin-bottom:14px">
+          <div>
+            <b>Project Gallery</b>
+            <div class="small muted">Finished pieces with their exact repeatable settings snapshot.</div>
+          </div>
+          <button class="primary" id="newProject">New Project</button>
+        </div>
+        <div class="toolbar" style="margin-bottom:14px">
+          <div class="row" style="flex:1">
+            <input id="projectSearch" placeholder="Search projects, material, notes, tags..." value="${esc(state.projectSearch)}" style="min-width:230px; flex:1">
+            <select id="projectTagFilter" style="max-width:220px">
+              <option value="all">All tags</option>
+              ${tags.map(t => `<option ${state.projectTagFilter === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}
+            </select>
+          </div>
+          <span class="pill">${filtered.length}/${state.projects.length} shown</span>
+        </div>
+        ${state.projects.length ? (filtered.length ? `<div class="grid cards">${filtered.map(projectCard).join('')}</div>` : empty('No project matches', 'Adjust the search or tag filter.')) : empty('No projects yet', 'Save a finished piece here with its settings snapshot.')}
+      `;
+    }
     function referenceTable(title, rows, watts) {
       return `
         ${title ? `<h2>${esc(title)}</h2>` : ''}
@@ -433,7 +494,7 @@
         <div class="metrics">${metric('Power', powerLabel(e))}${metric('Speed', `${e.speed} mm/min`)}${metric('Passes', e.passes)}${metric('Line int.', fmt(e.lineInterval, 'mm'))}</div>
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(e.focusValue, e.focusUnit)} - Air: ${e.airAssist ? 'On' : 'Off'}${e.software ? ' - ' + esc(e.software) : ''}</div>
         ${e.notes ? `<p class="small">${esc(e.notes)}</p>` : ''}
-        <div class="actions"><button data-edit-entry="${e.id}">Edit</button><button data-promote-entry="${e.id}">Save to library</button><button class="danger" data-delete-entry="${e.id}">Delete</button></div>
+        <div class="actions"><button data-edit-entry="${e.id}">Edit</button><button data-promote-entry="${e.id}">Save to library</button><button data-project-entry="${e.id}">Save as project</button><button class="danger" data-delete-entry="${e.id}">Delete</button></div>
       </article>`;
     }
     function profileCard(p) {
@@ -442,7 +503,18 @@
         <div class="metrics">${metric('Power', powerLabel(p))}${metric('Speed', `${p.speed} mm/min`)}${metric('Passes', p.passes)}${metric('Line int.', fmt(p.lineInterval, 'mm'))}</div>
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(p.focusValue, p.focusUnit)} - Air: ${p.airAssist ? 'On' : 'Off'}${p.software ? ' - ' + esc(p.software) : ''}</div>
         ${p.notes ? `<p class="small">${esc(p.notes)}</p>` : ''}
-        <div class="actions"><button data-edit-profile="${p.id}">Edit</button><button class="danger" data-delete-profile="${p.id}">Delete</button></div>
+        <div class="actions"><button data-edit-profile="${p.id}">Edit</button><button data-project-profile="${p.id}">Save as project</button><button class="danger" data-delete-profile="${p.id}">Delete</button></div>
+      </article>`;
+    }
+    function projectCard(p) {
+      const s = p.settings || {};
+      return `<article class="card">
+        <div class="spread"><div><b>${esc(p.name)}</b><div class="small muted">${esc(p.material)} - ${fmt(p.thicknessValue, p.thicknessUnit)} - ${esc(p.jobType)} - ${esc(p.dateCreated)}</div></div>${stars(p.rating)}</div>
+        <div class="row" style="margin-top:8px">${(p.tags || []).map(t => `<span class="pill">${esc(t)}</span>`).join('') || '<span class="pill">untagged</span>'}</div>
+        <div class="metrics">${metric('Power', powerLabel(s))}${metric('Speed', `${s.speed || 0} mm/min`)}${metric('Passes', s.passes || 1)}${metric('Line int.', fmt(s.lineInterval, 'mm'))}</div>
+        <div class="small muted" style="margin-top:9px">Focus: ${fmt(s.focusValue, s.focusUnit)} - Air: ${s.airAssist ? 'On' : 'Off'}${s.software ? ' - ' + esc(s.software) : ''}</div>
+        ${p.notes ? `<p class="small">${esc(p.notes)}</p>` : ''}
+        <div class="actions"><button data-edit-project="${p.id}">Edit</button><button data-project-to-entry="${p.id}">Copy to log</button><button class="danger" data-delete-project="${p.id}">Delete</button></div>
       </article>`;
     }
     function gridCard(g) {
@@ -493,10 +565,16 @@
       if (focusJobType) focusJobType.onchange = e => { state.focusJobType = e.target.value; render(); };
       const focusMaterialMm = document.getElementById('focusMaterialMm');
       if (focusMaterialMm) focusMaterialMm.onchange = e => { state.focusMaterialMm = e.target.value; render(); };
+      const projectSearch = document.getElementById('projectSearch');
+      if (projectSearch) projectSearch.onchange = e => { state.projectSearch = e.target.value; render(); };
+      const projectTagFilter = document.getElementById('projectTagFilter');
+      if (projectTagFilter) projectTagFilter.onchange = e => { state.projectTagFilter = e.target.value; render(); };
       const newEntry = document.getElementById('newEntry');
       if (newEntry) newEntry.onclick = () => openEntry();
       const newProfile = document.getElementById('newProfile');
       if (newProfile) newProfile.onclick = () => openProfile();
+      const newProject = document.getElementById('newProject');
+      if (newProject) newProject.onclick = () => openProject();
       const newGrid = document.getElementById('newGrid');
       if (newGrid) newGrid.onclick = () => openGridForm();
       const back = document.getElementById('backGrids');
@@ -506,8 +584,13 @@
       document.querySelectorAll('[data-edit-entry]').forEach(b => b.onclick = () => openEntry(state.entries.find(e => e.id === b.dataset.editEntry)));
       document.querySelectorAll('[data-delete-entry]').forEach(b => b.onclick = () => del('entries', b.dataset.deleteEntry, 'Delete this log entry?'));
       document.querySelectorAll('[data-promote-entry]').forEach(b => b.onclick = () => promoteEntry(b.dataset.promoteEntry));
+      document.querySelectorAll('[data-project-entry]').forEach(b => b.onclick = () => projectFromEntry(b.dataset.projectEntry));
       document.querySelectorAll('[data-edit-profile]').forEach(b => b.onclick = () => openProfile(state.profiles.find(p => p.id === b.dataset.editProfile)));
       document.querySelectorAll('[data-delete-profile]').forEach(b => b.onclick = () => del('profiles', b.dataset.deleteProfile, 'Remove this material from your library?'));
+      document.querySelectorAll('[data-project-profile]').forEach(b => b.onclick = () => projectFromProfile(b.dataset.projectProfile));
+      document.querySelectorAll('[data-edit-project]').forEach(b => b.onclick = () => openProject(state.projects.find(p => p.id === b.dataset.editProject)));
+      document.querySelectorAll('[data-delete-project]').forEach(b => b.onclick = () => del('projects', b.dataset.deleteProject, 'Delete this project?'));
+      document.querySelectorAll('[data-project-to-entry]').forEach(b => b.onclick = () => projectToEntry(b.dataset.projectToEntry));
       document.querySelectorAll('[data-open-grid]').forEach(c => c.onclick = () => { activeGridId = c.dataset.openGrid; render(); });
       document.querySelectorAll('[data-cell]').forEach(c => c.onclick = () => openCell(c.dataset.cell));
       document.querySelectorAll('[data-ref]').forEach(b => b.onclick = () => saveReference(b.dataset.ref));
@@ -547,7 +630,8 @@
       const fd = new FormData(form);
       const obj = {};
       for (const [k, v] of fd.entries()) obj[k] = v;
-      obj.airAssist = form.airAssist.checked;
+      obj.airAssist = form.airAssist ? form.airAssist.checked : false;
+      obj.settingsAirAssist = form.settingsAirAssist ? form.settingsAirAssist.checked : false;
       if (form.rating) obj.rating = num(form.rating.value);
       return obj;
     }
@@ -565,9 +649,9 @@
       };
     }
     function openEntry(entry) {
-      editingEntryId = entry ? entry.id : null;
+      editingEntryId = entry && entry.id ? entry.id : null;
       const data = { ...formDefaults('entry'), ...(entry || {}) };
-      openModal('entryModal', `<div class="dialog"><div class="spread"><h2>${entry ? 'Edit entry' : 'New log entry'}</h2><button data-close>×</button></div><form id="entryForm" class="formgrid">${modalFields('entry', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save entry</button></div></form></div>`);
+      openModal('entryModal', `<div class="dialog"><div class="spread"><h2>${editingEntryId ? 'Edit entry' : 'New log entry'}</h2><button data-close>×</button></div><form id="entryForm" class="formgrid">${modalFields('entry', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save entry</button></div></form></div>`);
       bindModal('entryModal');
       document.querySelectorAll('#entryModal .star').forEach(s => s.onclick = () => { document.querySelector('#entryModal [name=rating]').value = s.dataset.rating; document.querySelectorAll('#entryModal .star').forEach(x => x.classList.toggle('on', Number(x.dataset.rating) <= Number(s.dataset.rating))); });
       document.getElementById('entryForm').onsubmit = e => {
@@ -580,9 +664,9 @@
       };
     }
     function openProfile(profile) {
-      editingProfileId = profile ? profile.id : null;
+      editingProfileId = profile && profile.id ? profile.id : null;
       const data = { ...formDefaults('profile'), ...(profile || {}) };
-      openModal('profileModal', `<div class="dialog"><div class="spread"><h2>${profile ? 'Edit material' : 'Add material'}</h2><button data-close>×</button></div><form id="profileForm" class="formgrid">${modalFields('profile', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save material</button></div></form></div>`);
+      openModal('profileModal', `<div class="dialog"><div class="spread"><h2>${editingProfileId ? 'Edit material' : 'Add material'}</h2><button data-close>×</button></div><form id="profileForm" class="formgrid">${modalFields('profile', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save material</button></div></form></div>`);
       bindModal('profileModal');
       document.getElementById('profileForm').onsubmit = e => {
         e.preventDefault();
@@ -591,6 +675,129 @@
         upsert('profiles', normalizeSetting(f, editingProfileId));
         closeModal('profileModal');
       };
+    }
+    function projectSettingsFields(settings) {
+      const s = settings || {};
+      return `
+        ${field('settingsMinPower','Power min (%)',s.minPower,'number','min="0" max="100"')}
+        ${field('settingsMaxPower','Power max (%)',s.maxPower,'number','min="0" max="100"')}
+        ${field('settingsSpeed','Speed (mm/min)',s.speed,'number','min="0"')}
+        ${field('settingsPasses','Passes',s.passes || 1,'number','min="1"')}
+        ${field('settingsLineInterval','Line interval, mm',s.lineInterval,'number','step="any" min="0"')}
+        ${field('settingsOverscanPercent','Overscan (%)',s.overscanPercent,'number','step="any" min="0"')}
+        ${field('settingsKerfOffset','Kerf offset, mm',s.kerfOffset,'number','step="any"')}
+        ${select('settingsDitherMode','Dither mode',s.ditherMode || 'none',ditherModes)}
+        ${unitField('settingsFocusValue','settingsFocusUnit','Focus height',s.focusValue,s.focusUnit || state.unit)}
+        <label class="row" style="margin-top:20px"><input name="settingsAirAssist" type="checkbox" ${s.airAssist ? 'checked' : ''} style="width:auto"> Air assist on</label>
+        ${field('settingsAirPressure','Air pressure (psi)',s.airPressure,'number','step="any" min="0"')}
+        <label>Software<input name="settingsSoftware" value="${esc(s.software || '')}" list="software"></label>
+        <label class="span2">Settings file / profile name<input name="settingsFile" value="${esc(s.settingsFile || '')}"></label>`;
+    }
+    function openProject(project) {
+      editingProjectId = project && project.id ? project.id : null;
+      const data = { ...formDefaults('project'), ...(project || {}) };
+      const tagValue = Array.isArray(data.tags) ? tagString(data.tags) : data.tags;
+      openModal('projectModal', `<div class="dialog"><div class="spread"><h2>${editingProjectId ? 'Edit project' : 'New project'}</h2><button data-close>×</button></div><form id="projectForm" class="formgrid">
+        <label class="span2">Project name<input name="name" value="${esc(data.name)}"></label>
+        ${field('dateCreated','Date',data.dateCreated || today(),'date')}
+        ${select('jobType','Job type',data.jobType,['engrave','cut'])}
+        <label class="span2">Material<input name="material" value="${esc(data.material)}" list="materials"></label>
+        ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit)}
+        <label>Tags, comma-separated<input name="tags" value="${esc(tagValue)}" placeholder="gift, coasters"></label>
+        <div class="span2"><b class="small">Project rating</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating || 0)}" hidden></div>
+        <h3 class="span2" style="margin:8px 0 0">Settings snapshot</h3>
+        ${projectSettingsFields(data.settings)}
+        <label class="span2">Notes<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>
+        <input name="sourceEntryId" value="${esc(data.sourceEntryId || '')}" hidden>
+        <input name="sourceProfileId" value="${esc(data.sourceProfileId || '')}" hidden>
+        <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
+        <datalist id="materials">${materialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
+        <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save project</button></div></form></div>`);
+      bindModal('projectModal');
+      document.querySelectorAll('#projectModal .star').forEach(s => s.onclick = () => { document.querySelector('#projectModal [name=rating]').value = s.dataset.rating; document.querySelectorAll('#projectModal .star').forEach(x => x.classList.toggle('on', Number(x.dataset.rating) <= Number(s.dataset.rating))); });
+      document.getElementById('projectForm').onsubmit = e => {
+        e.preventDefault();
+        const f = readForm(e.target);
+        if (!f.name.trim() || !f.material.trim()) return alert('Add a project name and material first.');
+        const projectObj = normalizeProject(f, editingProjectId);
+        upsert('projects', projectObj);
+        closeModal('projectModal');
+      };
+    }
+    function normalizeProject(f, existingId) {
+      const minPower = num(f.settingsMinPower);
+      const existingProject = existingId ? state.projects.find(p => p.id === existingId) : null;
+      return {
+        id: existingId || uid(), name: f.name.trim(), material: f.material.trim(),
+        thicknessValue: f.thicknessValue === '' ? '' : num(f.thicknessValue), thicknessUnit: f.thicknessUnit,
+        jobType: f.jobType, dateCreated: f.dateCreated || today(), tags: tagArray(f.tags),
+        rating: num(f.rating, 0), notes: (f.notes || '').trim(),
+        sourceEntryId: f.sourceEntryId || null, sourceProfileId: f.sourceProfileId || null,
+        photos: existingProject && Array.isArray(existingProject.photos) ? existingProject.photos : [],
+        settings: {
+          minPower, maxPower: f.settingsMaxPower === '' ? minPower : num(f.settingsMaxPower), speed: num(f.settingsSpeed),
+          passes: Math.max(1, Math.round(num(f.settingsPasses, 1))), lineInterval: f.settingsLineInterval === '' ? '' : num(f.settingsLineInterval),
+          airAssist: !!f.settingsAirAssist, airPressure: f.settingsAirPressure === '' ? '' : num(f.settingsAirPressure),
+          overscanPercent: f.settingsOverscanPercent === '' ? '' : num(f.settingsOverscanPercent),
+          kerfOffset: f.settingsKerfOffset === '' ? '' : num(f.settingsKerfOffset),
+          ditherMode: f.settingsDitherMode || 'none',
+          focusValue: f.settingsFocusValue === '' ? '' : num(f.settingsFocusValue), focusUnit: f.settingsFocusUnit,
+          software: (f.settingsSoftware || '').trim(), settingsFile: (f.settingsFile || '').trim()
+        }
+      };
+    }
+    function projectDraftFromSource(source, sourceType) {
+      const namePrefix = sourceType === 'entry' ? source.material : `${source.material} ${source.jobType || ''}`.trim();
+      return {
+        ...formDefaults('project'),
+        name: namePrefix ? `${namePrefix} project` : '',
+        material: source.material || '',
+        thicknessValue: source.thicknessValue ?? '',
+        thicknessUnit: source.thicknessUnit || state.unit,
+        jobType: source.jobType || 'engrave',
+        dateCreated: today(),
+        rating: source.rating || 0,
+        notes: sourceType === 'entry' ? `Saved from log entry ${source.date || ''}. ${source.notes || ''}`.trim() : `Saved from Library profile. ${source.notes || ''}`.trim(),
+        sourceEntryId: sourceType === 'entry' ? source.id : '',
+        sourceProfileId: sourceType === 'profile' ? source.id : '',
+        settings: settingsFromSetting(source)
+      };
+    }
+    function projectFromEntry(id) {
+      const entry = state.entries.find(e => e.id === id);
+      if (entry) openProject(projectDraftFromSource(entry, 'entry'));
+    }
+    function projectFromProfile(id) {
+      const profile = state.profiles.find(p => p.id === id);
+      if (profile) openProject(projectDraftFromSource(profile, 'profile'));
+    }
+    function projectToEntry(id) {
+      const project = state.projects.find(p => p.id === id);
+      if (!project) return;
+      const s = project.settings || {};
+      openEntry({
+        ...formDefaults('entry'),
+        material: project.material,
+        thicknessValue: project.thicknessValue,
+        thicknessUnit: project.thicknessUnit,
+        jobType: project.jobType,
+        minPower: s.minPower ?? '',
+        maxPower: s.maxPower ?? '',
+        speed: s.speed ?? '',
+        passes: s.passes ?? '1',
+        lineInterval: s.lineInterval ?? '',
+        airAssist: !!s.airAssist,
+        airPressure: s.airPressure ?? '',
+        overscanPercent: s.overscanPercent ?? '',
+        kerfOffset: s.kerfOffset ?? '',
+        ditherMode: s.ditherMode || 'none',
+        focusValue: s.focusValue ?? '',
+        focusUnit: s.focusUnit || state.unit,
+        software: s.software || '',
+        settingsFile: s.settingsFile || '',
+        rating: project.rating || 0,
+        notes: `Replicated from project "${project.name}". ${project.notes || ''}`.trim()
+      });
     }
     function openGridForm() {
       const data = formDefaults('grid');
@@ -709,8 +916,8 @@
       reader.onload = () => {
         try {
           const data = JSON.parse(reader.result);
-          if (!confirm('Import will replace your current entries, library, and grids. Continue?')) return;
-          state.entries = data.entries || []; state.profiles = data.profiles || []; state.grids = data.grids || []; state.unit = data.unit || state.unit;
+          if (!confirm('Import will replace your current entries, library, grids, and projects. Continue?')) return;
+          state.entries = data.entries || []; state.profiles = data.profiles || []; state.grids = data.grids || []; state.projects = data.projects || []; state.unit = data.unit || state.unit;
           persist(); render();
         } catch (_) { alert('Could not read that file. Make sure it is a valid backup JSON.'); }
       };
