@@ -233,11 +233,15 @@
             profiles: data.profiles || [],
             grids: data.grids || [],
             search: '',
-            materialFilter: 'all'
+            materialFilter: 'all',
+            librarySearch: '',
+            libraryFilter: 'all',
+            focusMaterialMm: '',
+            focusJobType: 'engrave'
           };
         }
       } catch (_) {}
-      return { activeTab: 'log', unit: 'in', entries: [], profiles: [], grids: [], search: '', materialFilter: 'all' };
+      return { activeTab: 'log', unit: 'in', entries: [], profiles: [], grids: [], search: '', materialFilter: 'all', librarySearch: '', libraryFilter: 'all', focusMaterialMm: '', focusJobType: 'engrave' };
     }
     function persist() {
       const { entries, profiles, grids, unit } = state;
@@ -251,6 +255,9 @@
     function materialNames() {
       return [...new Set([...state.entries, ...state.profiles].map(x => x.material).filter(Boolean))].sort();
     }
+    function libraryMaterialNames() {
+      return [...new Set(state.profiles.map(x => x.material).filter(Boolean))].sort();
+    }
     function powerLabel(o) { return o.maxPower != null && o.maxPower !== o.minPower ? `${o.minPower}-${o.maxPower}%` : `${o.minPower}%`; }
     function stars(r) { return `<span class="small">${'●'.repeat(Number(r) || 0)}${'○'.repeat(5 - (Number(r) || 0))}</span>`; }
     function rowToRef(row, watts) {
@@ -259,6 +266,13 @@
     function splitMaterialThickness(material) {
       const m = material.match(/^(.*)\s+([0-9.]+)mm$/i);
       return m ? { material: m[1], thicknessValue: m[2], thicknessUnit: 'mm' } : { material, thicknessValue: '', thicknessUnit: state.unit };
+    }
+    function focusSuggestion(jobType, thicknessMm) {
+      if (jobType === 'engrave') return '7mm fixed focus for 20W engraving';
+      if (!Number.isFinite(thicknessMm) || thicknessMm <= 0) return 'Enter material thickness for a 20W cutting focus suggestion';
+      if (thicknessMm > 8) return '3mm fixed focus for 20W cutting material thicker than 8mm';
+      if (thicknessMm >= 5) return '5mm fixed focus for 20W cutting 5-8mm material';
+      return '7mm fixed focus for 20W cutting 0-5mm material';
     }
     function formDefaults(kind) {
       const base = {
@@ -322,12 +336,29 @@
       `;
     }
     function renderLibrary() {
+      const materials = libraryMaterialNames();
+      const q = state.librarySearch.toLowerCase();
+      const filtered = state.profiles.filter(p => {
+        const materialOk = state.libraryFilter === 'all' || p.material === state.libraryFilter;
+        const hay = [p.material, p.notes, p.software, p.jobType, p.thicknessValue, p.thicknessUnit].join(' ').toLowerCase();
+        return materialOk && (!q || hay.includes(q));
+      });
       return `
         <div class="toolbar" style="margin-bottom:14px">
           <div class="muted">Curated best-known settings per material. Promote from a log entry, grid cell, or reference row.</div>
           <button class="primary" id="newProfile">Add Material</button>
         </div>
-        ${state.profiles.length ? `<div class="grid cards">${state.profiles.map(profileCard).join('')}</div>` : empty('Library is empty', 'Save tuned settings here as your go-to reference.')}
+        <div class="toolbar" style="margin-bottom:14px">
+          <div class="row" style="flex:1">
+            <input id="librarySearch" placeholder="Search library material, notes, software..." value="${esc(state.librarySearch)}" style="min-width:230px; flex:1">
+            <select id="libraryFilter" style="max-width:220px">
+              <option value="all">All library materials</option>
+              ${materials.map(m => `<option ${state.libraryFilter === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}
+            </select>
+          </div>
+          <span class="pill">${filtered.length}/${state.profiles.length} shown</span>
+        </div>
+        ${state.profiles.length ? (filtered.length ? `<div class="grid cards">${filtered.map(profileCard).join('')}</div>` : empty('No library matches', 'Adjust the search or material filter.')) : empty('Library is empty', 'Save tuned settings here as your go-to reference.')}
       `;
     }
     function renderGrids() {
@@ -341,7 +372,31 @@
       `;
     }
     function renderReference() {
+      const focusText = focusSuggestion(state.focusJobType, num(state.focusMaterialMm, NaN));
       return `
+        <div class="toolbar" style="margin-bottom:14px">
+          <div>
+            <b>Reference tools</b>
+            <div class="small muted">Manual link and 20W fixed-focus helper for quick setup checks.</div>
+          </div>
+          <a href="docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf" target="_blank" rel="noopener"><button type="button">Open Manual</button></a>
+        </div>
+        <div class="panel" style="margin-bottom:16px">
+          <div class="toolbar">
+            <div>
+              <b>20W focus helper</b>
+              <div class="small muted">Based on the fixed-focus table in the official manual.</div>
+            </div>
+            <div class="row">
+              <select id="focusJobType" style="width:130px">
+                <option value="engrave" ${state.focusJobType === 'engrave' ? 'selected' : ''}>Engrave</option>
+                <option value="cut" ${state.focusJobType === 'cut' ? 'selected' : ''}>Cut</option>
+              </select>
+              <input id="focusMaterialMm" type="number" step="any" min="0" placeholder="Thickness mm" value="${esc(state.focusMaterialMm)}" style="width:140px">
+              <span class="pill">${esc(focusText)}</span>
+            </div>
+          </div>
+        </div>
         <div class="grid refgrid" style="margin-bottom:16px">
           ${notes.map(([title, body]) => `<div class="card"><b>${esc(title)}</b><p class="small muted">${esc(body)}</p></div>`).join('')}
         </div>
@@ -430,6 +485,14 @@
       if (search) search.oninput = e => { state.search = e.target.value; render(); };
       const filter = document.getElementById('materialFilter');
       if (filter) filter.onchange = e => { state.materialFilter = e.target.value; render(); };
+      const librarySearch = document.getElementById('librarySearch');
+      if (librarySearch) librarySearch.onchange = e => { state.librarySearch = e.target.value; render(); };
+      const libraryFilter = document.getElementById('libraryFilter');
+      if (libraryFilter) libraryFilter.onchange = e => { state.libraryFilter = e.target.value; render(); };
+      const focusJobType = document.getElementById('focusJobType');
+      if (focusJobType) focusJobType.onchange = e => { state.focusJobType = e.target.value; render(); };
+      const focusMaterialMm = document.getElementById('focusMaterialMm');
+      if (focusMaterialMm) focusMaterialMm.onchange = e => { state.focusMaterialMm = e.target.value; render(); };
       const newEntry = document.getElementById('newEntry');
       if (newEntry) newEntry.onclick = () => openEntry();
       const newProfile = document.getElementById('newProfile');
