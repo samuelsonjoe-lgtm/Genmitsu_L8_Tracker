@@ -47,6 +47,7 @@
     <button onClick="{{ goLog }}" style="border:none; background:none; cursor:pointer; padding:10px 4px; margin-right:18px; font-size:15px; font-weight:600; font-family:'Space Grotesk',sans-serif; color:{{ tabLogColor }}; border-bottom:2px solid {{ tabLogBorder }};">Log</button>
     <button onClick="{{ goLibrary }}" style="border:none; background:none; cursor:pointer; padding:10px 4px; margin-right:18px; font-size:15px; font-weight:600; font-family:'Space Grotesk',sans-serif; color:{{ tabLibraryColor }}; border-bottom:2px solid {{ tabLibraryBorder }};">Library</button>
     <button onClick="{{ goGrids }}" style="border:none; background:none; cursor:pointer; padding:10px 4px; margin-right:18px; font-size:15px; font-weight:600; font-family:'Space Grotesk',sans-serif; color:{{ tabGridsColor }}; border-bottom:2px solid {{ tabGridsBorder }};">Test Grids</button>
+    <button onClick="{{ goReference }}" style="border:none; background:none; cursor:pointer; padding:10px 4px; margin-right:18px; font-size:15px; font-weight:600; font-family:'Space Grotesk',sans-serif; color:{{ tabReferenceColor }}; border-bottom:2px solid {{ tabReferenceBorder }};">Reference</button>
   </div>
 
   <div style="max-width:1180px; margin:0 auto;">
@@ -284,6 +285,111 @@
           </div>
         </div>
       </sc-if>
+    </sc-if>
+
+    <!-- ============ REFERENCE TAB ============ -->
+    <sc-if value="{{ isReferenceTab }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; margin-bottom:18px;">
+        <div style="background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; padding:16px;">
+          <div style="font-size:12px; color:oklch(50% 0.01 260); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">20W work area</div>
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; color:oklch(45% 0.15 210); margin-top:4px;">400 x 400mm</div>
+          <div style="font-size:12px; color:oklch(45% 0.01 260); margin-top:6px;">455nm diode, 0.01mm engraving accuracy, up to 40000mm/min engraving speed.</div>
+        </div>
+        <div style="background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; padding:16px;">
+          <div style="font-size:12px; color:oklch(50% 0.01 260); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">Fixed focus, 20W</div>
+          <div style="font-size:13px; color:oklch(35% 0.01 260); margin-top:8px; line-height:1.55;">
+            Cut &gt;8mm: 3mm focus. Cut 5-8mm: 5mm focus. Cut 0-5mm: 7mm focus. Engrave: 7mm focus.
+          </div>
+        </div>
+        <div style="background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; padding:16px;">
+          <div style="font-size:12px; color:oklch(50% 0.01 260); font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">Safety and upkeep</div>
+          <div style="font-size:13px; color:oklch(35% 0.01 260); margin-top:8px; line-height:1.55;">
+            Keep fire suppression nearby, vent fumes, use air assist for cutting, clean the lens if cutting performance drops, and rest the machine 10 minutes after 4 hours engraving or 1 hour cutting.
+          </div>
+        </div>
+      </div>
+
+      <div style="background:oklch(98% 0.006 85); border:1px solid oklch(89% 0.025 85); border-radius:12px; padding:14px 16px; margin-bottom:18px; color:oklch(36% 0.04 85); font-size:13px; line-height:1.55;">
+        Official values are starting points, not final recipes. Material color, glue, moisture, flatness, focus, lens cleanliness, and airflow can change results. Copy promising rows into Library, then tune with Log entries or Test Grids.
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px;">
+        <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:18px; color:oklch(22% 0.01 260);">20W official starting points</div>
+        <div style="font-size:12px; color:oklch(50% 0.01 260);">Source: SainSmart L8 speed/power chart</div>
+      </div>
+      <div style="overflow-x:auto; background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; margin-bottom:22px;">
+        <table style="width:100%; border-collapse:collapse; min-width:720px; font-size:13px;">
+          <thead>
+            <tr style="background:oklch(96% 0.006 260); color:oklch(40% 0.01 260); text-align:left;">
+              <th style="padding:10px 12px;">Material</th>
+              <th style="padding:10px 12px;">Mode</th>
+              <th style="padding:10px 12px;">Line mm</th>
+              <th style="padding:10px 12px;">Power</th>
+              <th style="padding:10px 12px;">Speed</th>
+              <th style="padding:10px 12px;">Passes</th>
+              <th style="padding:10px 12px;">Note</th>
+              <th style="padding:10px 12px;"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <sc-for list="{{ reference20w }}" as="r" hint-placeholder-count="8">
+              <tr style="border-top:1px solid oklch(92% 0.006 260);">
+                <td style="padding:9px 12px; font-weight:600; color:oklch(28% 0.01 260);">{{ r.material }}</td>
+                <td style="padding:9px 12px; color:oklch(45% 0.01 260);">{{ r.modeLabel }}</td>
+                <td style="padding:9px 12px; color:oklch(45% 0.01 260);">{{ r.lineSpacingLabel }}</td>
+                <td style="padding:9px 12px; color:oklch(45% 0.15 45); font-weight:700;">{{ r.powerLabel }}</td>
+                <td style="padding:9px 12px; color:oklch(45% 0.15 210); font-weight:700;">{{ r.speedLabel }}</td>
+                <td style="padding:9px 12px; color:oklch(45% 0.01 260);">{{ r.passes }}</td>
+                <td style="padding:9px 12px; color:oklch(50% 0.01 260);">{{ r.note }}</td>
+                <td style="padding:9px 12px;"><button onClick="{{ r.onSave }}" style="border:1px solid oklch(88% 0.006 260); background:white; border-radius:7px; padding:6px 10px; font-size:12px; font-weight:700; color:oklch(50% 0.15 300); cursor:pointer; white-space:nowrap;">Save</button></td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+
+      <details style="background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; padding:14px 16px; margin-bottom:18px;">
+        <summary style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:16px; color:oklch(22% 0.01 260); cursor:pointer;">40W official starting points</summary>
+        <div style="overflow-x:auto; margin-top:12px;">
+          <table style="width:100%; border-collapse:collapse; min-width:720px; font-size:13px;">
+            <thead>
+              <tr style="background:oklch(96% 0.006 260); color:oklch(40% 0.01 260); text-align:left;">
+                <th style="padding:10px 12px;">Material</th>
+                <th style="padding:10px 12px;">Mode</th>
+                <th style="padding:10px 12px;">Line mm</th>
+                <th style="padding:10px 12px;">Power</th>
+                <th style="padding:10px 12px;">Speed</th>
+                <th style="padding:10px 12px;">Passes</th>
+                <th style="padding:10px 12px;">Note</th>
+                <th style="padding:10px 12px;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{ reference40w }}" as="r" hint-placeholder-count="8">
+                <tr style="border-top:1px solid oklch(92% 0.006 260);">
+                  <td style="padding:9px 12px; font-weight:600; color:oklch(28% 0.01 260);">{{ r.material }}</td>
+                  <td style="padding:9px 12px; color:oklch(45% 0.01 260);">{{ r.modeLabel }}</td>
+                  <td style="padding:9px 12px; color:oklch(45% 0.01 260);">{{ r.lineSpacingLabel }}</td>
+                  <td style="padding:9px 12px; color:oklch(45% 0.15 45); font-weight:700;">{{ r.powerLabel }}</td>
+                  <td style="padding:9px 12px; color:oklch(45% 0.15 210); font-weight:700;">{{ r.speedLabel }}</td>
+                  <td style="padding:9px 12px; color:oklch(45% 0.01 260);">{{ r.passes }}</td>
+                  <td style="padding:9px 12px; color:oklch(50% 0.01 260);">{{ r.note }}</td>
+                  <td style="padding:9px 12px;"><button onClick="{{ r.onSave }}" style="border:1px solid oklch(88% 0.006 260); background:white; border-radius:7px; padding:6px 10px; font-size:12px; font-weight:700; color:oklch(50% 0.15 300); cursor:pointer; white-space:nowrap;">Save</button></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px;">
+        <sc-for list="{{ referenceNotes }}" as="n" hint-placeholder-count="4">
+          <div style="background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; padding:16px;">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:700; color:oklch(22% 0.01 260);">{{ n.title }}</div>
+            <div style="font-size:13px; color:oklch(40% 0.01 260); margin-top:8px; line-height:1.55;">{{ n.body }}</div>
+          </div>
+        </sc-for>
+      </div>
     </sc-if>
   </div>
 
@@ -680,6 +786,121 @@ const DITHER_MODES = [
   { value: 'newsprint', label: 'Newsprint' }
 ];
 const ditherLabel = (v) => (DITHER_MODES.find(d => d.value === v) || DITHER_MODES[0]).label;
+const L8_REFERENCE_20W = [
+  { material: 'MDF board', mode: 'engrave', lineSpacing: 0.1, power: 60, speed: 30000, passes: 1 },
+  { material: 'Plywood', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 25000, passes: 1 },
+  { material: 'Pinewood', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 25000, passes: 1 },
+  { material: 'Tung paperboard', mode: 'engrave', lineSpacing: 0.1, power: 60, speed: 30000, passes: 1 },
+  { material: 'Paperboard', mode: 'engrave', lineSpacing: 0.1, power: 60, speed: 30000, passes: 1 },
+  { material: 'A4 paper', mode: 'engrave', lineSpacing: 0.1, power: 60, speed: 30000, passes: 1 },
+  { material: 'Kraft paper', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 17000, passes: 1 },
+  { material: 'Black acrylic', mode: 'engrave', lineSpacing: 0.1, power: 60, speed: 30000, passes: 1 },
+  { material: 'Cobblestone', mode: 'engrave', lineSpacing: 0.1, power: 80, speed: 30000, passes: 1 },
+  { material: 'Ceramic', mode: 'engrave', lineSpacing: 0.07, power: 100, speed: 10000, passes: 1 },
+  { material: 'Coated Metal', mode: 'engrave', lineSpacing: 0.1, power: 45, speed: 30000, passes: 1 },
+  { material: 'Electroplated Metal', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 8000, passes: 1 },
+  { material: 'Pure Metals', mode: 'engrave', lineSpacing: null, power: null, speed: null, passes: null, note: 'Cannot engrave; SainSmart recommends a fiber laser instead.' },
+  { material: 'Glass', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 10000, passes: 1 },
+  { material: 'Fabric', mode: 'engrave', lineSpacing: 0.1, power: 85, speed: 30000, passes: 1 },
+  { material: 'Cotton', mode: 'engrave', lineSpacing: 0.1, power: 85, speed: 30000, passes: 1 },
+  { material: 'Stainless Steel', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 4000, passes: 1, note: 'Different color effects can be obtained by adjusting power and speed.' },
+  { material: 'ABS plastic', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 30000, passes: 1 },
+  { material: 'Silicone', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 4000, passes: 1 },
+  { material: 'Rubber', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 20000, passes: 1 },
+  { material: 'Tile', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 16000, passes: 1 },
+  { material: 'Pinewood board 8mm', mode: 'cut', lineSpacing: null, power: 100, speed: 200, passes: 1 },
+  { material: 'Pinewood board 10mm', mode: 'cut', lineSpacing: null, power: 100, speed: 150, passes: 1 },
+  { material: 'Pinewood board 12mm', mode: 'cut', lineSpacing: null, power: 100, speed: 110, passes: 1 },
+  { material: 'Pinewood board 15mm', mode: 'cut', lineSpacing: null, power: 100, speed: 100, passes: 2 },
+  { material: 'Plywood 5mm', mode: 'cut', lineSpacing: null, power: 100, speed: 350, passes: 1 },
+  { material: 'Plywood 8mm', mode: 'cut', lineSpacing: null, power: 100, speed: 200, passes: 1 },
+  { material: 'Plywood 10mm', mode: 'cut', lineSpacing: null, power: 100, speed: 250, passes: 2 },
+  { material: 'Foam board 10mm', mode: 'cut', lineSpacing: null, power: 100, speed: 250, passes: 1 },
+  { material: 'Foam board 12mm', mode: 'cut', lineSpacing: null, power: 100, speed: 200, passes: 1 },
+  { material: 'Foam board 15mm', mode: 'cut', lineSpacing: null, power: 100, speed: 110, passes: 1 },
+  { material: 'Gray cardboard 3mm', mode: 'cut', lineSpacing: null, power: 100, speed: 300, passes: 1 },
+  { material: 'White cardboard 5mm', mode: 'cut', lineSpacing: null, power: 100, speed: 100, passes: 1 },
+  { material: 'Corrugated board 6mm', mode: 'cut', lineSpacing: null, power: 100, speed: 100, passes: 1 },
+  { material: 'Black Acrylic 5mm', mode: 'cut', lineSpacing: null, power: 100, speed: 100, passes: 2 },
+  { material: 'PVC 5mm', mode: 'cut', lineSpacing: null, power: 100, speed: 400, passes: 1 },
+  { material: 'PVC 7mm', mode: 'cut', lineSpacing: null, power: 100, speed: 500, passes: 1 },
+  { material: 'A4 paper', mode: 'cut', lineSpacing: null, power: 40, speed: 1200, passes: 1 },
+  { material: 'Knitting Material', mode: 'cut', lineSpacing: null, power: 80, speed: 1200, passes: 1 },
+  { material: 'Cotton', mode: 'cut', lineSpacing: null, power: 80, speed: 1200, passes: 1 },
+  { material: 'ABS plastic', mode: 'cut', lineSpacing: null, power: 80, speed: 1200, passes: 1 },
+  { material: 'Silicone', mode: 'cut', lineSpacing: null, power: 100, speed: 100, passes: 4 }
+];
+const L8_REFERENCE_40W = [
+  { material: 'MDF board', mode: 'engrave', lineSpacing: 0.1, power: 80, speed: 35000, passes: 1 },
+  { material: 'Plywood', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 35000, passes: 1 },
+  { material: 'Pinewood', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 35000, passes: 1 },
+  { material: 'Tung paperboard', mode: 'engrave', lineSpacing: 0.1, power: 80, speed: 38000, passes: 1 },
+  { material: 'Paperboard', mode: 'engrave', lineSpacing: 0.1, power: 80, speed: 35000, passes: 1 },
+  { material: 'A4 paper', mode: 'engrave', lineSpacing: 0.1, power: 50, speed: 30000, passes: 1 },
+  { material: 'Kraft paper', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 25000, passes: 1 },
+  { material: 'Black acrylic', mode: 'engrave', lineSpacing: 0.1, power: 80, speed: 35000, passes: 1 },
+  { material: 'Cobblestone', mode: 'engrave', lineSpacing: 0.1, power: 60, speed: 30000, passes: 1 },
+  { material: 'Ceramic', mode: 'engrave', lineSpacing: 0.07, power: 100, speed: 15000, passes: 1 },
+  { material: 'Coated metal', mode: 'engrave', lineSpacing: 0.1, power: 45, speed: 35000, passes: 1 },
+  { material: 'Electroplated metal', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 12000, passes: 1 },
+  { material: 'Pure metal', mode: 'engrave', lineSpacing: null, power: null, speed: null, passes: null, note: 'Cannot engrave; SainSmart recommends a fiber laser instead.' },
+  { material: 'Glass', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 6000, passes: 1 },
+  { material: 'Fabric', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 15000, passes: 1 },
+  { material: 'Cotton', mode: 'engrave', lineSpacing: 0.1, power: 80, speed: 35000, passes: 1 },
+  { material: 'Stainless steel', mode: 'engrave', lineSpacing: 0.1, power: 80, speed: 35000, passes: 1, note: 'Different color effects can be obtained by adjusting power and speed.' },
+  { material: 'ABS plastic', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 35000, passes: 1 },
+  { material: 'Silicone', mode: 'engrave', lineSpacing: 0.1, power: 100, speed: 6000, passes: 1 },
+  { material: 'Rubber', mode: 'engrave', lineSpacing: 0.1, power: 90, speed: 25000, passes: 1 },
+  { material: 'Tile', mode: 'engrave', lineSpacing: 0.1, power: 90, speed: 20000, passes: 1 },
+  { material: 'Stainless steel 0.2mm', mode: 'cut', lineSpacing: null, power: 100, speed: 180, passes: 1 },
+  { material: 'Pinewood board 10mm', mode: 'cut', lineSpacing: null, power: 100, speed: 220, passes: 1 },
+  { material: 'Pinewood board 15mm', mode: 'cut', lineSpacing: null, power: 100, speed: 170, passes: 1 },
+  { material: 'Pinewood board 18mm', mode: 'cut', lineSpacing: null, power: 100, speed: 150, passes: 1 },
+  { material: 'Pinewood board 20mm', mode: 'cut', lineSpacing: null, power: 100, speed: 150, passes: 1 },
+  { material: 'Plywood 5mm', mode: 'cut', lineSpacing: null, power: 100, speed: 520, passes: 1 },
+  { material: 'Plywood 8mm', mode: 'cut', lineSpacing: null, power: 100, speed: 300, passes: 1 },
+  { material: 'Plywood 10mm', mode: 'cut', lineSpacing: null, power: 100, speed: 380, passes: 1 },
+  { material: 'Foam board 10mm', mode: 'cut', lineSpacing: null, power: 100, speed: 380, passes: 1 },
+  { material: 'Foam board 12mm', mode: 'cut', lineSpacing: null, power: 100, speed: 300, passes: 1 },
+  { material: 'Foam board 15mm', mode: 'cut', lineSpacing: null, power: 100, speed: 160, passes: 1 },
+  { material: 'Gray cardboard 3mm', mode: 'cut', lineSpacing: null, power: 100, speed: 450, passes: 1 },
+  { material: 'White cardboard 5mm', mode: 'cut', lineSpacing: null, power: 100, speed: 300, passes: 2 },
+  { material: 'Corrugated board 6mm', mode: 'cut', lineSpacing: null, power: 100, speed: 750, passes: 1 },
+  { material: 'Black acrylic 5mm', mode: 'cut', lineSpacing: null, power: 100, speed: 150, passes: 1 },
+  { material: 'Black acrylic 12mm', mode: 'cut', lineSpacing: null, power: 100, speed: 100, passes: 1 },
+  { material: 'PVC 7mm', mode: 'cut', lineSpacing: null, power: 100, speed: 600, passes: 1 },
+  { material: 'A4 paper', mode: 'cut', lineSpacing: null, power: 40, speed: 1800, passes: 1 },
+  { material: 'Knitting material', mode: 'cut', lineSpacing: null, power: 80, speed: 1800, passes: 1 },
+  { material: 'Cotton', mode: 'cut', lineSpacing: null, power: 80, speed: 1800, passes: 1 },
+  { material: 'ABS plastic', mode: 'cut', lineSpacing: null, power: 80, speed: 1800, passes: 1 },
+  { material: 'Silicone', mode: 'cut', lineSpacing: null, power: 100, speed: 150, passes: 4 }
+];
+const L8_REFERENCE_NOTES = [
+  { title: 'Materials', body: 'Engraving examples include cardboard, wood, bamboo, rubber, leather, fabric, acrylic, painted metal, plastic, stone, ceramics, stainless steel, coated metals, and other non-transparent materials. Cutting examples include cardboard, wood, bamboo, cloth, leather, fabric, acrylic except clear acrylic, plastic, and similar non-transparent stock.' },
+  { title: 'LightBurn and coordinates', body: 'The manual recommends LightBurn, especially for camera positioning. Homing is recommended for absolute-coordinate work; if the machine crashes, pull the laser head back toward center before homing.' },
+  { title: 'Offline files', body: 'For offline work, generate G-code from LightBurn, place it in the TF-card root, and keep the root tidy. The manual says the machine reads the newest file by modification date and notes renaming to 001.nc for the offline button flow.' },
+  { title: 'Cut troubleshooting', body: 'If material will not cut through, check that the machine and material are parallel, the lens is clean, focus is correct, thickness is confirmed, then add passes or reduce cutting speed.' },
+  { title: 'Smoke and scorching', body: 'For excessive smoke or dust after cutting, the manual suggests reducing laser power and increasing speed. Use suitable airflow and avoid bent air-assist tubing.' },
+  { title: 'Reflective and clear materials', body: 'Transparent or reflective materials need anti-reflective prep such as laser color paper or black marker. Pure metals are not a good diode-laser target; the chart recommends a fiber laser for pure metal engraving.' }
+];
+function splitReferenceMaterial(material) {
+  const match = material.match(/^(.*?)[ ]+([0-9.]+)mm$/i);
+  if (!match) return { material, thicknessValue: '', thicknessUnit: 'mm' };
+  return { material: match[1].trim(), thicknessValue: match[2], thicknessUnit: 'mm' };
+}
+function referenceRow(row, wattLabel, onSave) {
+  return {
+    ...row,
+    wattLabel,
+    modeLabel: row.mode === 'cut' ? 'Cut' : 'Engrave',
+    lineSpacingLabel: row.lineSpacing == null ? '-' : String(row.lineSpacing),
+    powerLabel: row.power == null ? '-' : `${row.power}%`,
+    speedLabel: row.speed == null ? '-' : `${row.speed} mm/min`,
+    passes: row.passes == null ? '-' : row.passes,
+    note: row.note || '',
+    onSave
+  };
+}
 function rangeArray(min, max, step) {
   const out = [];
   const mn = num(min, 0), mx = num(max, 0), st = num(step, 1) || 1;
@@ -750,6 +971,7 @@ class Component extends DCLogic {
   goLog = () => this.setState({ activeTab: 'log' });
   goLibrary = () => this.setState({ activeTab: 'library' });
   goGrids = () => this.setState({ activeTab: 'grids' });
+  goReference = () => this.setState({ activeTab: 'reference' });
   setUnitIn = () => this.setState({ unit: 'in' }, this.persist);
   setUnitMm = () => this.setState({ unit: 'mm' }, this.persist);
 
@@ -919,6 +1141,40 @@ class Component extends DCLogic {
     if (!window.confirm('Remove this material from your library?')) return;
     this.setState(s => ({ profiles: s.profiles.filter(x => x.id !== id) }), this.persist);
   };
+  saveReferenceToProfile = (row, wattLabel) => {
+    if (row.power == null || row.speed == null) {
+      window.alert('This reference row does not include usable diode-laser settings.');
+      return;
+    }
+    const parsed = splitReferenceMaterial(row.material);
+    this.setState({
+      activeTab: 'library',
+      profileModalOpen: true,
+      editingProfileId: null,
+      profileForm: {
+        material: parsed.material,
+        thicknessValue: parsed.thicknessValue,
+        thicknessUnit: parsed.thicknessUnit,
+        jobType: row.mode,
+        minPower: String(row.power),
+        maxPower: String(row.power),
+        speed: String(row.speed),
+        passes: String(row.passes || 1),
+        lineInterval: row.lineSpacing == null ? '' : String(row.lineSpacing),
+        airAssist: row.mode === 'cut',
+        airPressure: '',
+        overscanPercent: '',
+        kerfOffset: '',
+        ditherMode: 'none',
+        focusValue: '',
+        focusUnit: 'mm',
+        materialHeightValue: '',
+        materialHeightUnit: 'mm',
+        software: 'LightBurn',
+        notes: `Official SainSmart ${wattLabel} starting point. Tune for your exact material, focus, airflow, and lens condition.${row.note ? ' ' + row.note : ''}`
+      }
+    });
+  };
 
   // ---------- test grids ----------
   openNewGrid = () => this.setState({ gridModalOpen: true, gridForm: newGridForm(this.state.unit) });
@@ -1028,14 +1284,14 @@ class Component extends DCLogic {
       if (o.kerfOffset !== '' && o.kerfOffset != null) parts.push(`Kerf ${o.kerfOffset}mm`);
       if (o.ditherMode && o.ditherMode !== 'none') parts.push(ditherLabel(o.ditherMode));
       if (o.materialHeightValue !== '' && o.materialHeightValue != null) parts.push(`Height ${o.materialHeightValue}${o.materialHeightUnit || ''}`);
-      return parts.join(' · ');
+      return parts.join(' - ');
     };
 
     const filteredEntries = filtered.map(e => ({
       ...e,
       thicknessLabel: fmtThickness(e.thicknessValue, e.thicknessUnit),
       focusLabel: fmtFocus(e.focusValue, e.focusUnit),
-      lineIntervalLabel: e.lineInterval === '' || e.lineInterval === null ? '—' : `${e.lineInterval}mm`,
+      lineIntervalLabel: e.lineInterval === '' || e.lineInterval === null ? '-' : `${e.lineInterval}mm`,
       airLabel: e.airAssist ? 'On' : 'Off',
       jobTypeLabel: e.jobType === 'cut' ? 'Cut' : 'Engrave',
       powerLabel: powerLabelOf(e),
@@ -1050,7 +1306,7 @@ class Component extends DCLogic {
       ...p,
       thicknessLabel: fmtThickness(p.thicknessValue, p.thicknessUnit),
       focusLabel: fmtFocus(p.focusValue, p.focusUnit),
-      lineIntervalLabel: p.lineInterval === '' || p.lineInterval === null ? '—' : `${p.lineInterval}mm`,
+      lineIntervalLabel: p.lineInterval === '' || p.lineInterval === null ? '-' : `${p.lineInterval}mm`,
       airLabel: p.airAssist ? 'On' : 'Off',
       jobTypeLabel: p.jobType === 'cut' ? 'Cut' : 'Engrave',
       powerLabel: powerLabelOf(p),
@@ -1068,7 +1324,7 @@ class Component extends DCLogic {
         id: g.id, name: g.name, material: g.material,
         thicknessLabel: fmtThickness(g.thicknessValue, g.thicknessUnit),
         createdDate: g.createdDate,
-        dims: `${powers.length}×${speeds.length} grid`,
+        dims: `${powers.length}x${speeds.length} grid`,
         totalCells: total, filledCount,
         onOpen: () => this.openGrid(g.id)
       };
@@ -1123,12 +1379,12 @@ class Component extends DCLogic {
 
     const gp = rangeArray(s.gridForm.powerMin, s.gridForm.powerMax, s.gridForm.powerStep);
     const gs = rangeArray(s.gridForm.speedMin, s.gridForm.speedMax, s.gridForm.speedStep);
-    const gridPreviewLabel = `${gp.length} power level(s) × ${gs.length} speed level(s) = ${gp.length * gs.length} cells`;
+    const gridPreviewLabel = `${gp.length} power level(s) x ${gs.length} speed level(s) = ${gp.length * gs.length} cells`;
 
     let cellModalLabel = 'Record result';
     if (s.activeCellKey) {
       const [p, sp] = s.activeCellKey.split('_');
-      cellModalLabel = `${p}% · ${sp} mm/min`;
+      cellModalLabel = `${p}% - ${sp} mm/min`;
     }
 
     return {
@@ -1138,14 +1394,16 @@ class Component extends DCLogic {
       fileInputRef: this.fileInputRef,
       triggerImport: this.triggerImport, exportData: this.exportData, importData: this.importData,
 
-      isLogTab: s.activeTab === 'log', isLibraryTab: s.activeTab === 'library', isGridsTab: s.activeTab === 'grids',
-      goLog: this.goLog, goLibrary: this.goLibrary, goGrids: this.goGrids,
+      isLogTab: s.activeTab === 'log', isLibraryTab: s.activeTab === 'library', isGridsTab: s.activeTab === 'grids', isReferenceTab: s.activeTab === 'reference',
+      goLog: this.goLog, goLibrary: this.goLibrary, goGrids: this.goGrids, goReference: this.goReference,
       tabLogColor: s.activeTab === 'log' ? 'oklch(45% 0.15 210)' : 'oklch(50% 0.01 260)',
       tabLogBorder: s.activeTab === 'log' ? 'oklch(45% 0.15 210)' : 'transparent',
       tabLibraryColor: s.activeTab === 'library' ? 'oklch(50% 0.15 300)' : 'oklch(50% 0.01 260)',
       tabLibraryBorder: s.activeTab === 'library' ? 'oklch(50% 0.15 300)' : 'transparent',
       tabGridsColor: s.activeTab === 'grids' ? 'oklch(58% 0.16 20)' : 'oklch(50% 0.01 260)',
       tabGridsBorder: s.activeTab === 'grids' ? 'oklch(58% 0.16 20)' : 'transparent',
+      tabReferenceColor: s.activeTab === 'reference' ? 'oklch(36% 0.08 85)' : 'oklch(50% 0.01 260)',
+      tabReferenceBorder: s.activeTab === 'reference' ? 'oklch(36% 0.08 85)' : 'transparent',
 
       stats: {
         entryCount: s.entries.length,
@@ -1165,6 +1423,9 @@ class Component extends DCLogic {
       showGridList: !s.activeGridId, showGridDetail: !!s.activeGridId,
       hasGrids: gridList.length > 0, gridList, openNewGrid: this.openNewGrid,
       activeGrid, closeGridDetail: this.closeGridDetail, deleteActiveGrid: this.deleteActiveGrid,
+      reference20w: L8_REFERENCE_20W.map(row => referenceRow(row, '20W', () => this.saveReferenceToProfile(row, '20W'))),
+      reference40w: L8_REFERENCE_40W.map(row => referenceRow(row, '40W', () => this.saveReferenceToProfile(row, '40W'))),
+      referenceNotes: L8_REFERENCE_NOTES,
 
       entryModalOpen: s.entryModalOpen, entryModalTitle: s.editingEntryId ? 'Edit entry' : 'New log entry',
       closeEntryModal: this.closeEntryModal, saveEntry: this.saveEntry, entryForm: s.entryForm,
