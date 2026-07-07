@@ -1,0 +1,1187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; background: oklch(97% 0.004 260); font-family: 'Public Sans', sans-serif; }
+    input, select, textarea { font-family: 'Public Sans', sans-serif; }
+    ::placeholder { color: oklch(65% 0.01 260); }
+    @keyframes l8-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</helmet>
+
+<div style="min-height:100vh; width:100%; box-sizing:border-box; padding:20px 20px 80px;">
+
+  <!-- HEADER -->
+  <div style="max-width:1180px; margin:0 auto 20px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:14px;">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <div style="width:42px; height:42px; border-radius:10px; background:oklch(30% 0.03 260); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        <div style="width:18px; height:3px; background:oklch(70% 0.16 30); border-radius:2px; box-shadow: 0 6px 0 oklch(70% 0.16 30), 0 -6px 0 oklch(70% 0.16 30); transform:rotate(45deg);"></div>
+      </div>
+      <div>
+        <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:20px; color:oklch(22% 0.01 260); line-height:1.1;">Genmitsu L8 Tracker</div>
+        <div style="font-size:13px; color:oklch(50% 0.01 260);">Materials, power &amp; settings log</div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div style="display:flex; border:1px solid oklch(88% 0.006 260); border-radius:8px; overflow:hidden;">
+        <button name="in" onClick="{{ setUnitIn }}" style="border:none; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; background:{{ unitInBg }}; color:{{ unitInColor }};">in</button>
+        <button name="mm" onClick="{{ setUnitMm }}" style="border:none; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; background:{{ unitMmBg }}; color:{{ unitMmColor }};">mm</button>
+      </div>
+      <button onClick="{{ triggerImport }}" style="border:1px solid oklch(88% 0.006 260); background:white; color:oklch(30% 0.01 260); padding:8px 14px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">Import</button>
+      <button onClick="{{ exportData }}" style="border:1px solid oklch(88% 0.006 260); background:white; color:oklch(30% 0.01 260); padding:8px 14px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">Export</button>
+      <input ref="{{ fileInputRef }}" type="file" accept="application/json" onChange="{{ importData }}" style="display:none;" />
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div style="max-width:1180px; margin:0 auto 20px; display:flex; gap:8px; border-bottom:1px solid oklch(89% 0.006 260);">
+    <button onClick="{{ goLog }}" style="border:none; background:none; cursor:pointer; padding:10px 4px; margin-right:18px; font-size:15px; font-weight:600; font-family:'Space Grotesk',sans-serif; color:{{ tabLogColor }}; border-bottom:2px solid {{ tabLogBorder }};">Log</button>
+    <button onClick="{{ goLibrary }}" style="border:none; background:none; cursor:pointer; padding:10px 4px; margin-right:18px; font-size:15px; font-weight:600; font-family:'Space Grotesk',sans-serif; color:{{ tabLibraryColor }}; border-bottom:2px solid {{ tabLibraryBorder }};">Library</button>
+    <button onClick="{{ goGrids }}" style="border:none; background:none; cursor:pointer; padding:10px 4px; margin-right:18px; font-size:15px; font-weight:600; font-family:'Space Grotesk',sans-serif; color:{{ tabGridsColor }}; border-bottom:2px solid {{ tabGridsBorder }};">Test Grids</button>
+  </div>
+
+  <div style="max-width:1180px; margin:0 auto;">
+
+    <!-- ============ LOG TAB ============ -->
+    <sc-if value="{{ isLogTab }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:20px;">
+        <div style="background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; padding:16px;">
+          <div style="font-size:12px; color:oklch(50% 0.01 260); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Entries logged</div>
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:700; color:oklch(45% 0.15 210); margin-top:4px;">{{ stats.entryCount }}</div>
+        </div>
+        <div style="background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; padding:16px;">
+          <div style="font-size:12px; color:oklch(50% 0.01 260); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Materials tried</div>
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:700; color:oklch(50% 0.15 150); margin-top:4px;">{{ stats.materialCount }}</div>
+        </div>
+        <div style="background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; padding:16px;">
+          <div style="font-size:12px; color:oklch(50% 0.01 260); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Library settings</div>
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:700; color:oklch(55% 0.15 300); margin-top:4px;">{{ stats.profileCount }}</div>
+        </div>
+        <div style="background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; padding:16px;">
+          <div style="font-size:12px; color:oklch(50% 0.01 260); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;">Test grids run</div>
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:28px; font-weight:700; color:oklch(58% 0.16 20); margin-top:4px;">{{ stats.gridCount }}</div>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:16px;">
+        <input type="text" placeholder="Search notes, material, software..." value="{{ search }}" onChange="{{ onSearchChange }}" style="flex:1; min-width:220px; padding:10px 14px; border:1px solid oklch(88% 0.006 260); border-radius:8px; font-size:14px; background:white; color:oklch(22% 0.01 260);" />
+        <select value="{{ materialFilter }}" onChange="{{ onMaterialFilterChange }}" style="padding:10px 14px; border:1px solid oklch(88% 0.006 260); border-radius:8px; font-size:14px; background:white; color:oklch(30% 0.01 260);">
+          <option value="all">All materials</option>
+          <sc-for list="{{ materialOptions }}" as="m" hint-placeholder-count="3">
+            <option value="{{ m }}">{{ m }}</option>
+          </sc-for>
+        </select>
+        <button onClick="{{ openNewEntry }}" style="padding:10px 18px; border:none; border-radius:8px; background:oklch(45% 0.15 210); color:white; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">+ New Entry</button>
+      </div>
+
+      <sc-if value="{{ hasFilteredEntries }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px;">
+          <sc-for list="{{ filteredEntries }}" as="entry" hint-placeholder-count="4">
+            <div style="background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; padding:16px; animation: l8-fade-in 0.25s ease;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+                <div>
+                  <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:16px; color:oklch(22% 0.01 260);">{{ entry.material }}</div>
+                  <div style="font-size:12px; color:oklch(50% 0.01 260); margin-top:2px;">{{ entry.thicknessLabel }} · {{ entry.jobTypeLabel }} · {{ entry.date }}</div>
+                </div>
+                <div style="display:flex; gap:4px;">
+                  <sc-for list="{{ entry.starsFilled }}" as="filled" hint-placeholder-count="5">
+                    <div style="width:8px; height:8px; border-radius:50%; background:{{ filled.color }};"></div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
+                <div style="background:oklch(95% 0.03 45); border-radius:8px; padding:8px 10px;">
+                  <div style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; color:oklch(45% 0.15 45);">Power</div>
+                  <div style="font-size:15px; font-weight:600; color:oklch(25% 0.01 260);">{{ entry.powerLabel }}</div>
+                </div>
+                <div style="background:oklch(95% 0.03 210); border-radius:8px; padding:8px 10px;">
+                  <div style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; color:oklch(45% 0.15 210);">Speed</div>
+                  <div style="font-size:15px; font-weight:600; color:oklch(25% 0.01 260);">{{ entry.speed }} mm/min</div>
+                </div>
+                <div style="background:oklch(95% 0.03 300); border-radius:8px; padding:8px 10px;">
+                  <div style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; color:oklch(50% 0.15 300);">Passes</div>
+                  <div style="font-size:15px; font-weight:600; color:oklch(25% 0.01 260);">{{ entry.passes }}</div>
+                </div>
+                <div style="background:oklch(95% 0.03 150); border-radius:8px; padding:8px 10px;">
+                  <div style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; color:oklch(45% 0.15 150);">Line int.</div>
+                  <div style="font-size:15px; font-weight:600; color:oklch(25% 0.01 260);">{{ entry.lineIntervalLabel }}</div>
+                </div>
+              </div>
+              <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; font-size:12px; color:oklch(45% 0.01 260);">
+                <span>Focus: {{ entry.focusLabel }}</span>
+                <span>·</span>
+                <span>Air: {{ entry.airLabel }}</span>
+                <sc-if value="{{ entry.software }}" hint-placeholder-val="{{ false }}">
+                  <span>· {{ entry.software }}</span>
+                </sc-if>
+              </div>
+              <sc-if value="{{ entry.extraLabel }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:6px; font-size:12px; color:oklch(50% 0.01 260);">{{ entry.extraLabel }}</div>
+              </sc-if>
+              <sc-if value="{{ entry.notes }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:8px; font-size:13px; color:oklch(35% 0.01 260); background:oklch(97% 0.004 260); border-radius:8px; padding:8px 10px;">{{ entry.notes }}</div>
+              </sc-if>
+              <div style="display:flex; gap:8px; margin-top:12px;">
+                <button onClick="{{ entry.onEdit }}" style="flex:1; padding:7px; border:1px solid oklch(88% 0.006 260); background:white; border-radius:7px; font-size:12px; font-weight:600; color:oklch(30% 0.01 260); cursor:pointer;">Edit</button>
+                <button onClick="{{ entry.onPromote }}" style="flex:1; padding:7px; border:1px solid oklch(88% 0.006 260); background:white; border-radius:7px; font-size:12px; font-weight:600; color:oklch(50% 0.15 300); cursor:pointer;">Save to library</button>
+                <button onClick="{{ entry.onDelete }}" style="padding:7px 10px; border:1px solid oklch(88% 0.006 260); background:white; border-radius:7px; font-size:12px; font-weight:600; color:oklch(55% 0.16 20); cursor:pointer;">Delete</button>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <sc-if value="{{ hasFilteredEntries }}" hint-placeholder-val="{{ true }}" invert="true">
+        <div style="text-align:center; padding:60px 20px; color:oklch(55% 0.01 260);">
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:600; color:oklch(35% 0.01 260); margin-bottom:6px;">No entries yet</div>
+          <div style="font-size:14px;">Log your first cut or engrave to start building a repeatable settings history.</div>
+        </div>
+      </sc-if>
+    </sc-if>
+
+    <!-- ============ LIBRARY TAB ============ -->
+    <sc-if value="{{ isLibraryTab }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:10px; flex-wrap:wrap;">
+        <div style="font-size:14px; color:oklch(50% 0.01 260); max-width:520px;">Curated best-known settings per material. Promote from a log entry or add directly.</div>
+        <button onClick="{{ openNewProfile }}" style="padding:10px 18px; border:none; border-radius:8px; background:oklch(50% 0.15 300); color:white; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">+ Add Material</button>
+      </div>
+
+      <sc-if value="{{ hasProfiles }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px;">
+          <sc-for list="{{ profileList }}" as="p" hint-placeholder-count="4">
+            <div style="background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; padding:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                  <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:16px; color:oklch(22% 0.01 260);">{{ p.material }}</div>
+                  <div style="font-size:12px; color:oklch(50% 0.01 260); margin-top:2px;">{{ p.thicknessLabel }} · {{ p.jobTypeLabel }}</div>
+                </div>
+                <div style="background:oklch(95% 0.03 150); color:oklch(45% 0.15 150); font-size:11px; font-weight:700; padding:4px 8px; border-radius:6px;">BEST KNOWN</div>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
+                <div style="background:oklch(95% 0.03 45); border-radius:8px; padding:8px 10px;">
+                  <div style="font-size:10px; font-weight:700; text-transform:uppercase; color:oklch(45% 0.15 45);">Power</div>
+                  <div style="font-size:15px; font-weight:600; color:oklch(25% 0.01 260);">{{ p.powerLabel }}</div>
+                </div>
+                <div style="background:oklch(95% 0.03 210); border-radius:8px; padding:8px 10px;">
+                  <div style="font-size:10px; font-weight:700; text-transform:uppercase; color:oklch(45% 0.15 210);">Speed</div>
+                  <div style="font-size:15px; font-weight:600; color:oklch(25% 0.01 260);">{{ p.speed }} mm/min</div>
+                </div>
+                <div style="background:oklch(95% 0.03 300); border-radius:8px; padding:8px 10px;">
+                  <div style="font-size:10px; font-weight:700; text-transform:uppercase; color:oklch(50% 0.15 300);">Passes</div>
+                  <div style="font-size:15px; font-weight:600; color:oklch(25% 0.01 260);">{{ p.passes }}</div>
+                </div>
+                <div style="background:oklch(95% 0.03 150); border-radius:8px; padding:8px 10px;">
+                  <div style="font-size:10px; font-weight:700; text-transform:uppercase; color:oklch(45% 0.15 150);">Line int.</div>
+                  <div style="font-size:15px; font-weight:600; color:oklch(25% 0.01 260);">{{ p.lineIntervalLabel }}</div>
+                </div>
+              </div>
+              <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; font-size:12px; color:oklch(45% 0.01 260);">
+                <span>Focus: {{ p.focusLabel }}</span>
+                <span>·</span>
+                <span>Air: {{ p.airLabel }}</span>
+                <sc-if value="{{ p.software }}" hint-placeholder-val="{{ false }}">
+                  <span>· {{ p.software }}</span>
+                </sc-if>
+              </div>
+              <sc-if value="{{ p.extraLabel }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:6px; font-size:12px; color:oklch(50% 0.01 260);">{{ p.extraLabel }}</div>
+              </sc-if>
+              <sc-if value="{{ p.notes }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:8px; font-size:13px; color:oklch(35% 0.01 260); background:oklch(97% 0.004 260); border-radius:8px; padding:8px 10px;">{{ p.notes }}</div>
+              </sc-if>
+              <div style="display:flex; gap:8px; margin-top:12px;">
+                <button onClick="{{ p.onEdit }}" style="flex:1; padding:7px; border:1px solid oklch(88% 0.006 260); background:white; border-radius:7px; font-size:12px; font-weight:600; color:oklch(30% 0.01 260); cursor:pointer;">Edit</button>
+                <button onClick="{{ p.onDelete }}" style="padding:7px 10px; border:1px solid oklch(88% 0.006 260); background:white; border-radius:7px; font-size:12px; font-weight:600; color:oklch(55% 0.16 20); cursor:pointer;">Delete</button>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <sc-if value="{{ hasProfiles }}" hint-placeholder-val="{{ false }}" invert="true">
+        <div style="text-align:center; padding:60px 20px; color:oklch(55% 0.01 260);">
+          <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:600; color:oklch(35% 0.01 260); margin-bottom:6px;">Library is empty</div>
+          <div style="font-size:14px;">Once you've dialed in a material, save it here as your go-to reference.</div>
+        </div>
+      </sc-if>
+    </sc-if>
+
+    <!-- ============ TEST GRIDS TAB ============ -->
+    <sc-if value="{{ isGridsTab }}" hint-placeholder-val="{{ false }}">
+
+      <sc-if value="{{ showGridList }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:10px; flex-wrap:wrap;">
+          <div style="font-size:14px; color:oklch(50% 0.01 260); max-width:560px;">Plan a power × speed test matrix for a new material, then record results per cell.</div>
+          <button onClick="{{ openNewGrid }}" style="padding:10px 18px; border:none; border-radius:8px; background:oklch(58% 0.16 20); color:white; font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;">+ New Test Grid</button>
+        </div>
+
+        <sc-if value="{{ hasGrids }}" hint-placeholder-val="{{ false }}">
+          <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:14px;">
+            <sc-for list="{{ gridList }}" as="g" hint-placeholder-count="3">
+              <div onClick="{{ g.onOpen }}" style="background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; padding:16px; cursor:pointer;">
+                <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:16px; color:oklch(22% 0.01 260);">{{ g.name }}</div>
+                <div style="font-size:12px; color:oklch(50% 0.01 260); margin-top:2px;">{{ g.material }} · {{ g.thicknessLabel }} · {{ g.createdDate }}</div>
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                  <div style="background:oklch(95% 0.03 20); color:oklch(45% 0.16 20); font-size:12px; font-weight:600; padding:4px 8px; border-radius:6px;">{{ g.dims }}</div>
+                  <div style="background:oklch(97% 0.004 260); color:oklch(45% 0.01 260); font-size:12px; font-weight:600; padding:4px 8px; border-radius:6px;">{{ g.filledCount }}/{{ g.totalCells }} recorded</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ hasGrids }}" hint-placeholder-val="{{ false }}" invert="true">
+          <div style="text-align:center; padding:60px 20px; color:oklch(55% 0.01 260);">
+            <div style="font-family:'Space Grotesk',sans-serif; font-size:17px; font-weight:600; color:oklch(35% 0.01 260); margin-bottom:6px;">No test grids yet</div>
+            <div style="font-size:14px;">New material? Run a power/speed matrix to dial in settings fast.</div>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <!-- GRID DETAIL -->
+      <sc-if value="{{ showGridDetail }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px;">
+          <button onClick="{{ closeGridDetail }}" style="border:1px solid oklch(88% 0.006 260); background:white; border-radius:7px; padding:6px 12px; font-size:13px; font-weight:600; cursor:pointer; color:oklch(30% 0.01 260);">&larr; Back</button>
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:19px; color:oklch(22% 0.01 260);">{{ activeGrid.name }}</div>
+          <button onClick="{{ deleteActiveGrid }}" style="margin-left:auto; border:1px solid oklch(88% 0.006 260); background:white; border-radius:7px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; color:oklch(55% 0.16 20);">Delete grid</button>
+        </div>
+        <div style="font-size:13px; color:oklch(50% 0.01 260); margin-bottom:6px;">
+          {{ activeGrid.material }} · {{ activeGrid.thicknessLabel }} · {{ activeGrid.jobTypeLabel }} · {{ activeGrid.passes }} pass(es) · Air: {{ activeGrid.airLabel }}<sc-if value="{{ activeGrid.software }}" hint-placeholder-val="{{ false }}"> · {{ activeGrid.software }}</sc-if>
+        </div>
+        <sc-if value="{{ activeGrid.extraLabel }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:12px; color:oklch(55% 0.01 260); margin-bottom:10px;">{{ activeGrid.extraLabel }}</div>
+        </sc-if>
+        <div style="font-size:12px; color:oklch(55% 0.01 260); margin-bottom:10px;">Click a cell to record a result. Rows = power %, columns = speed (mm/min).</div>
+        <div style="overflow-x:auto; background:white; border:1px solid oklch(90% 0.006 260); border-radius:12px; padding:16px;">
+          <div style="display:inline-block;">
+            <div style="display:flex;">
+              <div style="width:70px; flex-shrink:0;"></div>
+              <sc-for list="{{ activeGrid.speeds }}" as="sp" hint-placeholder-count="4">
+                <div style="width:84px; flex-shrink:0; text-align:center; font-size:11px; font-weight:700; color:oklch(45% 0.15 210); padding-bottom:6px;">{{ sp }}<br/>mm/min</div>
+              </sc-for>
+            </div>
+            <sc-for list="{{ activeGrid.rows }}" as="row" hint-placeholder-count="4">
+              <div style="display:flex; align-items:center;">
+                <div style="width:70px; flex-shrink:0; font-size:12px; font-weight:700; color:oklch(45% 0.15 45); text-align:right; padding-right:10px;">{{ row.power }}%</div>
+                <sc-for list="{{ row.cols }}" as="cell" hint-placeholder-count="4">
+                  <div onClick="{{ cell.onClick }}" style="width:76px; height:56px; margin:4px; border-radius:8px; cursor:pointer; background:{{ cell.bg }}; border:1px solid {{ cell.border }}; display:flex; align-items:center; justify-content:center; flex-direction:column;">
+                    <sc-if value="{{ cell.hasData }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:13px; font-weight:700; color:{{ cell.textColor }};">{{ cell.ratingLabel }}</div>
+                      <sc-if value="{{ cell.best }}" hint-placeholder-val="{{ false }}">
+                        <div style="font-size:9px; font-weight:700; color:{{ cell.textColor }};">BEST</div>
+                      </sc-if>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </sc-if>
+  </div>
+
+  <!-- ============ ENTRY MODAL ============ -->
+  <sc-if value="{{ entryModalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:oklch(20% 0.01 260 / 55%); display:flex; align-items:flex-start; justify-content:center; padding:30px 16px; z-index:100; overflow-y:auto;">
+      <div style="background:white; border-radius:14px; width:100%; max-width:640px; padding:24px; animation: l8-fade-in 0.2s ease;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:19px; color:oklch(22% 0.01 260);">{{ entryModalTitle }}</div>
+          <button onClick="{{ closeEntryModal }}" style="border:none; background:none; font-size:22px; cursor:pointer; color:oklch(50% 0.01 260); line-height:1;">&times;</button>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <label style="grid-column:span 1; font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Date
+            <input type="date" name="entryForm.date" value="{{ entryForm.date }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Job type
+            <select name="entryForm.jobType" value="{{ entryForm.jobType }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+              <option value="engrave">Engrave</option>
+              <option value="cut">Cut</option>
+            </select>
+          </label>
+          <label style="grid-column:span 2; font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Material
+            <input type="text" name="entryForm.material" placeholder="e.g. 1/8in Baltic birch plywood" value="{{ entryForm.material }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Thickness
+            <div style="display:flex; gap:6px; margin-top:4px;">
+              <input type="number" step="any" name="entryForm.thicknessValue" value="{{ entryForm.thicknessValue }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+              <select name="entryForm.thicknessUnit" value="{{ entryForm.thicknessUnit }}" onChange="{{ handleInput }}" style="padding:9px 6px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+                <option value="in">in</option>
+                <option value="mm">mm</option>
+              </select>
+            </div>
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Focus height
+            <div style="display:flex; gap:6px; margin-top:4px;">
+              <input type="number" step="any" name="entryForm.focusValue" value="{{ entryForm.focusValue }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+              <select name="entryForm.focusUnit" value="{{ entryForm.focusUnit }}" onChange="{{ handleInput }}" style="padding:9px 6px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+                <option value="in">in</option>
+                <option value="mm">mm</option>
+              </select>
+            </div>
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Power min (%)
+            <input type="number" min="0" max="100" name="entryForm.minPower" value="{{ entryForm.minPower }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Power max (%) <span style="font-weight:400; color:oklch(60% 0.01 260);">— leave blank if flat</span>
+            <input type="number" min="0" max="100" name="entryForm.maxPower" value="{{ entryForm.maxPower }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Speed (mm/min)
+            <input type="number" min="0" name="entryForm.speed" value="{{ entryForm.speed }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Passes
+            <input type="number" min="1" name="entryForm.passes" value="{{ entryForm.passes }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Line interval, mm (engrave)
+            <input type="number" step="any" min="0" name="entryForm.lineInterval" value="{{ entryForm.lineInterval }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Overscan (%)
+            <input type="number" step="any" min="0" name="entryForm.overscanPercent" value="{{ entryForm.overscanPercent }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Kerf offset, mm (cut)
+            <input type="number" step="any" name="entryForm.kerfOffset" value="{{ entryForm.kerfOffset }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Dither mode (photo engrave)
+            <select name="entryForm.ditherMode" value="{{ entryForm.ditherMode }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+              <sc-for list="{{ ditherModes }}" as="dm" hint-placeholder-count="6">
+                <option value="{{ dm.value }}">{{ dm.label }}</option>
+              </sc-for>
+            </select>
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Material height / Z-offset
+            <div style="display:flex; gap:6px; margin-top:4px;">
+              <input type="number" step="any" name="entryForm.materialHeightValue" value="{{ entryForm.materialHeightValue }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+              <select name="entryForm.materialHeightUnit" value="{{ entryForm.materialHeightUnit }}" onChange="{{ handleInput }}" style="padding:9px 6px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+                <option value="in">in</option>
+                <option value="mm">mm</option>
+              </select>
+            </div>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:oklch(40% 0.01 260); margin-top:18px;">
+            <input type="checkbox" name="entryForm.airAssist" checked="{{ entryForm.airAssist }}" onChange="{{ handleInput }}" style="width:16px; height:16px;" /> Air assist on
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Air pressure (psi)
+            <input type="number" step="any" min="0" name="entryForm.airPressure" value="{{ entryForm.airPressure }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Software
+            <input type="text" list="l8-software-list" name="entryForm.software" placeholder="LightBurn, LaserGRBL..." value="{{ entryForm.software }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="grid-column:span 2; font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Settings file / profile name
+            <input type="text" name="entryForm.settingsFile" placeholder="e.g. birch-engrave-v3.lbrn2" value="{{ entryForm.settingsFile }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <div style="grid-column:span 2;">
+            <div style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260); margin-bottom:4px;">Result quality</div>
+            <div style="display:flex; gap:6px;">
+              <sc-for list="{{ entryRatingStars }}" as="star" hint-placeholder-count="5">
+                <div onClick="{{ star.onClick }}" style="width:30px; height:30px; border-radius:7px; cursor:pointer; background:{{ star.bg }}; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:{{ star.color }};">{{ star.n }}</div>
+              </sc-for>
+            </div>
+          </div>
+          <label style="grid-column:span 2; font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Notes
+            <textarea name="entryForm.notes" rows="3" value="{{ entryForm.notes }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px; resize:vertical;"></textarea>
+          </label>
+        </div>
+
+        <datalist id="l8-software-list">
+          <option value="LightBurn"></option>
+          <option value="LaserGRBL"></option>
+          <option value="SnapMaker Luban"></option>
+          <option value="Inkscape + LightBurn"></option>
+        </datalist>
+
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button onClick="{{ closeEntryModal }}" style="flex:1; padding:11px; border:1px solid oklch(88% 0.006 260); background:white; border-radius:8px; font-size:14px; font-weight:600; color:oklch(30% 0.01 260); cursor:pointer;">Cancel</button>
+          <button onClick="{{ saveEntry }}" style="flex:1; padding:11px; border:none; background:oklch(45% 0.15 210); border-radius:8px; font-size:14px; font-weight:700; color:white; cursor:pointer;">Save entry</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ PROFILE MODAL ============ -->
+  <sc-if value="{{ profileModalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:oklch(20% 0.01 260 / 55%); display:flex; align-items:flex-start; justify-content:center; padding:30px 16px; z-index:100; overflow-y:auto;">
+      <div style="background:white; border-radius:14px; width:100%; max-width:600px; padding:24px; animation: l8-fade-in 0.2s ease;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:19px; color:oklch(22% 0.01 260);">{{ profileModalTitle }}</div>
+          <button onClick="{{ closeProfileModal }}" style="border:none; background:none; font-size:22px; cursor:pointer; color:oklch(50% 0.01 260); line-height:1;">&times;</button>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <label style="grid-column:span 2; font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Material
+            <input type="text" name="profileForm.material" value="{{ profileForm.material }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Thickness
+            <div style="display:flex; gap:6px; margin-top:4px;">
+              <input type="number" step="any" name="profileForm.thicknessValue" value="{{ profileForm.thicknessValue }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+              <select name="profileForm.thicknessUnit" value="{{ profileForm.thicknessUnit }}" onChange="{{ handleInput }}" style="padding:9px 6px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+                <option value="in">in</option>
+                <option value="mm">mm</option>
+              </select>
+            </div>
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Job type
+            <select name="profileForm.jobType" value="{{ profileForm.jobType }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+              <option value="engrave">Engrave</option>
+              <option value="cut">Cut</option>
+            </select>
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Power min (%)
+            <input type="number" min="0" max="100" name="profileForm.minPower" value="{{ profileForm.minPower }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Power max (%) <span style="font-weight:400; color:oklch(60% 0.01 260);">— blank if flat</span>
+            <input type="number" min="0" max="100" name="profileForm.maxPower" value="{{ profileForm.maxPower }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Speed (mm/min)
+            <input type="number" min="0" name="profileForm.speed" value="{{ profileForm.speed }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Passes
+            <input type="number" min="1" name="profileForm.passes" value="{{ profileForm.passes }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Line interval, mm
+            <input type="number" step="any" min="0" name="profileForm.lineInterval" value="{{ profileForm.lineInterval }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Overscan (%)
+            <input type="number" step="any" min="0" name="profileForm.overscanPercent" value="{{ profileForm.overscanPercent }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Kerf offset, mm (cut)
+            <input type="number" step="any" name="profileForm.kerfOffset" value="{{ profileForm.kerfOffset }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Dither mode (photo engrave)
+            <select name="profileForm.ditherMode" value="{{ profileForm.ditherMode }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+              <sc-for list="{{ ditherModes }}" as="dm" hint-placeholder-count="6">
+                <option value="{{ dm.value }}">{{ dm.label }}</option>
+              </sc-for>
+            </select>
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Focus height
+            <div style="display:flex; gap:6px; margin-top:4px;">
+              <input type="number" step="any" name="profileForm.focusValue" value="{{ profileForm.focusValue }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+              <select name="profileForm.focusUnit" value="{{ profileForm.focusUnit }}" onChange="{{ handleInput }}" style="padding:9px 6px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+                <option value="in">in</option>
+                <option value="mm">mm</option>
+              </select>
+            </div>
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Material height / Z-offset
+            <div style="display:flex; gap:6px; margin-top:4px;">
+              <input type="number" step="any" name="profileForm.materialHeightValue" value="{{ profileForm.materialHeightValue }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+              <select name="profileForm.materialHeightUnit" value="{{ profileForm.materialHeightUnit }}" onChange="{{ handleInput }}" style="padding:9px 6px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+                <option value="in">in</option>
+                <option value="mm">mm</option>
+              </select>
+            </div>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:oklch(40% 0.01 260); margin-top:18px;">
+            <input type="checkbox" name="profileForm.airAssist" checked="{{ profileForm.airAssist }}" onChange="{{ handleInput }}" style="width:16px; height:16px;" /> Air assist on
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Air pressure (psi)
+            <input type="number" step="any" min="0" name="profileForm.airPressure" value="{{ profileForm.airPressure }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Software
+            <input type="text" name="profileForm.software" value="{{ profileForm.software }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="grid-column:span 2; font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Notes
+            <textarea name="profileForm.notes" rows="3" value="{{ profileForm.notes }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px; resize:vertical;"></textarea>
+          </label>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button onClick="{{ closeProfileModal }}" style="flex:1; padding:11px; border:1px solid oklch(88% 0.006 260); background:white; border-radius:8px; font-size:14px; font-weight:600; color:oklch(30% 0.01 260); cursor:pointer;">Cancel</button>
+          <button onClick="{{ saveProfile }}" style="flex:1; padding:11px; border:none; background:oklch(50% 0.15 300); border-radius:8px; font-size:14px; font-weight:700; color:white; cursor:pointer;">Save to library</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ GRID FORM MODAL ============ -->
+  <sc-if value="{{ gridModalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:oklch(20% 0.01 260 / 55%); display:flex; align-items:flex-start; justify-content:center; padding:30px 16px; z-index:100; overflow-y:auto;">
+      <div style="background:white; border-radius:14px; width:100%; max-width:600px; padding:24px; animation: l8-fade-in 0.2s ease;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:19px; color:oklch(22% 0.01 260);">New Test Grid</div>
+          <button onClick="{{ closeGridModal }}" style="border:none; background:none; font-size:22px; cursor:pointer; color:oklch(50% 0.01 260); line-height:1;">&times;</button>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <label style="grid-column:span 2; font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Grid name
+            <input type="text" name="gridForm.name" placeholder="e.g. Birch plywood dial-in" value="{{ gridForm.name }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Material
+            <input type="text" name="gridForm.material" value="{{ gridForm.material }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Thickness
+            <div style="display:flex; gap:6px; margin-top:4px;">
+              <input type="number" step="any" name="gridForm.thicknessValue" value="{{ gridForm.thicknessValue }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+              <select name="gridForm.thicknessUnit" value="{{ gridForm.thicknessUnit }}" onChange="{{ handleInput }}" style="padding:9px 6px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+                <option value="in">in</option>
+                <option value="mm">mm</option>
+              </select>
+            </div>
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Job type
+            <select name="gridForm.jobType" value="{{ gridForm.jobType }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+              <option value="engrave">Engrave</option>
+              <option value="cut">Cut</option>
+            </select>
+          </label>
+          <div style="grid-column:span 2; height:1px; background:oklch(90% 0.006 260); margin:4px 0;"></div>
+          <div style="grid-column:span 2; font-size:12px; font-weight:700; color:oklch(45% 0.15 45);">POWER RANGE (%)</div>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Min
+            <input type="number" name="gridForm.powerMin" value="{{ gridForm.powerMin }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Max
+            <input type="number" name="gridForm.powerMax" value="{{ gridForm.powerMax }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Step
+            <input type="number" name="gridForm.powerStep" value="{{ gridForm.powerStep }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <div></div>
+          <div style="grid-column:span 2; font-size:12px; font-weight:700; color:oklch(45% 0.15 210);">SPEED RANGE (mm/min)</div>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Min
+            <input type="number" name="gridForm.speedMin" value="{{ gridForm.speedMin }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Max
+            <input type="number" name="gridForm.speedMax" value="{{ gridForm.speedMax }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Step
+            <input type="number" name="gridForm.speedStep" value="{{ gridForm.speedStep }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <div></div>
+          <div style="grid-column:span 2; height:1px; background:oklch(90% 0.006 260); margin:4px 0;"></div>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Passes (fixed)
+            <input type="number" min="1" name="gridForm.passes" value="{{ gridForm.passes }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Line interval, mm (fixed)
+            <input type="number" step="any" min="0" name="gridForm.lineInterval" value="{{ gridForm.lineInterval }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Overscan (%, fixed)
+            <input type="number" step="any" min="0" name="gridForm.overscanPercent" value="{{ gridForm.overscanPercent }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Kerf offset, mm (fixed)
+            <input type="number" step="any" name="gridForm.kerfOffset" value="{{ gridForm.kerfOffset }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Dither mode (fixed)
+            <select name="gridForm.ditherMode" value="{{ gridForm.ditherMode }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+              <sc-for list="{{ ditherModes }}" as="dm" hint-placeholder-count="6">
+                <option value="{{ dm.value }}">{{ dm.label }}</option>
+              </sc-for>
+            </select>
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Material height / Z-offset (fixed)
+            <div style="display:flex; gap:6px; margin-top:4px;">
+              <input type="number" step="any" name="gridForm.materialHeightValue" value="{{ gridForm.materialHeightValue }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+              <select name="gridForm.materialHeightUnit" value="{{ gridForm.materialHeightUnit }}" onChange="{{ handleInput }}" style="padding:9px 6px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;">
+                <option value="in">in</option>
+                <option value="mm">mm</option>
+              </select>
+            </div>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:oklch(40% 0.01 260); margin-top:18px;">
+            <input type="checkbox" name="gridForm.airAssist" checked="{{ gridForm.airAssist }}" onChange="{{ handleInput }}" style="width:16px; height:16px;" /> Air assist on
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Air pressure, psi (fixed)
+            <input type="number" step="any" min="0" name="gridForm.airPressure" value="{{ gridForm.airPressure }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+          <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Software
+            <input type="text" name="gridForm.software" value="{{ gridForm.software }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px;" />
+          </label>
+        </div>
+        <div style="margin-top:12px; font-size:12px; color:oklch(50% 0.01 260); background:oklch(97% 0.004 260); border-radius:8px; padding:8px 10px;">Preview: {{ gridPreviewLabel }}</div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button onClick="{{ closeGridModal }}" style="flex:1; padding:11px; border:1px solid oklch(88% 0.006 260); background:white; border-radius:8px; font-size:14px; font-weight:600; color:oklch(30% 0.01 260); cursor:pointer;">Cancel</button>
+          <button onClick="{{ saveGrid }}" style="flex:1; padding:11px; border:none; background:oklch(58% 0.16 20); border-radius:8px; font-size:14px; font-weight:700; color:white; cursor:pointer;">Create grid</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ CELL MODAL ============ -->
+  <sc-if value="{{ cellModalOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:oklch(20% 0.01 260 / 55%); display:flex; align-items:center; justify-content:center; padding:16px; z-index:110;">
+      <div style="background:white; border-radius:14px; width:100%; max-width:380px; padding:22px; animation: l8-fade-in 0.2s ease;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <div style="font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:17px; color:oklch(22% 0.01 260);">{{ cellModalLabel }}</div>
+          <button onClick="{{ closeCellModal }}" style="border:none; background:none; font-size:20px; cursor:pointer; color:oklch(50% 0.01 260); line-height:1;">&times;</button>
+        </div>
+        <div style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260); margin-bottom:6px;">Result quality</div>
+        <div style="display:flex; gap:6px; margin-bottom:14px;">
+          <sc-for list="{{ cellRatingStars }}" as="star" hint-placeholder-count="5">
+            <div onClick="{{ star.onClick }}" style="width:34px; height:34px; border-radius:8px; cursor:pointer; background:{{ star.bg }}; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; color:{{ star.color }};">{{ star.n }}</div>
+          </sc-for>
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:oklch(40% 0.01 260); margin-bottom:12px;">
+          <input type="checkbox" name="cellForm.best" checked="{{ cellForm.best }}" onChange="{{ handleInput }}" style="width:16px; height:16px;" /> Mark as best setting
+        </label>
+        <label style="font-size:12px; font-weight:600; color:oklch(40% 0.01 260);">Notes
+          <textarea name="cellForm.notes" rows="3" value="{{ cellForm.notes }}" onChange="{{ handleInput }}" style="width:100%; box-sizing:border-box; margin-top:4px; padding:9px 10px; border:1px solid oklch(88% 0.006 260); border-radius:7px; font-size:14px; resize:vertical;"></textarea>
+        </label>
+        <div style="display:flex; gap:10px; margin-top:18px;">
+          <button onClick="{{ clearCell }}" style="padding:11px 14px; border:1px solid oklch(88% 0.006 260); background:white; border-radius:8px; font-size:13px; font-weight:600; color:oklch(55% 0.16 20); cursor:pointer;">Clear</button>
+          <button onClick="{{ promoteCellToProfile }}" style="flex:1; padding:11px; border:1px solid oklch(88% 0.006 260); background:white; border-radius:8px; font-size:13px; font-weight:600; color:oklch(50% 0.15 300); cursor:pointer;">Save to library</button>
+          <button onClick="{{ saveCell }}" style="flex:1; padding:11px; border:none; background:oklch(58% 0.16 20); border-radius:8px; font-size:14px; font-weight:700; color:white; cursor:pointer;">Save</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const STORAGE_KEY = 'genmitsu-l8-tracker-v1';
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const today = () => new Date().toISOString().slice(0, 10);
+const num = (v, fallback) => {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : (fallback !== undefined ? fallback : 0);
+};
+const fmtThickness = (v, u) => (v === '' || v === null || v === undefined) ? '—' : `${v}${u}`;
+const fmtFocus = (v, u) => (v === '' || v === null || v === undefined || v === '') ? '—' : `${v}${u}`;
+
+function newEntryForm(unit) {
+  return {
+    date: today(), jobType: 'engrave', material: '', thicknessValue: '', thicknessUnit: unit,
+    minPower: '', maxPower: '', speed: '', passes: '1', lineInterval: '', airAssist: false, airPressure: '',
+    overscanPercent: '', kerfOffset: '', ditherMode: 'none',
+    focusValue: '', focusUnit: unit, materialHeightValue: '', materialHeightUnit: unit,
+    software: '', settingsFile: '', rating: 0, notes: ''
+  };
+}
+function newProfileForm(unit) {
+  return {
+    material: '', thicknessValue: '', thicknessUnit: unit, jobType: 'engrave',
+    minPower: '', maxPower: '', speed: '', passes: '1', lineInterval: '', airAssist: false, airPressure: '',
+    overscanPercent: '', kerfOffset: '', ditherMode: 'none',
+    focusValue: '', focusUnit: unit, materialHeightValue: '', materialHeightUnit: unit,
+    software: '', notes: ''
+  };
+}
+function newGridForm(unit) {
+  return {
+    name: '', material: '', thicknessValue: '', thicknessUnit: unit, jobType: 'engrave',
+    powerMin: '20', powerMax: '100', powerStep: '20',
+    speedMin: '100', speedMax: '500', speedStep: '100',
+    passes: '1', lineInterval: '', airAssist: false, airPressure: '',
+    overscanPercent: '', kerfOffset: '', ditherMode: 'none',
+    materialHeightValue: '', materialHeightUnit: unit, software: ''
+  };
+}
+const DITHER_MODES = [
+  { value: 'none', label: 'None / line fill' },
+  { value: 'threshold', label: 'Threshold' },
+  { value: 'floyd-steinberg', label: 'Floyd-Steinberg' },
+  { value: 'jarvis', label: 'Jarvis' },
+  { value: 'stucki', label: 'Stucki' },
+  { value: 'newsprint', label: 'Newsprint' }
+];
+const ditherLabel = (v) => (DITHER_MODES.find(d => d.value === v) || DITHER_MODES[0]).label;
+function rangeArray(min, max, step) {
+  const out = [];
+  const mn = num(min, 0), mx = num(max, 0), st = num(step, 1) || 1;
+  if (st <= 0) return [mn];
+  for (let v = mn; v <= mx + 1e-6 && out.length < 60; v += st) out.push(Math.round(v * 100) / 100);
+  return out.length ? out : [mn];
+}
+function ratingColor(rating) {
+  const hue = 25 + Math.max(0, Math.min(5, rating)) * 23;
+  return `oklch(55% 0.15 ${hue})`;
+}
+
+class Component extends DCLogic {
+  state = {
+    activeTab: 'log',
+    unit: 'in',
+    entries: [],
+    profiles: [],
+    grids: [],
+    search: '',
+    materialFilter: 'all',
+    entryModalOpen: false,
+    editingEntryId: null,
+    entryForm: newEntryForm('in'),
+    profileModalOpen: false,
+    editingProfileId: null,
+    profileForm: newProfileForm('in'),
+    gridModalOpen: false,
+    gridForm: newGridForm('in'),
+    activeGridId: null,
+    cellModalOpen: false,
+    activeCellKey: null,
+    cellForm: { rating: 0, notes: '', best: false }
+  };
+
+  fileInputRef = React.createRef();
+
+  componentDidMount() {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        this.setState({
+          entries: data.entries || [],
+          profiles: data.profiles || [],
+          grids: data.grids || [],
+          unit: data.unit || 'in'
+        });
+      }
+    } catch (e) { /* ignore corrupt storage */ }
+  }
+
+  persist = () => {
+    const { entries, profiles, grids, unit } = this.state;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ entries, profiles, grids, unit }));
+    } catch (e) { /* storage unavailable */ }
+  };
+
+  // ---------- generic form input ----------
+  handleInput = (e) => {
+    const [formKey, field] = e.target.name.split('.');
+    const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    this.setState(s => ({ [formKey]: { ...s[formKey], [field]: val } }));
+  };
+
+  // ---------- tabs / units ----------
+  goLog = () => this.setState({ activeTab: 'log' });
+  goLibrary = () => this.setState({ activeTab: 'library' });
+  goGrids = () => this.setState({ activeTab: 'grids' });
+  setUnitIn = () => this.setState({ unit: 'in' }, this.persist);
+  setUnitMm = () => this.setState({ unit: 'mm' }, this.persist);
+
+  onSearchChange = (e) => this.setState({ search: e.target.value });
+  onMaterialFilterChange = (e) => this.setState({ materialFilter: e.target.value });
+
+  // ---------- export / import ----------
+  triggerImport = () => { if (this.fileInputRef.current) this.fileInputRef.current.click(); };
+  exportData = () => {
+    const { entries, profiles, grids, unit } = this.state;
+    const blob = new Blob([JSON.stringify({ entries, profiles, grids, unit }, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `l8-tracker-backup-${today()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+  importData = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        const ok = window.confirm('Import will replace your current entries, library, and grids. Continue?');
+        if (!ok) return;
+        this.setState({
+          entries: data.entries || [],
+          profiles: data.profiles || [],
+          grids: data.grids || []
+        }, this.persist);
+      } catch (err) {
+        window.alert('Could not read that file — make sure it is a valid backup JSON.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  // ---------- entries ----------
+  openNewEntry = () => this.setState({ entryModalOpen: true, editingEntryId: null, entryForm: newEntryForm(this.state.unit) });
+  openEditEntry = (id) => {
+    const e = this.state.entries.find(x => x.id === id);
+    if (!e) return;
+    this.setState({
+      entryModalOpen: true, editingEntryId: id,
+      entryForm: {
+        date: e.date, jobType: e.jobType, material: e.material,
+        thicknessValue: String(e.thicknessValue), thicknessUnit: e.thicknessUnit,
+        minPower: String(e.minPower), maxPower: String(e.maxPower), speed: String(e.speed), passes: String(e.passes),
+        lineInterval: e.lineInterval === '' || e.lineInterval === null ? '' : String(e.lineInterval),
+        airAssist: e.airAssist, airPressure: e.airPressure === '' || e.airPressure == null ? '' : String(e.airPressure),
+        overscanPercent: e.overscanPercent === '' || e.overscanPercent == null ? '' : String(e.overscanPercent),
+        kerfOffset: e.kerfOffset === '' || e.kerfOffset == null ? '' : String(e.kerfOffset),
+        ditherMode: e.ditherMode || 'none',
+        focusValue: e.focusValue === '' ? '' : String(e.focusValue), focusUnit: e.focusUnit,
+        materialHeightValue: e.materialHeightValue === '' || e.materialHeightValue == null ? '' : String(e.materialHeightValue),
+        materialHeightUnit: e.materialHeightUnit || this.state.unit,
+        software: e.software, settingsFile: e.settingsFile, rating: e.rating, notes: e.notes
+      }
+    });
+  };
+  closeEntryModal = () => this.setState({ entryModalOpen: false });
+  setEntryRating = (n) => this.setState(s => ({ entryForm: { ...s.entryForm, rating: n } }));
+  saveEntry = () => {
+    const f = this.state.entryForm;
+    if (!f.material.trim()) { window.alert('Add a material name first.'); return; }
+    const minP = num(f.minPower);
+    const entry = {
+      id: this.state.editingEntryId || uid(),
+      date: f.date || today(), jobType: f.jobType, material: f.material.trim(),
+      thicknessValue: f.thicknessValue === '' ? '' : num(f.thicknessValue), thicknessUnit: f.thicknessUnit,
+      minPower: minP, maxPower: f.maxPower === '' ? minP : num(f.maxPower),
+      speed: num(f.speed), passes: Math.max(1, Math.round(num(f.passes, 1))),
+      lineInterval: f.lineInterval === '' ? '' : num(f.lineInterval),
+      airAssist: !!f.airAssist, airPressure: f.airPressure === '' ? '' : num(f.airPressure),
+      overscanPercent: f.overscanPercent === '' ? '' : num(f.overscanPercent),
+      kerfOffset: f.kerfOffset === '' ? '' : num(f.kerfOffset),
+      ditherMode: f.ditherMode || 'none',
+      focusValue: f.focusValue === '' ? '' : num(f.focusValue), focusUnit: f.focusUnit,
+      materialHeightValue: f.materialHeightValue === '' ? '' : num(f.materialHeightValue), materialHeightUnit: f.materialHeightUnit,
+      software: f.software.trim(), settingsFile: f.settingsFile.trim(),
+      rating: num(f.rating, 0), notes: f.notes.trim()
+    };
+    this.setState(s => {
+      const exists = s.entries.some(x => x.id === entry.id);
+      const entries = exists ? s.entries.map(x => x.id === entry.id ? entry : x) : [entry, ...s.entries];
+      return { entries, entryModalOpen: false };
+    }, this.persist);
+  };
+  deleteEntry = (id) => {
+    if (!window.confirm('Delete this log entry?')) return;
+    this.setState(s => ({ entries: s.entries.filter(x => x.id !== id) }), this.persist);
+  };
+  promoteEntryToProfile = (id) => {
+    const e = this.state.entries.find(x => x.id === id);
+    if (!e) return;
+    this.setState({
+      profileModalOpen: true, editingProfileId: null,
+      profileForm: {
+        material: e.material, thicknessValue: String(e.thicknessValue), thicknessUnit: e.thicknessUnit,
+        jobType: e.jobType, minPower: String(e.minPower), maxPower: String(e.maxPower), speed: String(e.speed), passes: String(e.passes),
+        lineInterval: e.lineInterval === '' ? '' : String(e.lineInterval), airAssist: e.airAssist,
+        airPressure: e.airPressure === '' || e.airPressure == null ? '' : String(e.airPressure),
+        overscanPercent: e.overscanPercent === '' || e.overscanPercent == null ? '' : String(e.overscanPercent),
+        kerfOffset: e.kerfOffset === '' || e.kerfOffset == null ? '' : String(e.kerfOffset),
+        ditherMode: e.ditherMode || 'none',
+        focusValue: e.focusValue === '' ? '' : String(e.focusValue), focusUnit: e.focusUnit,
+        materialHeightValue: e.materialHeightValue === '' || e.materialHeightValue == null ? '' : String(e.materialHeightValue),
+        materialHeightUnit: e.materialHeightUnit || this.state.unit,
+        software: e.software, notes: e.notes
+      }
+    });
+  };
+
+  // ---------- library profiles ----------
+  openNewProfile = () => this.setState({ profileModalOpen: true, editingProfileId: null, profileForm: newProfileForm(this.state.unit) });
+  openEditProfile = (id) => {
+    const p = this.state.profiles.find(x => x.id === id);
+    if (!p) return;
+    this.setState({
+      profileModalOpen: true, editingProfileId: id,
+      profileForm: {
+        material: p.material, thicknessValue: String(p.thicknessValue), thicknessUnit: p.thicknessUnit,
+        jobType: p.jobType, minPower: String(p.minPower), maxPower: String(p.maxPower), speed: String(p.speed), passes: String(p.passes),
+        lineInterval: p.lineInterval === '' ? '' : String(p.lineInterval), airAssist: p.airAssist,
+        airPressure: p.airPressure === '' || p.airPressure == null ? '' : String(p.airPressure),
+        overscanPercent: p.overscanPercent === '' || p.overscanPercent == null ? '' : String(p.overscanPercent),
+        kerfOffset: p.kerfOffset === '' || p.kerfOffset == null ? '' : String(p.kerfOffset),
+        ditherMode: p.ditherMode || 'none',
+        focusValue: p.focusValue === '' ? '' : String(p.focusValue), focusUnit: p.focusUnit,
+        materialHeightValue: p.materialHeightValue === '' || p.materialHeightValue == null ? '' : String(p.materialHeightValue),
+        materialHeightUnit: p.materialHeightUnit || this.state.unit,
+        software: p.software, notes: p.notes
+      }
+    });
+  };
+  closeProfileModal = () => this.setState({ profileModalOpen: false });
+  saveProfile = () => {
+    const f = this.state.profileForm;
+    if (!f.material.trim()) { window.alert('Add a material name first.'); return; }
+    const minP = num(f.minPower);
+    const profile = {
+      id: this.state.editingProfileId || uid(),
+      material: f.material.trim(), thicknessValue: f.thicknessValue === '' ? '' : num(f.thicknessValue), thicknessUnit: f.thicknessUnit,
+      jobType: f.jobType, minPower: minP, maxPower: f.maxPower === '' ? minP : num(f.maxPower),
+      speed: num(f.speed), passes: Math.max(1, Math.round(num(f.passes, 1))),
+      lineInterval: f.lineInterval === '' ? '' : num(f.lineInterval), airAssist: !!f.airAssist,
+      airPressure: f.airPressure === '' ? '' : num(f.airPressure),
+      overscanPercent: f.overscanPercent === '' ? '' : num(f.overscanPercent),
+      kerfOffset: f.kerfOffset === '' ? '' : num(f.kerfOffset),
+      ditherMode: f.ditherMode || 'none',
+      focusValue: f.focusValue === '' ? '' : num(f.focusValue), focusUnit: f.focusUnit,
+      materialHeightValue: f.materialHeightValue === '' ? '' : num(f.materialHeightValue), materialHeightUnit: f.materialHeightUnit,
+      software: f.software.trim(), notes: f.notes.trim()
+    };
+    this.setState(s => {
+      const exists = s.profiles.some(x => x.id === profile.id);
+      const profiles = exists ? s.profiles.map(x => x.id === profile.id ? profile : x) : [profile, ...s.profiles];
+      return { profiles, profileModalOpen: false };
+    }, this.persist);
+  };
+  deleteProfile = (id) => {
+    if (!window.confirm('Remove this material from your library?')) return;
+    this.setState(s => ({ profiles: s.profiles.filter(x => x.id !== id) }), this.persist);
+  };
+
+  // ---------- test grids ----------
+  openNewGrid = () => this.setState({ gridModalOpen: true, gridForm: newGridForm(this.state.unit) });
+  closeGridModal = () => this.setState({ gridModalOpen: false });
+  saveGrid = () => {
+    const f = this.state.gridForm;
+    if (!f.name.trim() || !f.material.trim()) { window.alert('Give the grid a name and a material.'); return; }
+    const grid = {
+      id: uid(), name: f.name.trim(), material: f.material.trim(),
+      thicknessValue: f.thicknessValue === '' ? '' : num(f.thicknessValue), thicknessUnit: f.thicknessUnit,
+      jobType: f.jobType,
+      powerMin: num(f.powerMin), powerMax: num(f.powerMax), powerStep: num(f.powerStep, 10),
+      speedMin: num(f.speedMin), speedMax: num(f.speedMax), speedStep: num(f.speedStep, 50),
+      passes: Math.max(1, Math.round(num(f.passes, 1))),
+      lineInterval: f.lineInterval === '' ? '' : num(f.lineInterval), airAssist: !!f.airAssist,
+      airPressure: f.airPressure === '' ? '' : num(f.airPressure),
+      overscanPercent: f.overscanPercent === '' ? '' : num(f.overscanPercent),
+      kerfOffset: f.kerfOffset === '' ? '' : num(f.kerfOffset),
+      ditherMode: f.ditherMode || 'none',
+      materialHeightValue: f.materialHeightValue === '' ? '' : num(f.materialHeightValue), materialHeightUnit: f.materialHeightUnit,
+      software: f.software.trim(), createdDate: today(), cells: {}
+    };
+    this.setState(s => ({ grids: [grid, ...s.grids], gridModalOpen: false, activeGridId: grid.id }), this.persist);
+  };
+  openGrid = (id) => this.setState({ activeGridId: id });
+  closeGridDetail = () => this.setState({ activeGridId: null });
+  deleteActiveGrid = () => {
+    if (!window.confirm('Delete this test grid?')) return;
+    this.setState(s => ({ grids: s.grids.filter(g => g.id !== s.activeGridId), activeGridId: null }), this.persist);
+  };
+
+  openCell = (key) => {
+    const grid = this.state.grids.find(g => g.id === this.state.activeGridId);
+    const existing = grid && grid.cells[key];
+    this.setState({
+      cellModalOpen: true, activeCellKey: key,
+      cellForm: existing ? { rating: existing.rating, notes: existing.notes, best: !!existing.best } : { rating: 0, notes: '', best: false }
+    });
+  };
+  closeCellModal = () => this.setState({ cellModalOpen: false });
+  setCellRating = (n) => this.setState(s => ({ cellForm: { ...s.cellForm, rating: n } }));
+  saveCell = () => {
+    const { activeGridId, activeCellKey, cellForm } = this.state;
+    this.setState(s => ({
+      grids: s.grids.map(g => g.id !== activeGridId ? g : {
+        ...g,
+        cells: { ...g.cells, [activeCellKey]: { rating: cellForm.rating, notes: cellForm.notes.trim(), best: !!cellForm.best } }
+      }),
+      cellModalOpen: false
+    }), this.persist);
+  };
+  clearCell = () => {
+    const { activeGridId, activeCellKey } = this.state;
+    this.setState(s => ({
+      grids: s.grids.map(g => {
+        if (g.id !== activeGridId) return g;
+        const cells = { ...g.cells };
+        delete cells[activeCellKey];
+        return { ...g, cells };
+      }),
+      cellModalOpen: false
+    }), this.persist);
+  };
+  promoteCellToProfile = () => {
+    const grid = this.state.grids.find(g => g.id === this.state.activeGridId);
+    if (!grid || !this.state.activeCellKey) return;
+    const [power, speed] = this.state.activeCellKey.split('_').map(Number);
+    this.setState({
+      cellModalOpen: false,
+      profileModalOpen: true, editingProfileId: null,
+      profileForm: {
+        material: grid.material, thicknessValue: grid.thicknessValue === '' ? '' : String(grid.thicknessValue), thicknessUnit: grid.thicknessUnit,
+        jobType: grid.jobType, minPower: String(power), maxPower: String(power), speed: String(speed), passes: String(grid.passes),
+        lineInterval: grid.lineInterval === '' ? '' : String(grid.lineInterval), airAssist: grid.airAssist,
+        airPressure: grid.airPressure === '' || grid.airPressure == null ? '' : String(grid.airPressure),
+        overscanPercent: grid.overscanPercent === '' || grid.overscanPercent == null ? '' : String(grid.overscanPercent),
+        kerfOffset: grid.kerfOffset === '' || grid.kerfOffset == null ? '' : String(grid.kerfOffset),
+        ditherMode: grid.ditherMode || 'none',
+        focusValue: '', focusUnit: this.state.unit,
+        materialHeightValue: grid.materialHeightValue === '' || grid.materialHeightValue == null ? '' : String(grid.materialHeightValue),
+        materialHeightUnit: grid.materialHeightUnit || this.state.unit,
+        software: grid.software, notes: this.state.cellForm.notes || ''
+      }
+    });
+  };
+
+  renderVals() {
+    const s = this.state;
+    const unit = s.unit;
+
+    // ---- entries (filtered) ----
+    const materialSet = new Set([...s.entries.map(e => e.material), ...s.profiles.map(p => p.material)].filter(Boolean));
+    const materialOptions = Array.from(materialSet).sort();
+
+    const q = s.search.trim().toLowerCase();
+    const filtered = s.entries.filter(e => {
+      if (s.materialFilter !== 'all' && e.material !== s.materialFilter) return false;
+      if (!q) return true;
+      return [e.material, e.notes, e.software, e.settingsFile].join(' ').toLowerCase().includes(q);
+    });
+
+    const powerLabelOf = (o) => (o.maxPower !== undefined && o.maxPower !== null && o.maxPower !== o.minPower) ? `${o.minPower}–${o.maxPower}%` : `${o.minPower}%`;
+    const extraLabelOf = (o) => {
+      const parts = [];
+      if (o.airAssist && o.airPressure !== '' && o.airPressure != null) parts.push(`Air ${o.airPressure}psi`);
+      if (o.overscanPercent !== '' && o.overscanPercent != null) parts.push(`Overscan ${o.overscanPercent}%`);
+      if (o.kerfOffset !== '' && o.kerfOffset != null) parts.push(`Kerf ${o.kerfOffset}mm`);
+      if (o.ditherMode && o.ditherMode !== 'none') parts.push(ditherLabel(o.ditherMode));
+      if (o.materialHeightValue !== '' && o.materialHeightValue != null) parts.push(`Height ${o.materialHeightValue}${o.materialHeightUnit || ''}`);
+      return parts.join(' · ');
+    };
+
+    const filteredEntries = filtered.map(e => ({
+      ...e,
+      thicknessLabel: fmtThickness(e.thicknessValue, e.thicknessUnit),
+      focusLabel: fmtFocus(e.focusValue, e.focusUnit),
+      lineIntervalLabel: e.lineInterval === '' || e.lineInterval === null ? '—' : `${e.lineInterval}mm`,
+      airLabel: e.airAssist ? 'On' : 'Off',
+      jobTypeLabel: e.jobType === 'cut' ? 'Cut' : 'Engrave',
+      powerLabel: powerLabelOf(e),
+      extraLabel: extraLabelOf(e),
+      starsFilled: [1, 2, 3, 4, 5].map(n => ({ color: n <= e.rating ? ratingColor(e.rating) : 'oklch(90% 0.006 260)' })),
+      onEdit: () => this.openEditEntry(e.id),
+      onDelete: () => this.deleteEntry(e.id),
+      onPromote: () => this.promoteEntryToProfile(e.id)
+    }));
+
+    const profileList = s.profiles.map(p => ({
+      ...p,
+      thicknessLabel: fmtThickness(p.thicknessValue, p.thicknessUnit),
+      focusLabel: fmtFocus(p.focusValue, p.focusUnit),
+      lineIntervalLabel: p.lineInterval === '' || p.lineInterval === null ? '—' : `${p.lineInterval}mm`,
+      airLabel: p.airAssist ? 'On' : 'Off',
+      jobTypeLabel: p.jobType === 'cut' ? 'Cut' : 'Engrave',
+      powerLabel: powerLabelOf(p),
+      extraLabel: extraLabelOf(p),
+      onEdit: () => this.openEditProfile(p.id),
+      onDelete: () => this.deleteProfile(p.id)
+    }));
+
+    const gridList = s.grids.map(g => {
+      const powers = rangeArray(g.powerMin, g.powerMax, g.powerStep);
+      const speeds = rangeArray(g.speedMin, g.speedMax, g.speedStep);
+      const total = powers.length * speeds.length;
+      const filledCount = Object.keys(g.cells || {}).length;
+      return {
+        id: g.id, name: g.name, material: g.material,
+        thicknessLabel: fmtThickness(g.thicknessValue, g.thicknessUnit),
+        createdDate: g.createdDate,
+        dims: `${powers.length}×${speeds.length} grid`,
+        totalCells: total, filledCount,
+        onOpen: () => this.openGrid(g.id)
+      };
+    });
+
+    // ---- active grid detail ----
+    let activeGrid = null;
+    const activeGridRaw = s.grids.find(g => g.id === s.activeGridId);
+    if (activeGridRaw) {
+      const powers = rangeArray(activeGridRaw.powerMin, activeGridRaw.powerMax, activeGridRaw.powerStep);
+      const speeds = rangeArray(activeGridRaw.speedMin, activeGridRaw.speedMax, activeGridRaw.speedStep);
+      const rows = powers.map(power => ({
+        power,
+        cols: speeds.map(speed => {
+          const key = `${power}_${speed}`;
+          const cell = activeGridRaw.cells[key];
+          const hasData = !!cell;
+          let bg = 'oklch(97% 0.004 260)', border = 'oklch(90% 0.006 260)', textColor = 'oklch(30% 0.01 260)';
+          if (hasData) {
+            if (cell.best) { bg = 'oklch(92% 0.05 150)'; border = 'oklch(70% 0.13 150)'; textColor = 'oklch(38% 0.14 150)'; }
+            else { bg = ratingColor(cell.rating).replace('55%', '93%').replace('0.15', '0.05'); border = ratingColor(cell.rating); textColor = ratingColor(cell.rating).replace('55%', '38%'); }
+          }
+          return {
+            key, speed, hasData, best: hasData && cell.best,
+            ratingLabel: hasData ? `${cell.rating}/5` : '',
+            bg, border, textColor,
+            onClick: () => this.openCell(key)
+          };
+        })
+      }));
+      activeGrid = {
+        id: activeGridRaw.id, name: activeGridRaw.name, material: activeGridRaw.material,
+        thicknessLabel: fmtThickness(activeGridRaw.thicknessValue, activeGridRaw.thicknessUnit),
+        jobTypeLabel: activeGridRaw.jobType === 'cut' ? 'Cut' : 'Engrave',
+        passes: activeGridRaw.passes, airLabel: activeGridRaw.airAssist ? 'On' : 'Off',
+        software: activeGridRaw.software,
+        extraLabel: extraLabelOf(activeGridRaw),
+        speeds, rows
+      };
+    }
+
+    const entryRatingStars = [1, 2, 3, 4, 5].map(n => ({
+      n, bg: n <= s.entryForm.rating ? ratingColor(s.entryForm.rating) : 'oklch(95% 0.006 260)',
+      color: n <= s.entryForm.rating ? 'white' : 'oklch(50% 0.01 260)',
+      onClick: () => this.setEntryRating(n)
+    }));
+    const cellRatingStars = [1, 2, 3, 4, 5].map(n => ({
+      n, bg: n <= s.cellForm.rating ? ratingColor(s.cellForm.rating) : 'oklch(95% 0.006 260)',
+      color: n <= s.cellForm.rating ? 'white' : 'oklch(50% 0.01 260)',
+      onClick: () => this.setCellRating(n)
+    }));
+
+    const gp = rangeArray(s.gridForm.powerMin, s.gridForm.powerMax, s.gridForm.powerStep);
+    const gs = rangeArray(s.gridForm.speedMin, s.gridForm.speedMax, s.gridForm.speedStep);
+    const gridPreviewLabel = `${gp.length} power level(s) × ${gs.length} speed level(s) = ${gp.length * gs.length} cells`;
+
+    let cellModalLabel = 'Record result';
+    if (s.activeCellKey) {
+      const [p, sp] = s.activeCellKey.split('_');
+      cellModalLabel = `${p}% · ${sp} mm/min`;
+    }
+
+    return {
+      unit, ditherModes: DITHER_MODES,
+      unitInBg: unit === 'in' ? 'oklch(30% 0.03 260)' : 'white', unitInColor: unit === 'in' ? 'white' : 'oklch(40% 0.01 260)',
+      unitMmBg: unit === 'mm' ? 'oklch(30% 0.03 260)' : 'white', unitMmColor: unit === 'mm' ? 'white' : 'oklch(40% 0.01 260)',
+      fileInputRef: this.fileInputRef,
+      triggerImport: this.triggerImport, exportData: this.exportData, importData: this.importData,
+
+      isLogTab: s.activeTab === 'log', isLibraryTab: s.activeTab === 'library', isGridsTab: s.activeTab === 'grids',
+      goLog: this.goLog, goLibrary: this.goLibrary, goGrids: this.goGrids,
+      tabLogColor: s.activeTab === 'log' ? 'oklch(45% 0.15 210)' : 'oklch(50% 0.01 260)',
+      tabLogBorder: s.activeTab === 'log' ? 'oklch(45% 0.15 210)' : 'transparent',
+      tabLibraryColor: s.activeTab === 'library' ? 'oklch(50% 0.15 300)' : 'oklch(50% 0.01 260)',
+      tabLibraryBorder: s.activeTab === 'library' ? 'oklch(50% 0.15 300)' : 'transparent',
+      tabGridsColor: s.activeTab === 'grids' ? 'oklch(58% 0.16 20)' : 'oklch(50% 0.01 260)',
+      tabGridsBorder: s.activeTab === 'grids' ? 'oklch(58% 0.16 20)' : 'transparent',
+
+      stats: {
+        entryCount: s.entries.length,
+        materialCount: materialOptions.length,
+        profileCount: s.profiles.length,
+        gridCount: s.grids.length
+      },
+      search: s.search, onSearchChange: this.onSearchChange,
+      materialFilter: s.materialFilter, onMaterialFilterChange: this.onMaterialFilterChange,
+      materialOptions,
+      openNewEntry: this.openNewEntry,
+      hasFilteredEntries: filteredEntries.length > 0,
+      filteredEntries,
+
+      hasProfiles: profileList.length > 0, profileList, openNewProfile: this.openNewProfile,
+
+      showGridList: !s.activeGridId, showGridDetail: !!s.activeGridId,
+      hasGrids: gridList.length > 0, gridList, openNewGrid: this.openNewGrid,
+      activeGrid, closeGridDetail: this.closeGridDetail, deleteActiveGrid: this.deleteActiveGrid,
+
+      entryModalOpen: s.entryModalOpen, entryModalTitle: s.editingEntryId ? 'Edit entry' : 'New log entry',
+      closeEntryModal: this.closeEntryModal, saveEntry: this.saveEntry, entryForm: s.entryForm,
+      entryRatingStars, handleInput: this.handleInput,
+
+      profileModalOpen: s.profileModalOpen, profileModalTitle: s.editingProfileId ? 'Edit material' : 'Add material',
+      closeProfileModal: this.closeProfileModal, saveProfile: this.saveProfile, profileForm: s.profileForm,
+
+      gridModalOpen: s.gridModalOpen, closeGridModal: this.closeGridModal, saveGrid: this.saveGrid,
+      gridForm: s.gridForm, gridPreviewLabel,
+
+      cellModalOpen: s.cellModalOpen, cellModalLabel, closeCellModal: this.closeCellModal,
+      cellForm: s.cellForm, cellRatingStars, saveCell: this.saveCell, clearCell: this.clearCell,
+      promoteCellToProfile: this.promoteCellToProfile
+    };
+  }
+}
+</script>
+</body>
+</html>
