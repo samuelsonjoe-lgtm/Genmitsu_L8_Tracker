@@ -21,13 +21,17 @@ Other features:
 - Export/import your data as a JSON backup file, so it can move between devices or be backed up outside the browser.
 - All data persists automatically in the browser (localStorage) between sessions.
 
+## Current storage model
+
+The current `.dc.html` version saves live data in the browser's `localStorage` under `genmitsu-l8-tracker-v1`. That means data is tied to the browser/profile that opened the app. Use Export regularly for portable JSON backups until the planned standalone version writes to a real app data file.
+
 ## Fields tracked (per entry/profile/grid)
 
 Material, thickness, job type, power (min/max), speed, passes, line interval, air assist (on/off + pressure), overscan %, kerf offset, dither mode (for photo engraves), focus height / material Z-offset, software (e.g. LightBurn), settings file reference, result rating, and notes.
 
 ## Official source material
 
-- Local manual: `Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf`
+- Local manual: `docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf`
 - SainSmart L8 resources: https://docs.sainsmart.com/article/1wosao83f2-genmitsu-l-8-resources
 - SainSmart L8 speed/power chart: https://docs.sainsmart.com/article/389gfcep9u-l-8-engraving-speed-power-reference-chart
 
