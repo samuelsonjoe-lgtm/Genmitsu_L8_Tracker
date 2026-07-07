@@ -2,6 +2,11 @@
 
 A single-file web app for logging and organizing laser settings for a Genmitsu L8 20W diode laser engraver, so results are repeatable across sessions.
 
+## Files to use
+
+- `index.html` - standalone offline baseline. This is the preferred file to open locally because it has no `support.js`, x-dc, or Google Fonts dependency.
+- `Genmitsu L8 Tracker.dc.html` - original Claude/Grok artifact export kept for reference and comparison.
+
 ## Why this exists
 
 Getting clean, repeatable cuts and engraves out of a diode laser depends on a pile of interacting numbers - power, speed, passes, line interval, focus height, air assist, and more - that vary by material and thickness. Without a system, that knowledge lives in scattered notes (or nowhere), and every new sheet of material means re-guessing settings from scratch. This tool gives that data a permanent, searchable home.

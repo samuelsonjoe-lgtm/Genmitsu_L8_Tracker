@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Genmitsu L8 Tracker</title>
+  <style>
+    :root {
+      --bg: #f5f6f8;
+      --panel: #ffffff;
+      --ink: #222831;
+      --muted: #667085;
+      --line: #d9dee7;
+      --blue: #236d9c;
+      --green: #2f7d55;
+      --violet: #7855a6;
+      --amber: #9a641d;
+      --red: #b14242;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", Arial, sans-serif;
+      line-height: 1.4;
+    }
+    button, input, select, textarea { font: inherit; }
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      border-radius: 6px;
+      padding: 8px 11px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    button.primary { background: var(--blue); border-color: var(--blue); color: white; }
+    button.danger { color: var(--red); }
+    button.ghost { background: transparent; }
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 9px;
+      background: white;
+      color: var(--ink);
+    }
+    textarea { resize: vertical; }
+    label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: #424b5a; }
+    .shell { max-width: 1180px; margin: 0 auto; padding: 20px 18px 70px; }
+    .topbar, .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .mark { width: 42px; height: 42px; border-radius: 9px; background: #283342; position: relative; }
+    .mark:before { content: ""; position: absolute; width: 22px; height: 4px; border-radius: 4px; background: #e2833a; top: 19px; left: 10px; transform: rotate(45deg); box-shadow: 0 7px 0 #e2833a, 0 -7px 0 #e2833a; }
+    h1 { margin: 0; font-size: 21px; }
+    .subtitle { color: var(--muted); font-size: 13px; }
+    .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line); margin: 18px 0; overflow-x: auto; }
+    .tab { border: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: 11px 2px 9px; color: var(--muted); background: transparent; white-space: nowrap; }
+    .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .grid { display: grid; gap: 14px; }
+    .stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 18px; }
+    .cards { grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); }
+    .refgrid { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+    .card, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 15px;
+    }
+    .stat-label { color: var(--muted); font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+    .stat-value { font-size: 28px; font-weight: 800; margin-top: 4px; }
+    .muted { color: var(--muted); }
+    .small { font-size: 12px; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .spread { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+    .pill { border-radius: 999px; padding: 3px 8px; background: #eef1f5; color: #425166; font-size: 12px; font-weight: 700; }
+    .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+    .metric { border-radius: 7px; padding: 8px; background: #f3f6fa; }
+    .metric b { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+    .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .empty { text-align: center; padding: 48px 20px; color: var(--muted); }
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(20, 25, 35, .55);
+      display: none;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 28px 14px;
+      overflow-y: auto;
+      z-index: 10;
+    }
+    .modal.open { display: flex; }
+    .dialog { background: white; width: min(680px, 100%); border-radius: 10px; padding: 20px; }
+    .formgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .span2 { grid-column: span 2; }
+    .unitrow { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 6px; }
+    .stars { display: flex; gap: 6px; }
+    .star { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line); display: grid; place-items: center; font-weight: 800; background: #f3f5f8; cursor: pointer; }
+    .star.on { background: var(--amber); color: white; border-color: var(--amber); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 720px; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: #f3f5f8; color: #475467; font-size: 12px; text-transform: uppercase; }
+    .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: white; }
+    .grid-table { overflow-x: auto; background: white; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+    .matrix { display: inline-grid; gap: 5px; align-items: center; }
+    .cell { width: 76px; height: 54px; border: 1px solid var(--line); border-radius: 7px; display: grid; place-items: center; text-align: center; cursor: pointer; background: #f8fafc; font-size: 12px; font-weight: 800; }
+    .cell.done { background: #eef8f1; border-color: #78b38d; color: var(--green); }
+    .cell.best { background: #fff4db; border-color: #d9982f; color: var(--amber); }
+    .axis { font-size: 12px; font-weight: 800; color: var(--muted); text-align: center; }
+    @media (max-width: 700px) {
+      .formgrid { grid-template-columns: 1fr; }
+      .span2 { grid-column: span 1; }
+      .metrics { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark" aria-hidden="true"></div>
+        <div>
+          <h1>Genmitsu L8 Tracker</h1>
+          <div class="subtitle">Standalone offline materials, power, and settings log</div>
+        </div>
+      </div>
+      <div class="row">
+        <button id="unitIn">in</button>
+        <button id="unitMm">mm</button>
+        <button id="importBtn">Import</button>
+        <button id="exportBtn">Export</button>
+        <input id="importFile" type="file" accept="application/json" hidden>
+      </div>
+    </header>
+
+    <nav class="tabs" id="tabs"></nav>
+    <section id="app"></section>
+  </main>
+
+  <div class="modal" id="entryModal"></div>
+  <div class="modal" id="profileModal"></div>
+  <div class="modal" id="gridModal"></div>
+  <div class="modal" id="cellModal"></div>
+
+  <script>
+  (() => {
+    const STORAGE_KEY = 'genmitsu-l8-tracker-v1';
+    const tabs = [
+      ['log', 'Log'],
+      ['library', 'Library'],
+      ['grids', 'Test Grids'],
+      ['reference', 'Reference']
+    ];
+    const reference20w = [
+      ['MDF board','engrave',0.1,60,30000,1,''],
+      ['Plywood','engrave',0.1,100,25000,1,''],
+      ['Pinewood','engrave',0.1,100,25000,1,''],
+      ['Kraft paper','engrave',0.1,100,17000,1,''],
+      ['Black acrylic','engrave',0.1,60,30000,1,''],
+      ['Ceramic','engrave',0.07,100,10000,1,''],
+      ['Coated Metal','engrave',0.1,45,30000,1,''],
+      ['Electroplated Metal','engrave',0.1,100,8000,1,''],
+      ['Pure Metals','engrave',null,null,null,null,'Cannot engrave; SainSmart recommends a fiber laser.'],
+      ['Glass','engrave',0.1,100,10000,1,'Use anti-reflective prep.'],
+      ['Stainless Steel','engrave',0.1,100,4000,1,'Adjust speed/power for color effects.'],
+      ['Rubber','engrave',0.1,100,20000,1,''],
+      ['Tile','engrave',0.1,100,16000,1,''],
+      ['Pinewood board 8mm','cut',null,100,200,1,''],
+      ['Pinewood board 10mm','cut',null,100,150,1,''],
+      ['Pinewood board 15mm','cut',null,100,100,2,''],
+      ['Plywood 5mm','cut',null,100,350,1,''],
+      ['Plywood 8mm','cut',null,100,200,1,''],
+      ['Plywood 10mm','cut',null,100,250,2,''],
+      ['Gray cardboard 3mm','cut',null,100,300,1,''],
+      ['Black Acrylic 5mm','cut',null,100,100,2,''],
+      ['PVC 5mm','cut',null,100,400,1,'Confirm material safety before cutting.'],
+      ['A4 paper','cut',null,40,1200,1,''],
+      ['Cotton','cut',null,80,1200,1,''],
+      ['Silicone','cut',null,100,100,4,'']
+    ];
+    const reference40w = [
+      ['MDF board','engrave',0.1,80,35000,1,''],
+      ['Plywood','engrave',0.1,100,35000,1,''],
+      ['Kraft paper','engrave',0.1,100,25000,1,''],
+      ['Ceramic','engrave',0.07,100,15000,1,''],
+      ['Coated metal','engrave',0.1,45,35000,1,''],
+      ['Pure metal','engrave',null,null,null,null,'Cannot engrave; SainSmart recommends a fiber laser.'],
+      ['Glass','engrave',0.1,100,6000,1,'Use anti-reflective prep.'],
+      ['Stainless steel','engrave',0.1,80,35000,1,'Adjust speed/power for color effects.'],
+      ['Pinewood board 10mm','cut',null,100,220,1,''],
+      ['Pinewood board 20mm','cut',null,100,150,1,''],
+      ['Plywood 5mm','cut',null,100,520,1,''],
+      ['Plywood 10mm','cut',null,100,380,1,''],
+      ['Black acrylic 5mm','cut',null,100,150,1,''],
+      ['Black acrylic 12mm','cut',null,100,100,1,''],
+      ['A4 paper','cut',null,40,1800,1,''],
+      ['Cotton','cut',null,80,1800,1,''],
+      ['Silicone','cut',null,100,150,4,'']
+    ];
+    const notes = [
+      ['Fixed focus, 20W', 'Cut >8mm: 3mm focus. Cut 5-8mm: 5mm focus. Cut 0-5mm: 7mm focus. Engrave: 7mm focus.'],
+      ['Safety and upkeep', 'Keep fire suppression nearby, vent fumes, use air assist for cutting, clean the lens if performance drops, and rest the machine 10 minutes after 4 hours engraving or 1 hour cutting.'],
+      ['Cut troubleshooting', 'If material will not cut through, check machine/material parallelism, lens cleanliness, focus, and material thickness, then add passes or reduce speed.'],
+      ['Offline files', 'For offline work, generate G-code from LightBurn, place it in the TF-card root, and keep only the file you intend to run.']
+    ];
+    const softwareList = ['LightBurn', 'LaserGRBL', 'CutLabX', 'Inkscape + LightBurn'];
+    const ditherModes = ['none', 'threshold', 'floyd-steinberg', 'jarvis', 'stucki', 'newsprint'];
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const today = () => new Date().toISOString().slice(0, 10);
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const num = (v, fallback = 0) => {
+      const n = parseFloat(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    const fmt = (v, u) => v === '' || v == null ? '-' : `${v}${u || ''}`;
+    const state = loadState();
+    let activeGridId = null;
+    let activeCellKey = null;
+    let editingEntryId = null;
+    let editingProfileId = null;
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const data = JSON.parse(raw);
+          return {
+            activeTab: 'log',
+            unit: data.unit || 'in',
+            entries: data.entries || [],
+            profiles: data.profiles || [],
+            grids: data.grids || [],
+            search: '',
+            materialFilter: 'all'
+          };
+        }
+      } catch (_) {}
+      return { activeTab: 'log', unit: 'in', entries: [], profiles: [], grids: [], search: '', materialFilter: 'all' };
+    }
+    function persist() {
+      const { entries, profiles, grids, unit } = state;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ entries, profiles, grids, unit }));
+    }
+    function backupObject() {
+      return { entries: state.entries, profiles: state.profiles, grids: state.grids, unit: state.unit };
+    }
+    function setTab(tab) { state.activeTab = tab; render(); }
+    function setUnit(unit) { state.unit = unit; persist(); render(); }
+    function materialNames() {
+      return [...new Set([...state.entries, ...state.profiles].map(x => x.material).filter(Boolean))].sort();
+    }
+    function powerLabel(o) { return o.maxPower != null && o.maxPower !== o.minPower ? `${o.minPower}-${o.maxPower}%` : `${o.minPower}%`; }
+    function stars(r) { return `<span class="small">${'●'.repeat(Number(r) || 0)}${'○'.repeat(5 - (Number(r) || 0))}</span>`; }
+    function rowToRef(row, watts) {
+      return { material: row[0], jobType: row[1], lineInterval: row[2], minPower: row[3], maxPower: row[3], speed: row[4], passes: row[5], note: row[6], watts };
+    }
+    function splitMaterialThickness(material) {
+      const m = material.match(/^(.*)\s+([0-9.]+)mm$/i);
+      return m ? { material: m[1], thicknessValue: m[2], thicknessUnit: 'mm' } : { material, thicknessValue: '', thicknessUnit: state.unit };
+    }
+    function formDefaults(kind) {
+      const base = {
+        material: '', thicknessValue: '', thicknessUnit: state.unit, jobType: 'engrave',
+        minPower: '', maxPower: '', speed: '', passes: '1', lineInterval: '',
+        airAssist: false, airPressure: '', overscanPercent: '', kerfOffset: '', ditherMode: 'none',
+        focusValue: '', focusUnit: state.unit, materialHeightValue: '', materialHeightUnit: state.unit,
+        software: '', notes: ''
+      };
+      if (kind === 'entry') return { ...base, date: today(), settingsFile: '', rating: 0 };
+      if (kind === 'grid') return {
+        name: '', material: '', thicknessValue: '', thicknessUnit: state.unit, jobType: 'engrave',
+        powerMin: '20', powerMax: '100', powerStep: '20',
+        speedMin: '100', speedMax: '500', speedStep: '100',
+        passes: '1', lineInterval: '', airAssist: false, airPressure: '',
+        overscanPercent: '', kerfOffset: '', ditherMode: 'none',
+        materialHeightValue: '', materialHeightUnit: state.unit, software: ''
+      };
+      return base;
+    }
+    function render() {
+      renderTabs();
+      document.getElementById('unitIn').className = state.unit === 'in' ? 'primary' : '';
+      document.getElementById('unitMm').className = state.unit === 'mm' ? 'primary' : '';
+      const root = document.getElementById('app');
+      if (state.activeTab === 'log') root.innerHTML = renderLog();
+      if (state.activeTab === 'library') root.innerHTML = renderLibrary();
+      if (state.activeTab === 'grids') root.innerHTML = renderGrids();
+      if (state.activeTab === 'reference') root.innerHTML = renderReference();
+      bindPage();
+    }
+    function renderTabs() {
+      document.getElementById('tabs').innerHTML = tabs.map(([id, label]) => `<button class="tab ${state.activeTab === id ? 'active' : ''}" data-tab="${id}">${label}</button>`).join('');
+    }
+    function renderLog() {
+      const materials = materialNames();
+      const q = state.search.toLowerCase();
+      const filtered = state.entries.filter(e => {
+        const materialOk = state.materialFilter === 'all' || e.material === state.materialFilter;
+        const hay = [e.material, e.notes, e.software, e.settingsFile].join(' ').toLowerCase();
+        return materialOk && (!q || hay.includes(q));
+      });
+      return `
+        <div class="grid stats">
+          ${stat('Entries logged', state.entries.length, 'blue')}
+          ${stat('Materials tried', materials.length, 'green')}
+          ${stat('Library settings', state.profiles.length, 'violet')}
+          ${stat('Test grids run', state.grids.length, 'amber')}
+        </div>
+        <div class="toolbar" style="margin-bottom:14px">
+          <div class="row" style="flex:1">
+            <input id="search" placeholder="Search notes, material, software..." value="${esc(state.search)}" style="min-width:230px; flex:1">
+            <select id="materialFilter" style="max-width:220px">
+              <option value="all">All materials</option>
+              ${materials.map(m => `<option ${state.materialFilter === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}
+            </select>
+          </div>
+          <button class="primary" id="newEntry">New Entry</button>
+        </div>
+        ${filtered.length ? `<div class="grid cards">${filtered.map(entryCard).join('')}</div>` : empty('No entries yet', 'Log your first cut or engrave to start building a repeatable settings history.')}
+      `;
+    }
+    function renderLibrary() {
+      return `
+        <div class="toolbar" style="margin-bottom:14px">
+          <div class="muted">Curated best-known settings per material. Promote from a log entry, grid cell, or reference row.</div>
+          <button class="primary" id="newProfile">Add Material</button>
+        </div>
+        ${state.profiles.length ? `<div class="grid cards">${state.profiles.map(profileCard).join('')}</div>` : empty('Library is empty', 'Save tuned settings here as your go-to reference.')}
+      `;
+    }
+    function renderGrids() {
+      if (activeGridId) return renderGridDetail();
+      return `
+        <div class="toolbar" style="margin-bottom:14px">
+          <div class="muted">Plan a power x speed test matrix for a new material, then record results per cell.</div>
+          <button class="primary" id="newGrid">New Test Grid</button>
+        </div>
+        ${state.grids.length ? `<div class="grid cards">${state.grids.map(gridCard).join('')}</div>` : empty('No test grids yet', 'Run a matrix to dial in settings fast.')}
+      `;
+    }
+    function renderReference() {
+      return `
+        <div class="grid refgrid" style="margin-bottom:16px">
+          ${notes.map(([title, body]) => `<div class="card"><b>${esc(title)}</b><p class="small muted">${esc(body)}</p></div>`).join('')}
+        </div>
+        <div class="panel" style="margin-bottom:14px;background:#fff8e7;border-color:#ead59f">
+          <b>Official values are starting points.</b>
+          <span class="small">Material color, glue, moisture, flatness, focus, lens cleanliness, and airflow can change results. Copy promising rows into Library and tune from there.</span>
+        </div>
+        ${referenceTable('20W official starting points', reference20w, '20W')}
+        <details style="margin-top:16px"><summary><b>40W official starting points</b></summary>${referenceTable('', reference40w, '40W')}</details>
+      `;
+    }
+    function referenceTable(title, rows, watts) {
+      return `
+        ${title ? `<h2>${esc(title)}</h2>` : ''}
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Material</th><th>Mode</th><th>Line mm</th><th>Power</th><th>Speed</th><th>Passes</th><th>Note</th><th></th></tr></thead>
+            <tbody>${rows.map((r, i) => {
+              const ref = rowToRef(r, watts);
+              return `<tr>
+                <td><b>${esc(ref.material)}</b></td><td>${esc(ref.jobType)}</td><td>${ref.lineInterval ?? '-'}</td>
+                <td>${ref.minPower == null ? '-' : ref.minPower + '%'}</td><td>${ref.speed == null ? '-' : ref.speed + ' mm/min'}</td><td>${ref.passes ?? '-'}</td>
+                <td>${esc(ref.note || '')}</td><td><button data-ref="${watts}:${i}">Save</button></td>
+              </tr>`;
+            }).join('')}</tbody>
+          </table>
+        </div>`;
+    }
+    function stat(label, value, color) { return `<div class="card"><div class="stat-label">${label}</div><div class="stat-value" style="color:var(--${color})">${value}</div></div>`; }
+    function empty(title, body) { return `<div class="empty"><b>${esc(title)}</b><div>${esc(body)}</div></div>`; }
+    function entryCard(e) {
+      return `<article class="card">
+        <div class="spread"><div><b>${esc(e.material)}</b><div class="small muted">${fmt(e.thicknessValue, e.thicknessUnit)} - ${esc(e.jobType)} - ${esc(e.date)}</div></div>${stars(e.rating)}</div>
+        <div class="metrics">${metric('Power', powerLabel(e))}${metric('Speed', `${e.speed} mm/min`)}${metric('Passes', e.passes)}${metric('Line int.', fmt(e.lineInterval, 'mm'))}</div>
+        <div class="small muted" style="margin-top:9px">Focus: ${fmt(e.focusValue, e.focusUnit)} - Air: ${e.airAssist ? 'On' : 'Off'}${e.software ? ' - ' + esc(e.software) : ''}</div>
+        ${e.notes ? `<p class="small">${esc(e.notes)}</p>` : ''}
+        <div class="actions"><button data-edit-entry="${e.id}">Edit</button><button data-promote-entry="${e.id}">Save to library</button><button class="danger" data-delete-entry="${e.id}">Delete</button></div>
+      </article>`;
+    }
+    function profileCard(p) {
+      return `<article class="card">
+        <div class="spread"><div><b>${esc(p.material)}</b><div class="small muted">${fmt(p.thicknessValue, p.thicknessUnit)} - ${esc(p.jobType)}</div></div><span class="pill">BEST KNOWN</span></div>
+        <div class="metrics">${metric('Power', powerLabel(p))}${metric('Speed', `${p.speed} mm/min`)}${metric('Passes', p.passes)}${metric('Line int.', fmt(p.lineInterval, 'mm'))}</div>
+        <div class="small muted" style="margin-top:9px">Focus: ${fmt(p.focusValue, p.focusUnit)} - Air: ${p.airAssist ? 'On' : 'Off'}${p.software ? ' - ' + esc(p.software) : ''}</div>
+        ${p.notes ? `<p class="small">${esc(p.notes)}</p>` : ''}
+        <div class="actions"><button data-edit-profile="${p.id}">Edit</button><button class="danger" data-delete-profile="${p.id}">Delete</button></div>
+      </article>`;
+    }
+    function gridCard(g) {
+      const powers = range(g.powerMin, g.powerMax, g.powerStep);
+      const speeds = range(g.speedMin, g.speedMax, g.speedStep);
+      return `<article class="card" data-open-grid="${g.id}" style="cursor:pointer">
+        <b>${esc(g.name)}</b><div class="small muted">${esc(g.material)} - ${fmt(g.thicknessValue, g.thicknessUnit)} - ${esc(g.createdDate)}</div>
+        <div class="row" style="margin-top:10px"><span class="pill">${powers.length}x${speeds.length} grid</span><span class="pill">${Object.keys(g.cells || {}).length}/${powers.length * speeds.length} recorded</span></div>
+      </article>`;
+    }
+    function metric(label, value) { return `<div class="metric"><b>${esc(label)}</b>${esc(value)}</div>`; }
+    function range(min, max, step) {
+      const out = [];
+      const mn = num(min), mx = num(max), st = Math.max(num(step, 1), 0.01);
+      for (let v = mn; v <= mx + 1e-6 && out.length < 60; v += st) out.push(Math.round(v * 100) / 100);
+      return out.length ? out : [mn];
+    }
+    function renderGridDetail() {
+      const g = state.grids.find(x => x.id === activeGridId);
+      if (!g) { activeGridId = null; return renderGrids(); }
+      const powers = range(g.powerMin, g.powerMax, g.powerStep);
+      const speeds = range(g.speedMin, g.speedMax, g.speedStep);
+      let html = `<div class="toolbar" style="margin-bottom:12px"><div class="row"><button id="backGrids">Back</button><div><b>${esc(g.name)}</b><div class="small muted">${esc(g.material)} - ${fmt(g.thicknessValue, g.thicknessUnit)} - ${esc(g.jobType)} - ${g.passes} pass(es)</div></div></div><button class="danger" id="deleteGrid">Delete grid</button></div>`;
+      html += '<div class="grid-table"><div class="matrix" style="grid-template-columns:70px ' + speeds.map(() => '76px').join(' ') + '">';
+      html += '<div></div>' + speeds.map(s => `<div class="axis">${s}<br>mm/min</div>`).join('');
+      powers.forEach(p => {
+        html += `<div class="axis">${p}%</div>`;
+        speeds.forEach(s => {
+          const key = `${p}_${s}`;
+          const cell = (g.cells || {})[key];
+          html += `<div class="cell ${cell ? 'done' : ''} ${cell && cell.best ? 'best' : ''}" data-cell="${key}">${cell ? `${cell.rating}/5${cell.best ? '<br>BEST' : ''}` : ''}</div>`;
+        });
+      });
+      html += '</div></div>';
+      return html;
+    }
+    function bindPage() {
+      document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+      const search = document.getElementById('search');
+      if (search) search.oninput = e => { state.search = e.target.value; render(); };
+      const filter = document.getElementById('materialFilter');
+      if (filter) filter.onchange = e => { state.materialFilter = e.target.value; render(); };
+      const newEntry = document.getElementById('newEntry');
+      if (newEntry) newEntry.onclick = () => openEntry();
+      const newProfile = document.getElementById('newProfile');
+      if (newProfile) newProfile.onclick = () => openProfile();
+      const newGrid = document.getElementById('newGrid');
+      if (newGrid) newGrid.onclick = () => openGridForm();
+      const back = document.getElementById('backGrids');
+      if (back) back.onclick = () => { activeGridId = null; render(); };
+      const delGrid = document.getElementById('deleteGrid');
+      if (delGrid) delGrid.onclick = deleteActiveGrid;
+      document.querySelectorAll('[data-edit-entry]').forEach(b => b.onclick = () => openEntry(state.entries.find(e => e.id === b.dataset.editEntry)));
+      document.querySelectorAll('[data-delete-entry]').forEach(b => b.onclick = () => del('entries', b.dataset.deleteEntry, 'Delete this log entry?'));
+      document.querySelectorAll('[data-promote-entry]').forEach(b => b.onclick = () => promoteEntry(b.dataset.promoteEntry));
+      document.querySelectorAll('[data-edit-profile]').forEach(b => b.onclick = () => openProfile(state.profiles.find(p => p.id === b.dataset.editProfile)));
+      document.querySelectorAll('[data-delete-profile]').forEach(b => b.onclick = () => del('profiles', b.dataset.deleteProfile, 'Remove this material from your library?'));
+      document.querySelectorAll('[data-open-grid]').forEach(c => c.onclick = () => { activeGridId = c.dataset.openGrid; render(); });
+      document.querySelectorAll('[data-cell]').forEach(c => c.onclick = () => openCell(c.dataset.cell));
+      document.querySelectorAll('[data-ref]').forEach(b => b.onclick = () => saveReference(b.dataset.ref));
+    }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); document.getElementById(id).innerHTML = ''; }
+    function openModal(id, html) { const m = document.getElementById(id); m.innerHTML = html; m.classList.add('open'); }
+    function field(name, label, value = '', type = 'text', attrs = '') { return `<label>${label}<input name="${name}" type="${type}" value="${esc(value)}" ${attrs}></label>`; }
+    function select(name, label, value, options) { return `<label>${label}<select name="${name}">${options.map(o => `<option value="${esc(o)}" ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`; }
+    function modalFields(kind, data) {
+      return `
+        ${kind === 'entry' ? field('date','Date',data.date,'date') : ''}
+        ${select('jobType','Job type',data.jobType,['engrave','cut'])}
+        <label class="span2">Material<input name="material" value="${esc(data.material)}" list="materials"></label>
+        ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit)}
+        ${unitField('focusValue','focusUnit','Focus height',data.focusValue,data.focusUnit)}
+        ${field('minPower','Power min (%)',data.minPower,'number','min="0" max="100"')}
+        ${field('maxPower','Power max (%)',data.maxPower,'number','min="0" max="100"')}
+        ${field('speed','Speed (mm/min)',data.speed,'number','min="0"')}
+        ${field('passes','Passes',data.passes,'number','min="1"')}
+        ${field('lineInterval','Line interval, mm',data.lineInterval,'number','step="any" min="0"')}
+        ${field('overscanPercent','Overscan (%)',data.overscanPercent,'number','step="any" min="0"')}
+        ${field('kerfOffset','Kerf offset, mm',data.kerfOffset,'number','step="any"')}
+        ${select('ditherMode','Dither mode',data.ditherMode,ditherModes)}
+        ${unitField('materialHeightValue','materialHeightUnit','Material height / Z-offset',data.materialHeightValue,data.materialHeightUnit)}
+        <label class="row" style="margin-top:20px"><input name="airAssist" type="checkbox" ${data.airAssist ? 'checked' : ''} style="width:auto"> Air assist on</label>
+        ${field('airPressure','Air pressure (psi)',data.airPressure,'number','step="any" min="0"')}
+        <label>Software<input name="software" value="${esc(data.software)}" list="software"></label>
+        ${kind === 'entry' ? `<label class="span2">Settings file / profile name<input name="settingsFile" value="${esc(data.settingsFile)}"></label><div class="span2"><b class="small">Result quality</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating)}" hidden></div>` : ''}
+        <label class="span2">Notes<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>
+        <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
+        <datalist id="materials">${materialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>`;
+    }
+    function unitField(valueName, unitName, label, value, unit) {
+      return `<label>${label}<span class="unitrow"><input name="${valueName}" type="number" step="any" value="${esc(value)}"><select name="${unitName}"><option ${unit === 'in' ? 'selected' : ''}>in</option><option ${unit === 'mm' ? 'selected' : ''}>mm</option></select></span></label>`;
+    }
+    function readForm(form) {
+      const fd = new FormData(form);
+      const obj = {};
+      for (const [k, v] of fd.entries()) obj[k] = v;
+      obj.airAssist = form.airAssist.checked;
+      if (form.rating) obj.rating = num(form.rating.value);
+      return obj;
+    }
+    function normalizeSetting(f, existingId) {
+      const minPower = num(f.minPower);
+      return {
+        id: existingId || uid(), material: f.material.trim(), thicknessValue: f.thicknessValue === '' ? '' : num(f.thicknessValue), thicknessUnit: f.thicknessUnit,
+        jobType: f.jobType, minPower, maxPower: f.maxPower === '' ? minPower : num(f.maxPower), speed: num(f.speed),
+        passes: Math.max(1, Math.round(num(f.passes, 1))), lineInterval: f.lineInterval === '' ? '' : num(f.lineInterval),
+        airAssist: !!f.airAssist, airPressure: f.airPressure === '' ? '' : num(f.airPressure), overscanPercent: f.overscanPercent === '' ? '' : num(f.overscanPercent),
+        kerfOffset: f.kerfOffset === '' ? '' : num(f.kerfOffset), ditherMode: f.ditherMode || 'none',
+        focusValue: f.focusValue === '' ? '' : num(f.focusValue), focusUnit: f.focusUnit,
+        materialHeightValue: f.materialHeightValue === '' ? '' : num(f.materialHeightValue), materialHeightUnit: f.materialHeightUnit,
+        software: (f.software || '').trim(), notes: (f.notes || '').trim()
+      };
+    }
+    function openEntry(entry) {
+      editingEntryId = entry ? entry.id : null;
+      const data = { ...formDefaults('entry'), ...(entry || {}) };
+      openModal('entryModal', `<div class="dialog"><div class="spread"><h2>${entry ? 'Edit entry' : 'New log entry'}</h2><button data-close>×</button></div><form id="entryForm" class="formgrid">${modalFields('entry', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save entry</button></div></form></div>`);
+      bindModal('entryModal');
+      document.querySelectorAll('#entryModal .star').forEach(s => s.onclick = () => { document.querySelector('#entryModal [name=rating]').value = s.dataset.rating; document.querySelectorAll('#entryModal .star').forEach(x => x.classList.toggle('on', Number(x.dataset.rating) <= Number(s.dataset.rating))); });
+      document.getElementById('entryForm').onsubmit = e => {
+        e.preventDefault();
+        const f = readForm(e.target);
+        if (!f.material.trim()) return alert('Add a material name first.');
+        const entryObj = { ...normalizeSetting(f, editingEntryId), date: f.date || today(), settingsFile: (f.settingsFile || '').trim(), rating: num(f.rating) };
+        upsert('entries', entryObj);
+        closeModal('entryModal');
+      };
+    }
+    function openProfile(profile) {
+      editingProfileId = profile ? profile.id : null;
+      const data = { ...formDefaults('profile'), ...(profile || {}) };
+      openModal('profileModal', `<div class="dialog"><div class="spread"><h2>${profile ? 'Edit material' : 'Add material'}</h2><button data-close>×</button></div><form id="profileForm" class="formgrid">${modalFields('profile', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save material</button></div></form></div>`);
+      bindModal('profileModal');
+      document.getElementById('profileForm').onsubmit = e => {
+        e.preventDefault();
+        const f = readForm(e.target);
+        if (!f.material.trim()) return alert('Add a material name first.');
+        upsert('profiles', normalizeSetting(f, editingProfileId));
+        closeModal('profileModal');
+      };
+    }
+    function openGridForm() {
+      const data = formDefaults('grid');
+      openModal('gridModal', `<div class="dialog"><div class="spread"><h2>New test grid</h2><button data-close>×</button></div><form id="gridForm" class="formgrid">
+        ${field('name','Grid name',data.name)}${select('jobType','Job type',data.jobType,['engrave','cut'])}
+        <label class="span2">Material<input name="material" value="" list="materials"></label>
+        ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit)}
+        ${field('passes','Passes',data.passes,'number','min="1"')}
+        ${field('powerMin','Power min (%)',data.powerMin,'number')}${field('powerMax','Power max (%)',data.powerMax,'number')}${field('powerStep','Power step',data.powerStep,'number')}
+        ${field('speedMin','Speed min',data.speedMin,'number')}${field('speedMax','Speed max',data.speedMax,'number')}${field('speedStep','Speed step',data.speedStep,'number')}
+        ${field('lineInterval','Line interval, mm',data.lineInterval,'number','step="any"')}${select('ditherMode','Dither mode',data.ditherMode,ditherModes)}
+        <label class="row" style="margin-top:20px"><input name="airAssist" type="checkbox" style="width:auto"> Air assist on</label>
+        ${field('airPressure','Air pressure (psi)',data.airPressure,'number','step="any"')}
+        <label>Software<input name="software" value="${esc(data.software)}" list="software"></label>
+        <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
+        <datalist id="materials">${materialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
+        <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Create grid</button></div></form></div>`);
+      bindModal('gridModal');
+      document.getElementById('gridForm').onsubmit = e => {
+        e.preventDefault();
+        const f = readForm(e.target);
+        if (!f.name.trim() || !f.material.trim()) return alert('Give the grid a name and a material.');
+        const grid = {
+          id: uid(), name: f.name.trim(), material: f.material.trim(), createdDate: today(), jobType: f.jobType,
+          thicknessValue: f.thicknessValue === '' ? '' : num(f.thicknessValue), thicknessUnit: f.thicknessUnit,
+          powerMin: num(f.powerMin), powerMax: num(f.powerMax), powerStep: num(f.powerStep, 10),
+          speedMin: num(f.speedMin), speedMax: num(f.speedMax), speedStep: num(f.speedStep, 100),
+          passes: Math.max(1, Math.round(num(f.passes, 1))), lineInterval: f.lineInterval === '' ? '' : num(f.lineInterval),
+          airAssist: !!f.airAssist, airPressure: f.airPressure === '' ? '' : num(f.airPressure), ditherMode: f.ditherMode,
+          software: (f.software || '').trim(), cells: {}
+        };
+        state.grids.unshift(grid); activeGridId = grid.id; persist(); closeModal('gridModal'); render();
+      };
+    }
+    function openCell(key) {
+      activeCellKey = key;
+      const g = state.grids.find(x => x.id === activeGridId);
+      const existing = (g.cells || {})[key] || { rating: 0, notes: '', best: false };
+      openModal('cellModal', `<div class="dialog" style="max-width:420px"><div class="spread"><h2>${esc(key.replace('_', '% - '))} mm/min</h2><button data-close>×</button></div><form id="cellForm" class="grid">
+        <label>Rating<select name="rating">${[0,1,2,3,4,5].map(n => `<option ${n === existing.rating ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label class="row"><input type="checkbox" name="best" ${existing.best ? 'checked' : ''} style="width:auto"> Mark as best setting</label>
+        <label>Notes<textarea name="notes" rows="3">${esc(existing.notes)}</textarea></label>
+        <div class="actions"><button type="button" id="clearCell">Clear</button><button type="button" id="cellToLibrary">Save to library</button><button class="primary">Save</button></div>
+      </form></div>`);
+      bindModal('cellModal');
+      document.getElementById('clearCell').onclick = () => { delete g.cells[key]; persist(); closeModal('cellModal'); render(); };
+      document.getElementById('cellToLibrary').onclick = () => promoteCell();
+      document.getElementById('cellForm').onsubmit = e => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        g.cells ||= {};
+        g.cells[key] = { rating: num(fd.get('rating')), best: e.target.best.checked, notes: String(fd.get('notes') || '').trim() };
+        persist(); closeModal('cellModal'); render();
+      };
+    }
+    function bindModal(id) { document.querySelectorAll(`#${id} [data-close]`).forEach(b => b.onclick = () => closeModal(id)); }
+    function upsert(key, item) {
+      const list = state[key];
+      const idx = list.findIndex(x => x.id === item.id);
+      if (idx >= 0) list[idx] = item; else list.unshift(item);
+      persist(); render();
+    }
+    function del(key, id, message) {
+      if (!confirm(message)) return;
+      state[key] = state[key].filter(x => x.id !== id);
+      persist(); render();
+    }
+    function promoteEntry(id) {
+      const e = state.entries.find(x => x.id === id);
+      if (e) openProfile({ ...e, id: null, notes: `Promoted from log entry ${e.date}. ${e.notes || ''}`.trim() });
+    }
+    function saveReference(refKey) {
+      const [watts, index] = refKey.split(':');
+      const row = rowToRef((watts === '20W' ? reference20w : reference40w)[Number(index)], watts);
+      if (row.minPower == null || row.speed == null) return alert('This row does not include usable diode-laser settings.');
+      const parsed = splitMaterialThickness(row.material);
+      openProfile({
+        ...formDefaults('profile'), ...parsed, jobType: row.jobType, minPower: row.minPower, maxPower: row.maxPower,
+        speed: row.speed, passes: row.passes || 1, lineInterval: row.lineInterval ?? '', airAssist: row.jobType === 'cut',
+        focusUnit: 'mm', materialHeightUnit: 'mm', software: 'LightBurn',
+        notes: `Official SainSmart ${watts} starting point. Tune for your exact material, focus, airflow, and lens condition.${row.note ? ' ' + row.note : ''}`
+      });
+    }
+    function promoteCell() {
+      const g = state.grids.find(x => x.id === activeGridId);
+      if (!g || !activeCellKey) return;
+      const [power, speed] = activeCellKey.split('_').map(Number);
+      const cell = (g.cells || {})[activeCellKey] || {};
+      closeModal('cellModal');
+      openProfile({
+        ...formDefaults('profile'), material: g.material, thicknessValue: g.thicknessValue, thicknessUnit: g.thicknessUnit,
+        jobType: g.jobType, minPower: power, maxPower: power, speed, passes: g.passes, lineInterval: g.lineInterval,
+        airAssist: g.airAssist, airPressure: g.airPressure, ditherMode: g.ditherMode, software: g.software,
+        notes: `Promoted from test grid "${g.name}" at ${power}% / ${speed} mm/min.${cell.notes ? ' ' + cell.notes : ''}`
+      });
+    }
+    function deleteActiveGrid() {
+      if (!confirm('Delete this test grid?')) return;
+      state.grids = state.grids.filter(g => g.id !== activeGridId);
+      activeGridId = null; persist(); render();
+    }
+    document.getElementById('unitIn').onclick = () => setUnit('in');
+    document.getElementById('unitMm').onclick = () => setUnit('mm');
+    document.getElementById('exportBtn').onclick = () => {
+      const blob = new Blob([JSON.stringify(backupObject(), null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `l8-tracker-backup-${today()}.json`; a.click();
+      URL.revokeObjectURL(url);
+    };
+    document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
+    document.getElementById('importFile').onchange = e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (!confirm('Import will replace your current entries, library, and grids. Continue?')) return;
+          state.entries = data.entries || []; state.profiles = data.profiles || []; state.grids = data.grids || []; state.unit = data.unit || state.unit;
+          persist(); render();
+        } catch (_) { alert('Could not read that file. Make sure it is a valid backup JSON.'); }
+      };
+      reader.readAsText(file); e.target.value = '';
+    };
+    render();
+  })();
+  </script>
+</body>
+</html>
