@@ -32,6 +32,7 @@
 | **Machine profile selector** | Reference view defaults to L8 20W and can switch to L8 40W without showing both tables at once |
 | **Pricing calculator MVP** | Dedicated Pricing view estimates total revenue, direct costs, machine/labor/fee costs, profit, margin, and break-even price without changing Project records |
 | **Pricing polish pack 1** | Pricing now includes target margin/profit sale-price helpers, a subtle profitability badge, a short assumptions note, and copyable plain-text summaries |
+| **Pricing polish pack 2** | Pricing now has saved rate/fee defaults, compact print summaries, and one-row CSV export for the current estimate |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 

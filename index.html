@@ -115,6 +115,7 @@
     .cell.done { background: #eef8f1; border-color: #78b38d; color: var(--green); }
     .cell.best { background: #fff4db; border-color: #d9982f; color: var(--amber); }
     .axis { font-size: 12px; font-weight: 800; color: var(--muted); text-align: center; }
+    .print-only { display: none; }
     @media (max-width: 700px) {
       .formgrid { grid-template-columns: 1fr; }
       .span2 { grid-column: span 1; }
@@ -132,6 +133,9 @@
       .card { padding: 10px; }
       .metric { padding: 6px; background: #f9fafb; }
       .pill { border: 1px solid #9ca3af; background: white; color: #111827; }
+      .print-only { display: block; }
+      .pricing-defaults-card, .pricing-form-card, .pricing-results-card { display: none; }
+      .pricing-print-summary { display: block !important; border: 0; padding: 0; }
     }
   </style>
 </head>
@@ -292,15 +296,16 @@
             focusMaterialMm: '',
             focusJobType: 'engrave',
             machineProfile: data.machineProfile || '20W',
-            pricing: { ...pricingDefaults(), ...(data.pricing || {}) }
+            pricing: { ...pricingDefaults(), ...(data.pricing || {}) },
+            pricingPrefs: { ...pricingPreferenceDefaults(), ...(data.pricingPrefs || {}) }
           };
         }
       } catch (_) {}
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults() };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
     }
     function persist() {
-      const { entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing } = state;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing }));
+      const { entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
     }
     function backupObject() {
       return { schemaVersion: SCHEMA_VERSION, entries: state.entries, profiles: state.profiles, grids: state.grids, projects: state.projects, unit: state.unit };
@@ -658,16 +663,31 @@
     }
     function renderPricing() {
       const p = state.pricing || pricingDefaults();
+      const prefs = state.pricingPrefs || pricingPreferenceDefaults();
       return `
         <div class="toolbar" style="margin-bottom:14px">
           <div>
             <b>Pricing calculator</b>
             <div class="small muted">Quick project estimate for revenue, costs, profit, margin, and break-even price.</div>
           </div>
-          <button id="resetPricing" type="button">Reset</button>
+          <div class="row">
+            <button id="applyPricingDefaults" type="button">Apply defaults</button>
+            <button id="savePricingDefaults" type="button">Save as defaults</button>
+            <button id="printPricingSummary" type="button">Print summary</button>
+            <button id="exportPricingCsv" type="button">Export CSV</button>
+            <button id="resetPricing" type="button">Reset</button>
+          </div>
+        </div>
+        <div class="panel pricing-defaults-card" style="margin-bottom:14px">
+          <div class="spread">
+            <div>
+              <b>Saved pricing defaults</b>
+              <div class="small muted" id="pricingDefaultsSummary">${pricingPrefsSummary(prefs)}</div>
+            </div>
+          </div>
         </div>
         <div class="grid refgrid">
-          <form id="pricingForm" class="panel formgrid">
+          <form id="pricingForm" class="panel formgrid pricing-form-card">
             <label class="span2">Project / item name<input name="name" value="${esc(p.name)}" placeholder="Walnut coaster set"></label>
             ${field('quantity','Quantity',p.quantity,'number','min="0" step="1"')}
             ${field('salePrice','Sale price per item',p.salePrice,'number','min="0" step="0.01"')}
@@ -686,7 +706,7 @@
             ${field('targetProfitPerItem','Target profit per item',p.targetProfitPerItem,'number','min="0" step="0.01"')}
             <label class="span2">Notes<textarea name="notes" rows="3">${esc(p.notes)}</textarea></label>
           </form>
-          <div class="panel">
+          <div class="panel pricing-results-card">
             <div class="spread">
               <div>
                 <b>Estimate</b>
@@ -700,6 +720,7 @@
             <p class="small muted">Taxes, platform-specific rules, and shipping are only included if you enter them as costs or fees.</p>
           </div>
         </div>
+        <div class="panel print-only pricing-print-summary">${pricingPrintSummaryHtml(p)}</div>
       `;
     }
     function pricingDefaults() {
@@ -709,6 +730,12 @@
         machineRate: '', laborRate: '', feePercent: '', fixedFeeMode: 'order', fixedFee: '',
         targetMargin: '', targetProfitPerItem: '', notes: ''
       };
+    }
+    function pricingPreferenceDefaults() {
+      return { machineRate: '', laborRate: '', feePercent: '', fixedFee: '' };
+    }
+    function pricingPrefsSummary(prefs = state.pricingPrefs || pricingPreferenceDefaults()) {
+      return `Machine ${money(num(prefs.machineRate))}/hr - Labor ${money(num(prefs.laborRate))}/hr - Fee ${num(prefs.feePercent)}% + ${money(num(prefs.fixedFee))}`;
     }
     function pricingQuantity(p = state.pricing) {
       return Math.max(0, Math.round(num(p.quantity, 0)));
@@ -817,6 +844,91 @@
         p.notes ? `Notes: ${p.notes}` : ''
       ].filter(Boolean).join('\n');
     }
+    function pricingPrintSummaryHtml(p = state.pricing) {
+      const t = pricingTotals(p);
+      const status = pricingStatus(t);
+      return `
+        <h2>Pricing Summary</h2>
+        <p><b>${esc(p.name || 'Untitled project')}</b></p>
+        <div class="metrics">
+          ${metric('Quantity', pricingQuantity(p))}
+          ${metric('Sale price', money(num(p.salePrice)))}
+          ${metric('Total cost', money(t.totalCost))}
+          ${metric('Profit', money(t.profit))}
+          ${metric('Margin', percent(t.margin))}
+          ${metric('Break-even', priceSuggestionLabel(t.breakEvenPrice))}
+          ${metric('Target margin price', priceSuggestionLabel(t.targetMarginPrice))}
+          ${metric('Target profit price', priceSuggestionLabel(t.targetProfitPrice))}
+          ${metric('Status', status.label)}
+        </div>
+        ${p.notes ? `<p><b>Notes:</b> ${esc(p.notes)}</p>` : ''}
+      `;
+    }
+    function flashButton(button, label = 'Saved') {
+      if (!button) return;
+      const old = button.textContent;
+      button.textContent = label;
+      setTimeout(() => { button.textContent = old; }, 1600);
+    }
+    function savePricingDefaults(button) {
+      state.pricingPrefs = {
+        machineRate: state.pricing.machineRate || '',
+        laborRate: state.pricing.laborRate || '',
+        feePercent: state.pricing.feePercent || '',
+        fixedFee: state.pricing.fixedFee || ''
+      };
+      persist();
+      const summary = document.getElementById('pricingDefaultsSummary');
+      if (summary) summary.textContent = pricingPrefsSummary();
+      flashButton(button, 'Defaults saved');
+    }
+    function applyPricingDefaults(button) {
+      const prefs = state.pricingPrefs || pricingPreferenceDefaults();
+      state.pricing = {
+        ...pricingDefaults(),
+        ...state.pricing,
+        machineRate: prefs.machineRate || '',
+        laborRate: prefs.laborRate || '',
+        feePercent: prefs.feePercent || '',
+        fixedFee: prefs.fixedFee || ''
+      };
+      persist();
+      const form = document.getElementById('pricingForm');
+      if (form) {
+        ['machineRate', 'laborRate', 'feePercent', 'fixedFee'].forEach(name => {
+          if (form.elements[name]) form.elements[name].value = state.pricing[name] || '';
+        });
+        form.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      flashButton(button, 'Defaults applied');
+    }
+    function pricingCsv(p = state.pricing) {
+      const t = pricingTotals(p);
+      const headers = [
+        'name', 'quantity', 'sale_price_per_item', 'material_cost_mode', 'material_cost',
+        'hardware_consumables_cost', 'packaging_cost', 'laser_minutes', 'labor_minutes',
+        'machine_rate_per_hour', 'labor_rate_per_hour', 'fee_percent', 'fixed_fee_mode', 'fixed_fee',
+        'target_margin_percent', 'target_profit_per_item', 'notes',
+        'total_revenue', 'direct_cost', 'machine_time_cost', 'labor_cost', 'fee_cost',
+        'total_cost', 'profit_total', 'profit_per_item', 'margin_percent',
+        'break_even_price_per_item', 'target_margin_price_per_item', 'target_profit_price_per_item'
+      ];
+      const row = [
+        p.name || '', pricingQuantity(p), num(p.salePrice), p.materialCostMode || 'total', num(p.materialCost),
+        num(p.hardwareCost), num(p.packagingCost), num(p.laserMinutes), num(p.laborMinutes),
+        num(p.machineRate), num(p.laborRate), num(p.feePercent), p.fixedFeeMode || 'order', num(p.fixedFee),
+        num(p.targetMargin), num(p.targetProfitPerItem), p.notes || '',
+        t.revenue, t.directCost, t.machineCost, t.laborCost, t.feeCost,
+        t.totalCost, t.profit, t.profitPerItem, t.margin,
+        Number.isFinite(t.breakEvenPrice) ? t.breakEvenPrice : '',
+        Number.isFinite(t.targetMarginPrice) ? t.targetMarginPrice : '',
+        Number.isFinite(t.targetProfitPrice) ? t.targetProfitPrice : ''
+      ];
+      return csvRows([headers, row]);
+    }
+    function exportPricingCsv() {
+      downloadTextFile(`l8-pricing-${fileSlug(state.pricing.name || 'estimate')}-${today()}.csv`, pricingCsv(), 'text/csv;charset=utf-8');
+    }
     function showPricingCopyFallback(text) {
       const box = document.getElementById('pricingCopyFallback');
       if (!box) return alert(text);
@@ -831,9 +943,7 @@
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => {
           if (!button) return;
-          const old = button.textContent;
-          button.textContent = 'Copied';
-          setTimeout(() => { button.textContent = old; }, 1800);
+          flashButton(button, 'Copied');
         }).catch(() => showPricingCopyFallback(text));
       } else {
         showPricingCopyFallback(text);
@@ -1011,6 +1121,8 @@
           if (quantityPill) quantityPill.textContent = pricingQuantityLabel(state.pricing);
           const fallback = document.getElementById('pricingCopyFallback');
           if (fallback && fallback.style.display !== 'none') fallback.value = pricingSummaryText();
+          const printSummary = document.querySelector('.pricing-print-summary');
+          if (printSummary) printSummary.innerHTML = pricingPrintSummaryHtml(state.pricing);
         };
         pricingForm.onsubmit = e => e.preventDefault();
         pricingForm.oninput = refreshPricing;
@@ -1020,6 +1132,14 @@
       if (resetPricing) resetPricing.onclick = () => { state.pricing = pricingDefaults(); persist(); render(); };
       const copyPricing = document.getElementById('copyPricingSummary');
       if (copyPricing) copyPricing.onclick = copyPricingSummary;
+      const savePricingDefaultsBtn = document.getElementById('savePricingDefaults');
+      if (savePricingDefaultsBtn) savePricingDefaultsBtn.onclick = () => savePricingDefaults(savePricingDefaultsBtn);
+      const applyPricingDefaultsBtn = document.getElementById('applyPricingDefaults');
+      if (applyPricingDefaultsBtn) applyPricingDefaultsBtn.onclick = () => applyPricingDefaults(applyPricingDefaultsBtn);
+      const printPricingSummary = document.getElementById('printPricingSummary');
+      if (printPricingSummary) printPricingSummary.onclick = () => window.print();
+      const exportPricingCsvBtn = document.getElementById('exportPricingCsv');
+      if (exportPricingCsvBtn) exportPricingCsvBtn.onclick = exportPricingCsv;
       const newEntry = document.getElementById('newEntry');
       if (newEntry) newEntry.onclick = () => openEntry();
       const newProfile = document.getElementById('newProfile');
