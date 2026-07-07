@@ -32,7 +32,7 @@ Other features:
 - Delete actions show a short undo window before the removal becomes final.
 - Duplicate Log entries and Library profiles for quick tweak-and-resave runs.
 - Print a simplified Library cheat sheet for shop use.
-- Pricing calculator drafts persist locally between sessions.
+- Pricing calculator drafts/defaults persist locally between sessions, but are not part of the main JSON backup/export yet.
 - All data persists automatically in the browser (localStorage) between sessions.
 
 ## Current storage model

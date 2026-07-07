@@ -699,13 +699,16 @@
             ${field('packagingCost','Packaging cost',p.packagingCost,'number','min="0" step="0.01"')}
             ${field('laserMinutes','Laser / job time, minutes',p.laserMinutes,'number','min="0" step="0.1"')}
             ${field('laborMinutes','Labor time, minutes',p.laborMinutes,'number','min="0" step="0.1"')}
+            <div class="span2 small muted">Hardware, packaging, laser time, and labor time are totals for this job or batch.</div>
             ${field('machineRate','Machine rate per hour',p.machineRate,'number','min="0" step="0.01"')}
             ${field('laborRate','Labor rate per hour',p.laborRate,'number','min="0" step="0.01"')}
+            <div class="span2 small muted">Machine rate covers running the laser; labor rate is your own time.</div>
             ${field('feePercent','Marketplace / payment fee %',p.feePercent,'number','min="0" step="0.01"')}
-            <label>Fixed fee basis<select name="fixedFeeMode"><option value="order" ${p.fixedFeeMode === 'order' ? 'selected' : ''}>Per order</option><option value="perItem" ${p.fixedFeeMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
+            <label>Fixed fee basis<select name="fixedFeeMode"><option value="order" ${p.fixedFeeMode === 'order' ? 'selected' : ''}>Per listing/batch</option><option value="perItem" ${p.fixedFeeMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
             ${field('fixedFee','Fixed fee',p.fixedFee,'number','min="0" step="0.01"')}
             ${field('targetMargin','Target margin %',p.targetMargin,'number','min="0" step="0.01"')}
             ${field('targetProfitPerItem','Target profit per item',p.targetProfitPerItem,'number','min="0" step="0.01"')}
+            <div class="span2 small muted">Margin = profit as a % of sale price, not markup on cost.</div>
             <label class="span2">Notes<textarea name="notes" rows="3">${esc(p.notes)}</textarea></label>
           </form>
           <div class="panel pricing-results-card">
@@ -758,6 +761,9 @@
     function priceSuggestionLabel(value) {
       return Number.isFinite(value) ? money(value) : 'Not available';
     }
+    function hasPricingValue(value) {
+      return String(value ?? '').trim() !== '';
+    }
     function pricingTotals(p = state.pricing) {
       const quantity = pricingQuantity(p);
       const revenue = quantity * num(p.salePrice);
@@ -782,8 +788,8 @@
         const denominator = quantity * (1 - feeRate - Math.max(0, targetMargin));
         return denominator > 0 ? baseCost / denominator : NaN;
       };
-      const hasTargetMargin = String(p.targetMargin ?? '').trim() !== '';
-      const hasTargetProfit = String(p.targetProfitPerItem ?? '').trim() !== '';
+      const hasTargetMargin = hasPricingValue(p.targetMargin);
+      const hasTargetProfit = hasPricingValue(p.targetProfitPerItem);
       const targetMarginRate = Math.max(0, num(p.targetMargin)) / 100;
       const targetProfitPerItem = Math.max(0, num(p.targetProfitPerItem));
       return {
@@ -796,6 +802,10 @@
       };
     }
     function pricingStatus(t) {
+      const p = state.pricing || pricingDefaults();
+      const hasSalePrice = hasPricingValue(p.salePrice);
+      const hasCosts = ['materialCost', 'hardwareCost', 'packagingCost', 'laserMinutes', 'laborMinutes', 'fixedFee'].some(key => num(p[key]) > 0);
+      if (!hasSalePrice && !hasCosts) return { label: 'Enter values', tone: '' };
       const threshold = Math.max(1, Math.abs(t.revenue) * 0.02);
       if (Math.abs(t.profit) <= threshold) return { label: 'Near break-even', tone: 'warn' };
       if (t.profit > 0) return { label: 'Profitable estimate', tone: 'good' };
@@ -815,7 +825,7 @@
           ${metric('Profit total', money(t.profit))}
           ${metric('Profit per item', money(t.profitPerItem))}
           ${metric('Margin', percent(t.margin))}
-          ${metric('Break-even per item', priceSuggestionLabel(t.breakEvenPrice))}
+          ${metric('Break-even price per item', priceSuggestionLabel(t.breakEvenPrice))}
           ${metric('Price for target margin', priceSuggestionLabel(t.targetMarginPrice))}
           ${metric('Price for target profit', priceSuggestionLabel(t.targetProfitPrice))}
         </div>
@@ -921,7 +931,7 @@
         p.name || '', pricingQuantity(p), num(p.salePrice), p.materialCostMode || 'total', num(p.materialCost),
         num(p.hardwareCost), num(p.packagingCost), num(p.laserMinutes), num(p.laborMinutes),
         num(p.machineRate), num(p.laborRate), num(p.feePercent), p.fixedFeeMode || 'order', num(p.fixedFee),
-        num(p.targetMargin), num(p.targetProfitPerItem), p.notes || '',
+        hasPricingValue(p.targetMargin) ? num(p.targetMargin) : '', hasPricingValue(p.targetProfitPerItem) ? num(p.targetProfitPerItem) : '', p.notes || '',
         t.revenue, t.directCost, t.machineCost, t.laborCost, t.feeCost,
         t.totalCost, t.profit, t.profitPerItem, t.margin,
         Number.isFinite(t.breakEvenPrice) ? t.breakEvenPrice : '',
