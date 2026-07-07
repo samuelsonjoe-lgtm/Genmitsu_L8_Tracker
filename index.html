@@ -173,27 +173,44 @@
       ['MDF board','engrave',0.1,60,30000,1,''],
       ['Plywood','engrave',0.1,100,25000,1,''],
       ['Pinewood','engrave',0.1,100,25000,1,''],
+      ['Tung paperboard','engrave',0.1,60,30000,1,''],
+      ['Paperboard','engrave',0.1,60,30000,1,''],
+      ['A4 paper','engrave',0.1,60,30000,1,''],
       ['Kraft paper','engrave',0.1,100,17000,1,''],
       ['Black acrylic','engrave',0.1,60,30000,1,''],
+      ['Cobblestone','engrave',0.1,80,30000,1,''],
       ['Ceramic','engrave',0.07,100,10000,1,''],
       ['Coated Metal','engrave',0.1,45,30000,1,''],
       ['Electroplated Metal','engrave',0.1,100,8000,1,''],
-      ['Pure Metals','engrave',null,null,null,null,'Cannot engrave; SainSmart recommends a fiber laser.'],
+      ['Pure Metals','engrave',null,null,null,null,'Cannot engrave; SainSmart recommends another fiber laser machine from Genmitsu.'],
       ['Glass','engrave',0.1,100,10000,1,'Use anti-reflective prep.'],
-      ['Stainless Steel','engrave',0.1,100,4000,1,'Adjust speed/power for color effects.'],
+      ['Fabric','engrave',0.1,85,30000,1,''],
+      ['Cotton','engrave',0.1,85,30000,1,''],
+      ['Stainless Steel','engrave',0.1,100,4000,1,'Different color effects can be obtained by adjusting the power and speed.'],
+      ['ABS plastic','engrave',0.1,100,30000,1,''],
+      ['Silicone','engrave',0.1,100,4000,1,''],
       ['Rubber','engrave',0.1,100,20000,1,''],
       ['Tile','engrave',0.1,100,16000,1,''],
       ['Pinewood board 8mm','cut',null,100,200,1,''],
       ['Pinewood board 10mm','cut',null,100,150,1,''],
+      ['Pinewood board 12mm','cut',null,100,110,1,''],
       ['Pinewood board 15mm','cut',null,100,100,2,''],
       ['Plywood 5mm','cut',null,100,350,1,''],
       ['Plywood 8mm','cut',null,100,200,1,''],
       ['Plywood 10mm','cut',null,100,250,2,''],
+      ['Foam board 10mm','cut',null,100,250,1,''],
+      ['Foam board 12mm','cut',null,100,200,1,''],
+      ['Foam board 15mm','cut',null,100,110,1,''],
       ['Gray cardboard 3mm','cut',null,100,300,1,''],
+      ['White cardboard 5mm','cut',null,100,100,1,''],
+      ['Corrugated board 6mm','cut',null,100,100,1,''],
       ['Black Acrylic 5mm','cut',null,100,100,2,''],
       ['PVC 5mm','cut',null,100,400,1,'Confirm material safety before cutting.'],
+      ['PVC 7mm','cut',null,100,500,1,'Confirm material safety before cutting.'],
       ['A4 paper','cut',null,40,1200,1,''],
+      ['Knitting Material','cut',null,80,1200,1,''],
       ['Cotton','cut',null,80,1200,1,''],
+      ['ABS plastic','cut',null,80,1200,1,''],
       ['Silicone','cut',null,100,100,4,'']
     ];
     const reference40w = [
@@ -275,7 +292,43 @@
       return { schemaVersion: SCHEMA_VERSION, entries: state.entries, profiles: state.profiles, grids: state.grids, projects: state.projects, unit: state.unit };
     }
     function setTab(tab) { state.activeTab = tab; render(); }
-    function setUnit(unit) { state.unit = unit; persist(); render(); }
+    function roundUnitValue(value) {
+      return Math.round(value * 10000) / 10000;
+    }
+    function convertUnitValue(value, fromUnit, toUnit) {
+      if (value === '' || value == null || fromUnit === toUnit) return value;
+      const n = Number(value);
+      if (!Number.isFinite(n)) return value;
+      if (fromUnit === 'in' && toUnit === 'mm') return roundUnitValue(n * 25.4);
+      if (fromUnit === 'mm' && toUnit === 'in') return roundUnitValue(n / 25.4);
+      return value;
+    }
+    function convertUnitFields(obj, pairs, fromUnit, toUnit) {
+      if (!obj) return;
+      pairs.forEach(([valueKey, unitKey]) => {
+        const currentUnit = obj[unitKey] || fromUnit;
+        if (currentUnit !== fromUnit) return;
+        obj[valueKey] = convertUnitValue(obj[valueKey], currentUnit, toUnit);
+        obj[unitKey] = toUnit;
+      });
+    }
+    function convertStoredUnits(fromUnit, toUnit) {
+      const settingPairs = [['thicknessValue', 'thicknessUnit'], ['focusValue', 'focusUnit'], ['materialHeightValue', 'materialHeightUnit']];
+      state.entries.forEach(item => convertUnitFields(item, settingPairs, fromUnit, toUnit));
+      state.profiles.forEach(item => convertUnitFields(item, settingPairs, fromUnit, toUnit));
+      state.grids.forEach(item => convertUnitFields(item, [['thicknessValue', 'thicknessUnit']], fromUnit, toUnit));
+      state.projects.forEach(project => {
+        convertUnitFields(project, [['thicknessValue', 'thicknessUnit']], fromUnit, toUnit);
+        convertUnitFields(project.settings, [['focusValue', 'focusUnit']], fromUnit, toUnit);
+      });
+    }
+    function setUnit(unit) {
+      if (unit === state.unit) return;
+      convertStoredUnits(state.unit, unit);
+      state.unit = unit;
+      persist();
+      render();
+    }
     function materialNames() {
       return [...new Set([...state.entries, ...state.profiles, ...state.projects].map(x => x.material).filter(Boolean))].sort();
     }
@@ -477,7 +530,10 @@
             <b>Reference tools</b>
             <div class="small muted">Manual link and 20W fixed-focus helper for quick setup checks.</div>
           </div>
-          <a href="docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf" target="_blank" rel="noopener"><button type="button">Open Manual</button></a>
+          <div class="row">
+            <a href="docs/L8_Engraving_Speed_Power_Reference_Chart_20W.pdf" target="_blank" rel="noopener"><button type="button">Open 20W Chart</button></a>
+            <a href="docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf" target="_blank" rel="noopener"><button type="button">Open Manual</button></a>
+          </div>
         </div>
         <div class="panel" style="margin-bottom:16px">
           <div class="toolbar">

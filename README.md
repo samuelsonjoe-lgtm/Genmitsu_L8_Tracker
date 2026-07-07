@@ -23,7 +23,7 @@ The app has five views:
 
 Other features:
 
-- Toggle between imperial and metric units.
+- Toggle between imperial and metric units, with stored thickness/focus/Z-offset values converted when switching.
 - Export/import your data as a JSON backup file, with merge or replace import modes.
 - Material autocomplete includes both your saved materials and official SainSmart reference materials.
 - Keyboard shortcuts: `Ctrl+N` creates a new item in the active view, `Ctrl+S` saves the open form, `Esc` closes modals or exits grid detail, and `/` focuses the active search field.
@@ -42,6 +42,7 @@ Material, thickness, job type, power (min/max), speed, passes, line interval, ai
 ## Official source material
 
 - Local manual: `docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf`
+- Local 20W chart: `docs/L8_Engraving_Speed_Power_Reference_Chart_20W.pdf`
 - SainSmart L8 resources: https://docs.sainsmart.com/article/1wosao83f2-genmitsu-l-8-resources
 - SainSmart L8 speed/power chart: https://docs.sainsmart.com/article/389gfcep9u-l-8-engraving-speed-power-reference-chart
 
