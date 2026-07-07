@@ -18,23 +18,22 @@
 | Material autocomplete (partial) | `<datalist id="materials">` seeded from `materialNames()`, which pulls distinct values from existing Log entries + Library profiles |
 | README/docs cleanup | Storage model, file roles, and data fields documented |
 | Pushed to GitHub | Repo is live and clean |
+| **Duplicate entry button** | Clone a Log entry or Library profile into a new draft with the same settings, ready for a quick tweak-and-resave (`e481745`) |
+| **Print-friendly Library view** | Print Library button + dedicated print stylesheet renders a clean shop cheat sheet (`e481745`) |
+| **Import merge mode** | Import now prompts: OK = merge into current data by `id`, Cancel = replace everything (with a second confirmation) (`e481745`) |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
-These three were voted as the next pass:
-
-1. **Duplicate entry button** — clone a Log entry (or Library profile) into a new draft with the same settings, dated today, ready for a quick tweak-and-resave. Removes re-typing power/speed/passes/etc. for "one more pass at the same material."
-2. **Print-friendly Library view** — a `@media print` stylesheet (or a dedicated print route) that renders Library cards as a clean cheat sheet: material, thickness, job type, power/speed/passes/line interval/focus — no buttons, no chrome. Tape it up next to the laser.
-3. **Import merge mode** — today's import replaces `entries`/`profiles`/`grids` wholesale. Add a choice on import: **Replace** (current behavior) vs **Merge** (append/upsert by `id`, skip or overwrite duplicates). Needed once there's more than one machine/computer touching the data.
+**Sort controls** for Log, Library, and Projects (once the Projects tab exists) — newest-first for Log, by material/rating for Library. Low-risk, high-payoff next bite.
 
 ### 1.3 Still open from the original backlog
 
 | Item | Priority (orig. audit) | Status |
 |------|------------------------|--------|
-| Sort options (Log by date, Library by material/rating) | High | Not started |
+| Sort options (Log by date, Library by material/rating) | High | Up next — see §1.2 |
 | Material presets/autocomplete seeded from the **Reference** table specifically | High | Partial — datalist exists but only draws from Log/Library, not the SainSmart reference rows |
 | Keyboard shortcuts (`Ctrl+N`, `Ctrl+S`, `Esc`, `/`) | High | Not started |
-| Version/schema stamp in exported JSON (`schemaVersion`) | Medium | Not started — matters once merge-import and the Project Gallery (below) add new fields |
+| Version/schema stamp in exported JSON (`schemaVersion`) | Medium | Done — `schemaVersion: 2` is now included in storage/export with `projects: []` |
 | True desktop packaging (Tauri) — app-data file persistence, auto-backups | High (blocks real durability) | Not started; still on `localStorage` |
 | Thickness-aware Library matching ("what do I use for 3mm birch?") | Medium | Not started |
 | Tag system (`gift`, `commission`, `failed`, etc.) | Medium | Not started — would also benefit the Project Gallery below |
@@ -109,6 +108,8 @@ Adds a new `projects` array to the existing schema (`entries`, `profiles`, `grid
 
 The `settings` sub-object intentionally mirrors the field names already used on Log/Library (`minPower`, `maxPower`, `lineInterval`, `overscanPercent`, `kerfOffset`, `ditherMode`, `focusValue`/`focusUnit`, `airAssist`, `airPressure`, `software`, `settingsFile`) so the "save as project" copy step is a straight field mapping, not a translation layer.
 
+**Kerf note convention:** for inlay/interlocking projects, `kerfOffset` alone isn't self-explanatory — a kerf value tuned for a tight inlay fit and one tuned for general single-part dimensional accuracy can legitimately differ. When saving a project of that kind, the `notes` field should say the kerf was *inlay-calibrated* (and ideally which LightBurn kerf-test result it came from), so a future lookup doesn't assume it's a general-purpose value.
+
 ### 2.4 Photo storage — phased, because this app has no desktop backend yet
 
 This is the one part of the feature that's constrained by where the app is architecturally right now (static HTML/JS + `localStorage`, no file system access). Two phases:
@@ -145,10 +146,55 @@ This is the one part of the feature that's constrained by where the app is archi
 
 | Phase | Work | Depends on |
 |-------|------|------------|
-| 1 | Data model + `schemaVersion: 2`, `projects: []` added to state/load/save, migration for old exports (missing `projects`/`schemaVersion` defaults to `[]`/`1`) | Nothing — can start immediately |
-| 2 | Projects tab: card grid, search/filter/sort, create/edit/delete, "Save as Project" from Log & Library | Phase 1 |
+| 1 | Data model + `schemaVersion: 2`, `projects: []` added to state/load/save, migration for old exports (missing `projects`/`schemaVersion` defaults to `[]`/`1`) | Done in `d73220f` |
+| 2 | Projects tab: card grid, search/filter, create/edit/delete, "Save as Project" from Log & Library, "Copy to Log" from Projects | Mostly done in `d73220f`; shared sort controls still open |
 | 3 | Photo capture: file input → canvas downscale → base64 `dataUrl`, primary photo display on cards | Phase 2 |
 | 4 | Print/export niceties: include Projects in JSON export (already automatic once in `state`), optional single-project print view | Phase 2 |
 | 5 | (Later, post-Tauri) Swap `dataUrl` storage for on-disk file storage + one-time migration | Tauri desktop packaging from the standalone-offline audit |
+| 6 | Expense/sale tracking on Projects — see §2.7 | Project foundation from Phase 2 (extends the Project form/data model, no photos/Tauri dependency) |
 
-Phases 1–4 need nothing beyond what the app already has today (still just `index.html` + `localStorage`). Phase 5 is explicitly gated on the desktop packaging work already planned in `docs/STANDALONE_OFFLINE_AUDIT.md`.
+Phases 1–2 are now the working Projects foundation. Phases 3–4 need nothing beyond what the app already has today (still just `index.html` + `localStorage`). Phase 5 is explicitly gated on the desktop packaging work already planned in `docs/STANDALONE_OFFLINE_AUDIT.md`. Phase 6 can slot in any time now that the Projects form/cards exist — it doesn't need photos or Tauri.
+
+### 2.7 Phase 6 — expense/sale tracking (optional, per project)
+
+**Why on Projects, not a new tab:** a Project already represents "one finished thing" — the natural place to ask "what did this cost and what did it sell for" is right next to the settings snapshot that made it, not a separate ledger disconnected from the piece.
+
+**Goal:** answer "am I actually making money on this?" at a glance. Not a bookkeeping system — no invoices, no tax categories, no multi-currency, no customer CRM. Once sales are real and regular, a proper accounting tool (or even just the CSV export below fed into one) handles that better than a bolt-on tracker would.
+
+**New optional fields on the Project record** (all default to empty/zero — invisible in the form and on cards until used):
+
+```json
+{
+  "status": "kept",
+  "qty": 1,
+  "materialCost": 0,
+  "otherCosts": 0,
+  "timeHours": 0,
+  "soldPrice": 0,
+  "saleDate": "",
+  "buyerNote": ""
+}
+```
+
+- `status`: `kept` / `gifted` / `for-sale` / `sold` — lets Projects be filtered down to "actual inventory" without cluttering personal pieces that were never for sale
+- `qty`: supports batches (e.g. one "Walnut coaster set" project = 10 units) instead of one record per identical item
+- `materialCost`, `otherCosts` ($): raw material + consumables (glue, finish, packaging, shipping supplies)
+- `timeHours`: optional — only meaningful if a labor rate is set (see below)
+- `soldPrice`, `saleDate`, `buyerNote`: what it sold for, when, and where/to whom (e.g. "Etsy," "craft fair," a name)
+
+**A single global setting**, not per-project: `hourlyLaborRate` ($/hr), stored alongside `unit` in top-level state. Lets time-cost be optional — leave it at 0 and `timeHours` just becomes a log, not a cost input. Because this is top-level state, it must be added to `loadState()`, `persist()`, `backupObject()`, and both import paths — not just `normalizeProject()`.
+
+**Computed at render time, never stored** (so nothing can drift out of sync with the raw fields):
+- `costPerUnit = (materialCost + otherCosts + timeHours * hourlyLaborRate) / max(qty, 1)`
+- Treat `soldPrice` as the **total sale amount for the whole project/batch**, not per-unit.
+- `profit = soldPrice - (costPerUnit * qty)`, only shown when `status === 'sold'`
+- `marginPercent = profit / soldPrice`, only when `soldPrice > 0`
+
+**UI:**
+- A collapsible **"Sale & cost"** section at the bottom of the existing project form, collapsed by default — keeps the form uncluttered for anyone just using Projects as a settings/photo log
+- A one-line **shop totals strip** in the Projects tab header, computed live from `state.projects`: e.g. *"Revenue $420 · Costs $85 · Profit $335 across 6 sold"* — no new nav, no new tab
+- `status` badge on project cards (reuse the existing pill style used for "BEST KNOWN" on Library cards)
+
+**Export:** project-level sale/cost fields ride along in the existing JSON export/import once added to `normalizeProject()`. The top-level `hourlyLaborRate` needs explicit export/import handling with the other top-level settings. A "Sold projects" CSV export (name, material, qty, cost, sold price, profit, sale date) is a nice-to-have for handing off to whoever does taxes at year-end, but isn't required for MVP.
+
+**Privacy note:** `buyerNote` may contain customer names, marketplaces, or order details. Keep it optional, avoid storing sensitive information by default, and remember that JSON backups/exports will include it.
