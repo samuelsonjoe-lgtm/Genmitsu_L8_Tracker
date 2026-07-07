@@ -24,7 +24,9 @@ The app has five views:
 Other features:
 
 - Toggle between imperial and metric units.
-- Export/import your data as a JSON backup file, so it can move between devices or be backed up outside the browser.
+- Export/import your data as a JSON backup file, with merge or replace import modes.
+- Duplicate Log entries and Library profiles for quick tweak-and-resave runs.
+- Print a simplified Library cheat sheet for shop use.
 - All data persists automatically in the browser (localStorage) between sessions.
 
 ## Current storage model

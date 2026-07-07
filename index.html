@@ -114,6 +114,19 @@
       .span2 { grid-column: span 1; }
       .metrics { grid-template-columns: 1fr; }
     }
+    @media print {
+      body { background: white; color: #111827; }
+      .shell { max-width: none; padding: 0; }
+      .topbar .row, .tabs, .toolbar, .actions, .modal { display: none !important; }
+      .brand { margin-bottom: 14px; }
+      .mark { display: none; }
+      .subtitle::after { content: " - Library print sheet"; }
+      .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .card, .panel, .metric { break-inside: avoid; border-color: #9ca3af; box-shadow: none; }
+      .card { padding: 10px; }
+      .metric { padding: 6px; background: #f9fafb; }
+      .pill { border: 1px solid #9ca3af; background: white; color: #111827; }
+    }
   </style>
 </head>
 <body>
@@ -378,7 +391,7 @@
       return `
         <div class="toolbar" style="margin-bottom:14px">
           <div class="muted">Curated best-known settings per material. Promote from a log entry, grid cell, or reference row.</div>
-          <button class="primary" id="newProfile">Add Material</button>
+          <div class="row"><button id="printLibrary">Print Library</button><button class="primary" id="newProfile">Add Material</button></div>
         </div>
         <div class="toolbar" style="margin-bottom:14px">
           <div class="row" style="flex:1">
@@ -494,7 +507,7 @@
         <div class="metrics">${metric('Power', powerLabel(e))}${metric('Speed', `${e.speed} mm/min`)}${metric('Passes', e.passes)}${metric('Line int.', fmt(e.lineInterval, 'mm'))}</div>
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(e.focusValue, e.focusUnit)} - Air: ${e.airAssist ? 'On' : 'Off'}${e.software ? ' - ' + esc(e.software) : ''}</div>
         ${e.notes ? `<p class="small">${esc(e.notes)}</p>` : ''}
-        <div class="actions"><button data-edit-entry="${e.id}">Edit</button><button data-promote-entry="${e.id}">Save to library</button><button data-project-entry="${e.id}">Save as project</button><button class="danger" data-delete-entry="${e.id}">Delete</button></div>
+        <div class="actions"><button data-edit-entry="${e.id}">Edit</button><button data-duplicate-entry="${e.id}">Duplicate</button><button data-promote-entry="${e.id}">Save to library</button><button data-project-entry="${e.id}">Save as project</button><button class="danger" data-delete-entry="${e.id}">Delete</button></div>
       </article>`;
     }
     function profileCard(p) {
@@ -503,7 +516,7 @@
         <div class="metrics">${metric('Power', powerLabel(p))}${metric('Speed', `${p.speed} mm/min`)}${metric('Passes', p.passes)}${metric('Line int.', fmt(p.lineInterval, 'mm'))}</div>
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(p.focusValue, p.focusUnit)} - Air: ${p.airAssist ? 'On' : 'Off'}${p.software ? ' - ' + esc(p.software) : ''}</div>
         ${p.notes ? `<p class="small">${esc(p.notes)}</p>` : ''}
-        <div class="actions"><button data-edit-profile="${p.id}">Edit</button><button data-project-profile="${p.id}">Save as project</button><button class="danger" data-delete-profile="${p.id}">Delete</button></div>
+        <div class="actions"><button data-edit-profile="${p.id}">Edit</button><button data-duplicate-profile="${p.id}">Duplicate</button><button data-project-profile="${p.id}">Save as project</button><button class="danger" data-delete-profile="${p.id}">Delete</button></div>
       </article>`;
     }
     function projectCard(p) {
@@ -573,6 +586,8 @@
       if (newEntry) newEntry.onclick = () => openEntry();
       const newProfile = document.getElementById('newProfile');
       if (newProfile) newProfile.onclick = () => openProfile();
+      const printLibrary = document.getElementById('printLibrary');
+      if (printLibrary) printLibrary.onclick = () => window.print();
       const newProject = document.getElementById('newProject');
       if (newProject) newProject.onclick = () => openProject();
       const newGrid = document.getElementById('newGrid');
@@ -582,10 +597,12 @@
       const delGrid = document.getElementById('deleteGrid');
       if (delGrid) delGrid.onclick = deleteActiveGrid;
       document.querySelectorAll('[data-edit-entry]').forEach(b => b.onclick = () => openEntry(state.entries.find(e => e.id === b.dataset.editEntry)));
+      document.querySelectorAll('[data-duplicate-entry]').forEach(b => b.onclick = () => duplicateEntry(b.dataset.duplicateEntry));
       document.querySelectorAll('[data-delete-entry]').forEach(b => b.onclick = () => del('entries', b.dataset.deleteEntry, 'Delete this log entry?'));
       document.querySelectorAll('[data-promote-entry]').forEach(b => b.onclick = () => promoteEntry(b.dataset.promoteEntry));
       document.querySelectorAll('[data-project-entry]').forEach(b => b.onclick = () => projectFromEntry(b.dataset.projectEntry));
       document.querySelectorAll('[data-edit-profile]').forEach(b => b.onclick = () => openProfile(state.profiles.find(p => p.id === b.dataset.editProfile)));
+      document.querySelectorAll('[data-duplicate-profile]').forEach(b => b.onclick = () => duplicateProfile(b.dataset.duplicateProfile));
       document.querySelectorAll('[data-delete-profile]').forEach(b => b.onclick = () => del('profiles', b.dataset.deleteProfile, 'Remove this material from your library?'));
       document.querySelectorAll('[data-project-profile]').forEach(b => b.onclick = () => projectFromProfile(b.dataset.projectProfile));
       document.querySelectorAll('[data-edit-project]').forEach(b => b.onclick = () => openProject(state.projects.find(p => p.id === b.dataset.editProject)));
@@ -860,6 +877,29 @@
       if (idx >= 0) list[idx] = item; else list.unshift(item);
       persist(); render();
     }
+    function mergeList(existing, incoming) {
+      const merged = [...existing];
+      (incoming || []).forEach(item => {
+        if (!item || !item.id) return;
+        const idx = merged.findIndex(x => x.id === item.id);
+        if (idx >= 0) merged[idx] = item; else merged.unshift(item);
+      });
+      return merged;
+    }
+    function replaceData(data) {
+      state.entries = data.entries || [];
+      state.profiles = data.profiles || [];
+      state.grids = data.grids || [];
+      state.projects = data.projects || [];
+      state.unit = data.unit || state.unit;
+    }
+    function mergeData(data) {
+      state.entries = mergeList(state.entries, data.entries);
+      state.profiles = mergeList(state.profiles, data.profiles);
+      state.grids = mergeList(state.grids, data.grids);
+      state.projects = mergeList(state.projects, data.projects);
+      state.unit = data.unit || state.unit;
+    }
     function del(key, id, message) {
       if (!confirm(message)) return;
       state[key] = state[key].filter(x => x.id !== id);
@@ -868,6 +908,16 @@
     function promoteEntry(id) {
       const e = state.entries.find(x => x.id === id);
       if (e) openProfile({ ...e, id: null, notes: `Promoted from log entry ${e.date}. ${e.notes || ''}`.trim() });
+    }
+    function duplicateEntry(id) {
+      const e = state.entries.find(x => x.id === id);
+      if (!e) return;
+      openEntry({ ...e, id: null, date: today(), notes: e.notes ? `Duplicated from ${e.date}. ${e.notes}` : `Duplicated from ${e.date}.` });
+    }
+    function duplicateProfile(id) {
+      const p = state.profiles.find(x => x.id === id);
+      if (!p) return;
+      openProfile({ ...p, id: null, notes: p.notes ? `Duplicated from Library profile. ${p.notes}` : 'Duplicated from Library profile.' });
     }
     function saveReference(refKey) {
       const [watts, index] = refKey.split(':');
@@ -916,8 +966,13 @@
       reader.onload = () => {
         try {
           const data = JSON.parse(reader.result);
-          if (!confirm('Import will replace your current entries, library, grids, and projects. Continue?')) return;
-          state.entries = data.entries || []; state.profiles = data.profiles || []; state.grids = data.grids || []; state.projects = data.projects || []; state.unit = data.unit || state.unit;
+          const merge = confirm('Import mode: OK = merge with current data, Cancel = replace everything.');
+          if (merge) {
+            mergeData(data);
+          } else {
+            if (!confirm('Replace all current entries, library, grids, and projects?')) return;
+            replaceData(data);
+          }
           persist(); render();
         } catch (_) { alert('Could not read that file. Make sure it is a valid backup JSON.'); }
       };
