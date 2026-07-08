@@ -25,7 +25,7 @@ The app has six views:
 Other features:
 
 - Toggle between imperial and metric units, with stored thickness/focus/Z-offset values converted when switching.
-- Export/import your data as a JSON backup file, with merge or replace import modes.
+- Export/import your data and portable app preferences as a JSON backup file, with merge or replace import modes.
 - Material autocomplete includes both your saved materials and official SainSmart reference materials.
 - Material safety warnings flag obvious risky/unknown terms such as PVC, vinyl, chlorinated plastics, unknown plastics, fiberglass, and carbon fiber without blocking saves.
 - Library includes a closest-saved-setting helper for matching material and thickness.
@@ -33,7 +33,7 @@ Other features:
 - Delete actions show a short undo window before the removal becomes final.
 - Duplicate Log entries and Library profiles for quick tweak-and-resave runs.
 - Print a simplified Library cheat sheet for shop use.
-- Pricing calculator drafts/defaults persist locally between sessions, but are not part of the main JSON backup/export yet.
+- Pricing calculator drafts/defaults persist locally between sessions and are included in the main JSON backup/export.
 - **Create project from estimate** on the Pricing tab opens a prefilled Project draft (user must still click Save project).
 - **Accounting report** on the Projects tab summarizes filtered project revenue, cost, profit, margin, quantity, and status counts.
 - **Export accounting CSV** on the Projects tab exports one row per project with accounting inputs and calculated totals.
@@ -42,6 +42,8 @@ Other features:
 ## Current storage model
 
 The standalone `index.html` app saves live data in the browser's `localStorage` under `genmitsu-l8-tracker-v1`. That means data is tied to the browser/profile that opened the app. Use Export regularly for portable JSON backups until a future desktop build writes to a real app data file.
+
+JSON backups include Log entries, Library profiles, Test Grids, Projects, unit preference, saved sort preferences, Library match helper inputs, selected machine profile, Pricing draft, and Pricing defaults. Session-only search text, tag/status filters, active tab, and open modal state are intentionally not backed up.
 
 ## Fields tracked
 

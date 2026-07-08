@@ -91,7 +91,7 @@ No Critical issues found. No schema version bump required.
 |------|-------|
 | **Material not mapped from Pricing** | Pricing has no material field — user must enter material before Save project. |
 | **Settings snapshot empty from Pricing** | Bridge fills accounting only; laser settings still entered manually or via Log/Library promote flows. |
-| **Pricing not in JSON Export** | Unchanged — still localStorage-only. |
+| **Pricing in JSON Export** | Updated later in Backup/Import Completeness Pack 1 — Pricing draft/defaults now export with the main JSON backup. |
 | **CSV exports all projects** | Not limited to current filter; uses full `state.projects` list. |
 | **Status filter not persisted** | Resets on reload (by design, matches tag filter behavior). |
 | **Invoice/tax/inventory/customers** | Out of scope per constraints. |

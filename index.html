@@ -153,8 +153,8 @@
       <div class="row">
         <button id="unitIn">in</button>
         <button id="unitMm">mm</button>
-        <button id="importBtn">Import</button>
-        <button id="exportBtn">Export</button>
+        <button id="importBtn" title="Import a JSON backup. You can merge records or replace current data.">Import</button>
+        <button id="exportBtn" title="Export records plus portable preferences such as Pricing, machine profile, and saved sort settings.">Export</button>
         <input id="importFile" type="file" accept="application/json" hidden>
       </div>
     </header>
@@ -311,7 +311,23 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
     }
     function backupObject() {
-      return { schemaVersion: SCHEMA_VERSION, entries: state.entries, profiles: state.profiles, grids: state.grids, projects: state.projects, unit: state.unit };
+      return {
+        schemaVersion: SCHEMA_VERSION,
+        entries: state.entries,
+        profiles: state.profiles,
+        grids: state.grids,
+        projects: state.projects,
+        unit: state.unit,
+        entrySort: state.entrySort,
+        librarySort: state.librarySort,
+        projectSort: state.projectSort,
+        libraryMatchMaterial: state.libraryMatchMaterial,
+        libraryMatchThickness: state.libraryMatchThickness,
+        libraryMatchUnit: state.libraryMatchUnit,
+        machineProfile: state.machineProfile,
+        pricing: state.pricing,
+        pricingPrefs: state.pricingPrefs
+      };
     }
     function setTab(tab) { state.activeTab = tab; render(); }
     function roundUnitValue(value) {
@@ -1931,12 +1947,25 @@
       });
       return merged;
     }
+    function applyBackupPreferences(data) {
+      if (!data || typeof data !== 'object') return;
+      if ('entrySort' in data) state.entrySort = data.entrySort || 'date-desc';
+      if ('librarySort' in data) state.librarySort = data.librarySort || 'material-asc';
+      if ('projectSort' in data) state.projectSort = data.projectSort || 'date-desc';
+      if ('libraryMatchMaterial' in data) state.libraryMatchMaterial = data.libraryMatchMaterial || '';
+      if ('libraryMatchThickness' in data) state.libraryMatchThickness = data.libraryMatchThickness || '';
+      if ('libraryMatchUnit' in data) state.libraryMatchUnit = data.libraryMatchUnit || data.unit || state.unit;
+      if ('machineProfile' in data) state.machineProfile = data.machineProfile === '40W' ? '40W' : '20W';
+      if (data.pricing && typeof data.pricing === 'object') state.pricing = { ...pricingDefaults(), ...data.pricing };
+      if (data.pricingPrefs && typeof data.pricingPrefs === 'object') state.pricingPrefs = { ...pricingPreferenceDefaults(), ...data.pricingPrefs };
+    }
     function replaceData(data) {
       state.entries = data.entries || [];
       state.profiles = data.profiles || [];
       state.grids = data.grids || [];
       state.projects = data.projects || [];
       state.unit = data.unit || state.unit;
+      applyBackupPreferences(data);
     }
     function mergeData(data) {
       state.entries = mergeList(state.entries, data.entries);
@@ -1944,6 +1973,7 @@
       state.grids = mergeList(state.grids, data.grids);
       state.projects = mergeList(state.projects, data.projects);
       state.unit = data.unit || state.unit;
+      applyBackupPreferences(data);
     }
     function hideUndoToast() {
       const toast = document.getElementById('undoToast');

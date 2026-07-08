@@ -38,6 +38,7 @@
 | **Project accounting bridge + export pack** | Pricing tab can open a prefilled Project draft (no auto-save); Projects tab exports accounting CSV and filters by sale/status |
 | **Project accounting reports pack 1** | Projects tab now summarizes filtered accounting totals, quantity, overall margin, status counts, and a copyable plain-text report |
 | **Material safety warning pack 1** | Material fields and cards surface warning-only guidance for PVC/vinyl/chlorinated plastics, unknown plastics, fiberglass, carbon fiber, coated unknown metal, and mystery materials |
+| **Backup/import completeness pack 1** | JSON backups now include Pricing draft/defaults, selected machine profile, saved sort preferences, and Library match helper inputs while keeping session filters/search out |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
@@ -50,7 +51,7 @@
 | Sort options (Log by date, Library by material/rating) | High | Done — Log, Library, and Projects have dropdown controls |
 | Material presets/autocomplete seeded from the **Reference** table specifically | High | Done — autocomplete draws from saved records plus official 20W/40W reference rows |
 | Keyboard shortcuts (`Ctrl+N`, `Ctrl+S`, `Esc`, `/`) | High | Done |
-| Version/schema stamp in exported JSON (`schemaVersion`) | Medium | Done — `schemaVersion: 2` is now included in storage/export with `projects: []` |
+| Version/schema stamp in exported JSON (`schemaVersion`) | Medium | Done — `schemaVersion: 2` is included in storage/export with `projects: []` and portable preferences |
 | True desktop packaging (Tauri) — app-data file persistence, auto-backups | High (blocks real durability) | Not started; still on `localStorage` |
 | Thickness-aware Library matching ("what do I use for 3mm birch?") | Medium | Done — Library has a closest saved setting helper |
 | Tag system (`gift`, `commission`, `failed`, etc.) | Medium | Done — Projects and Library support comma-separated tags, visible pills, and tag filtering |
