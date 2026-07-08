@@ -295,6 +295,7 @@
             projectSort: data.projectSort || 'date-desc',
             projectSearch: '',
             projectTagFilter: 'all',
+            projectStatusFilter: 'all',
             focusMaterialMm: '',
             focusJobType: 'engrave',
             machineProfile: data.machineProfile || '20W',
@@ -303,7 +304,7 @@
           };
         }
       } catch (_) {}
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
     }
     function persist() {
       const { entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
@@ -651,8 +652,10 @@
       const filtered = sortBy(state.projects.filter(p => {
         const tags = tagsOf(p);
         const tagOk = state.projectTagFilter === 'all' || tags.includes(state.projectTagFilter);
+        const status = p.status || 'kept';
+        const statusOk = state.projectStatusFilter === 'all' || status === state.projectStatusFilter;
         const hay = [p.name, p.material, p.notes, ...tags].join(' ').toLowerCase();
-        return tagOk && (!q || hay.includes(q));
+        return tagOk && statusOk && (!q || hay.includes(q));
       }), state.projectSort);
       return `
         <div class="toolbar" style="margin-bottom:14px">
@@ -660,7 +663,10 @@
             <b>Project Gallery</b>
             <div class="small muted">Finished pieces with their exact repeatable settings snapshot.</div>
           </div>
-          <button class="primary" id="newProject">New Project</button>
+          <div class="row">
+            <button id="exportProjectsCsv" type="button">Export accounting CSV</button>
+            <button class="primary" id="newProject">New Project</button>
+          </div>
         </div>
         <div class="toolbar" style="margin-bottom:14px">
           <div class="row" style="flex:1">
@@ -668,6 +674,13 @@
             <select id="projectTagFilter" style="max-width:220px">
               <option value="all">All tags</option>
               ${tags.map(t => `<option ${state.projectTagFilter === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}
+            </select>
+            <select id="projectStatusFilter" style="max-width:180px">
+              <option value="all" ${state.projectStatusFilter === 'all' ? 'selected' : ''}>All statuses</option>
+              <option value="kept" ${state.projectStatusFilter === 'kept' ? 'selected' : ''}>Kept</option>
+              <option value="gifted" ${state.projectStatusFilter === 'gifted' ? 'selected' : ''}>Gifted</option>
+              <option value="for-sale" ${state.projectStatusFilter === 'for-sale' ? 'selected' : ''}>For sale</option>
+              <option value="sold" ${state.projectStatusFilter === 'sold' ? 'selected' : ''}>Sold</option>
             </select>
             <select id="projectSort" style="max-width:190px">
               <option value="date-desc" ${state.projectSort === 'date-desc' ? 'selected' : ''}>Newest first</option>
@@ -677,9 +690,9 @@
               <option value="rating-desc" ${state.projectSort === 'rating-desc' ? 'selected' : ''}>Rating high-low</option>
             </select>
           </div>
-          <div class="row"><span class="pill">${filtered.length}/${state.projects.length} shown</span>${state.projectTagFilter !== 'all' ? '<button id="clearProjectTag" type="button">Clear tag</button>' : ''}</div>
+          <div class="row"><span class="pill">${filtered.length}/${state.projects.length} shown</span>${state.projectTagFilter !== 'all' ? '<button id="clearProjectTag" type="button">Clear tag</button>' : ''}${state.projectStatusFilter !== 'all' ? '<button id="clearProjectStatus" type="button">Clear status</button>' : ''}</div>
         </div>
-        ${state.projects.length ? (filtered.length ? `<div class="grid cards">${filtered.map(projectCard).join('')}</div>` : empty('No project matches', 'Adjust the search or tag filter.')) : empty('No projects yet', 'Save a finished piece here with its settings snapshot.')}
+        ${state.projects.length ? (filtered.length ? `<div class="grid cards">${filtered.map(projectCard).join('')}</div>` : empty('No project matches', 'Adjust the search, tag, or status filter.')) : empty('No projects yet', 'Save a finished piece here with its settings snapshot.')}
       `;
     }
     function renderPricing() {
@@ -696,6 +709,7 @@
             <button id="savePricingDefaults" type="button">Save as defaults</button>
             <button id="printPricingSummary" type="button">Print summary</button>
             <button id="exportPricingCsv" type="button">Export CSV</button>
+            <button id="createProjectFromPricing" type="button">Create project from estimate</button>
             <button id="resetPricing" type="button">Reset</button>
           </div>
         </div>
@@ -1043,6 +1057,83 @@
         ${metric('Break-even price', priceSuggestionLabel(t.breakEvenPrice))}
       </div>`;
     }
+    function pricingGrossRevenue(p = state.pricing) {
+      const quantity = pricingQuantity(p);
+      if (!hasPricingValue(p.salePrice)) return '';
+      return Math.round(num(p.salePrice) * quantity * 100) / 100;
+    }
+    function projectDraftFromPricing(p = state.pricing) {
+      const quantity = pricingQuantity(p);
+      const grossRevenue = pricingGrossRevenue(p);
+      const hasSalePrice = hasPricingValue(p.salePrice);
+      const accountingNotes = [
+        (p.notes || '').trim(),
+        'Draft created from Pricing estimate. Review accounting fields, then click Save project.'
+      ].filter(Boolean).join('\n\n');
+      return {
+        ...formDefaults('project'),
+        name: (p.name || '').trim() || 'Pricing estimate project',
+        quantity: String(quantity || 1),
+        soldPrice: grossRevenue === '' ? '' : String(grossRevenue),
+        status: hasSalePrice ? 'for-sale' : 'kept',
+        materialCost: p.materialCost || '',
+        materialCostMode: p.materialCostMode || 'total',
+        hardwareCost: p.hardwareCost || '',
+        packagingCost: p.packagingCost || '',
+        machineMinutes: p.laserMinutes || '',
+        machineRate: p.machineRate || '',
+        laborMinutes: p.laborMinutes || '',
+        laborRate: p.laborRate || '',
+        feePercent: p.feePercent || '',
+        fixedFee: p.fixedFee || '',
+        fixedFeeMode: p.fixedFeeMode || 'order',
+        accountingNotes
+      };
+    }
+    function createProjectFromPricing() {
+      const form = document.getElementById('pricingForm');
+      if (form) updatePricingDraft(form);
+      openProject(projectDraftFromPricing(state.pricing), {
+        draftNote: 'Draft from Pricing estimate. Review the project fields and click Save project when ready. Nothing is saved until then.'
+      });
+      if (!pendingUndo) showInfoToast('Project draft opened from Pricing. Click Save project to keep it.');
+    }
+    function projectAccountingCsvRow(p) {
+      const t = projectAccountingTotals(p);
+      const s = p.settings || {};
+      return [
+        p.id, p.name || '', p.material || '', p.thicknessValue ?? '', p.thicknessUnit || '', p.jobType || '', p.dateCreated || '',
+        tagString(tagsOf(p)), p.rating ?? '', p.notes || '', p.sourceEntryId || '', p.sourceProfileId || '',
+        s.minPower ?? '', s.maxPower ?? '', s.speed ?? '', s.passes ?? '', s.software || '', s.settingsFile || '',
+        p.status || 'kept', projectQuantity(p), p.soldPrice ?? '', p.saleDate || '',
+        p.materialCost ?? '', p.materialCostMode || 'total', p.hardwareCost ?? '', p.packagingCost ?? '',
+        p.machineMinutes ?? p.laserMinutes ?? '', p.machineRate ?? '', p.laborMinutes ?? '', p.laborRate ?? '',
+        p.feePercent ?? '', p.fixedFee ?? '', p.fixedFeeMode || 'order', p.accountingNotes || '',
+        t.revenue, t.materialCost, t.hardwarePackagingCost, t.machineCost, t.laborCost, t.feeCost, t.totalCost,
+        t.profit, t.profitPerItem, t.margin,
+        Number.isFinite(t.breakEvenPrice) ? t.breakEvenPrice : ''
+      ];
+    }
+    function projectsAccountingCsv() {
+      const headers = [
+        'project_id', 'name', 'material', 'thickness_value', 'thickness_unit', 'job_type', 'date_created',
+        'tags', 'rating', 'notes', 'source_entry_id', 'source_profile_id',
+        'power_min', 'power_max', 'speed_mm_min', 'passes', 'software', 'settings_file',
+        'status', 'quantity', 'sold_price', 'sale_date',
+        'material_cost', 'material_cost_mode', 'hardware_cost', 'packaging_cost',
+        'machine_minutes', 'machine_rate_per_hour', 'labor_minutes', 'labor_rate_per_hour',
+        'fee_percent', 'fixed_fee', 'fixed_fee_mode', 'accounting_notes',
+        'calc_revenue', 'calc_material_cost', 'calc_hardware_packaging_cost', 'calc_machine_cost',
+        'calc_labor_cost', 'calc_fee_cost', 'calc_total_cost', 'calc_profit_total',
+        'calc_profit_per_item', 'calc_margin_percent', 'calc_break_even_price'
+      ];
+      const rows = sortBy([...state.projects], state.projectSort).map(projectAccountingCsvRow);
+      return csvRows([headers, ...rows]);
+    }
+    function exportProjectsAccountingCsv() {
+      if (!state.projects.length) return alert('No projects to export yet.');
+      downloadTextFile(`l8-projects-accounting-${today()}.csv`, projectsAccountingCsv(), 'text/csv;charset=utf-8');
+    }
     function projectAccountingFields(data) {
       return `
         <h3 class="span2" style="margin:8px 0 0">Sale & cost</h3>
@@ -1230,6 +1321,12 @@
       if (projectTagFilter) projectTagFilter.onchange = e => { state.projectTagFilter = e.target.value; render(); };
       const clearProjectTag = document.getElementById('clearProjectTag');
       if (clearProjectTag) clearProjectTag.onclick = () => { state.projectTagFilter = 'all'; render(); };
+      const projectStatusFilter = document.getElementById('projectStatusFilter');
+      if (projectStatusFilter) projectStatusFilter.onchange = e => { state.projectStatusFilter = e.target.value; render(); };
+      const clearProjectStatus = document.getElementById('clearProjectStatus');
+      if (clearProjectStatus) clearProjectStatus.onclick = () => { state.projectStatusFilter = 'all'; render(); };
+      const exportProjectsCsv = document.getElementById('exportProjectsCsv');
+      if (exportProjectsCsv) exportProjectsCsv.onclick = exportProjectsAccountingCsv;
       const projectSort = document.getElementById('projectSort');
       if (projectSort) projectSort.onchange = e => { state.projectSort = e.target.value; persist(); render(); };
       const pricingForm = document.getElementById('pricingForm');
@@ -1264,6 +1361,8 @@
       if (printPricingSummary) printPricingSummary.onclick = () => window.print();
       const exportPricingCsvBtn = document.getElementById('exportPricingCsv');
       if (exportPricingCsvBtn) exportPricingCsvBtn.onclick = exportPricingCsv;
+      const createProjectFromPricingBtn = document.getElementById('createProjectFromPricing');
+      if (createProjectFromPricingBtn) createProjectFromPricingBtn.onclick = createProjectFromPricing;
       const newEntry = document.getElementById('newEntry');
       if (newEntry) newEntry.onclick = () => openEntry();
       const newProfile = document.getElementById('newProfile');
@@ -1448,11 +1547,15 @@
         <label>Software<input name="settingsSoftware" value="${esc(s.software || '')}" list="software"></label>
         <label class="span2">Settings file / profile name<input name="settingsFile" value="${esc(s.settingsFile || '')}"></label>`;
     }
-    function openProject(project) {
+    function openProject(project, options = {}) {
       editingProjectId = project && project.id ? project.id : null;
       const data = { ...formDefaults('project'), ...(project || {}) };
       const tagValue = Array.isArray(data.tags) ? tagString(data.tags) : data.tags;
+      const draftBanner = options.draftNote
+        ? `<div class="span2 panel" style="padding:10px 12px; background:#fff4db; border-color:#d9982f">${esc(options.draftNote)}</div>`
+        : '';
       openModal('projectModal', `<div class="dialog"><div class="spread"><h2>${editingProjectId ? 'Edit project' : 'New project'}</h2><button data-close>×</button></div><form id="projectForm" class="formgrid">
+        ${draftBanner}
         <label class="span2">Project name<input name="name" value="${esc(data.name)}"></label>
         ${field('dateCreated','Date',data.dateCreated || today(),'date')}
         ${select('jobType','Job type',data.jobType,['engrave','cut'])}
@@ -1519,7 +1622,7 @@
     function normalizeProjectAccounting(f) {
       return {
         status: f.status || 'kept',
-        quantity: f.quantity === '' ? '' : projectQuantity(f),
+        quantity: f.quantity === '' || f.quantity == null ? '' : projectQuantity(f),
         soldPrice: optionalMoney(f.soldPrice),
         saleDate: f.saleDate || '',
         materialCost: optionalMoney(f.materialCost),
@@ -1679,6 +1782,18 @@
       toast.innerHTML = '';
       if (pendingUndo && pendingUndo.timer) clearTimeout(pendingUndo.timer);
       pendingUndo = null;
+    }
+    function showInfoToast(message, ms = 4500) {
+      if (pendingUndo) return;
+      const toast = document.getElementById('undoToast');
+      toast.innerHTML = `<span>${esc(message)}</span>`;
+      toast.classList.add('show');
+      setTimeout(() => {
+        if (!pendingUndo) {
+          toast.classList.remove('show');
+          toast.innerHTML = '';
+        }
+      }, ms);
     }
     function showUndoToast(label) {
       const toast = document.getElementById('undoToast');
