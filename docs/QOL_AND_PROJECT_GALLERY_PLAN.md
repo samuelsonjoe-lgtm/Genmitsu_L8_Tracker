@@ -210,4 +210,55 @@ Phases 1–2 are now the working Projects foundation. Phases 3–4 need nothing 
 
 **Export:** project-level sale/cost fields ride along in the existing JSON export/import once added to `normalizeProject()`. The top-level `hourlyLaborRate` needs explicit export/import handling with the other top-level settings. A "Sold projects" CSV export (name, material, qty, cost, sold price, profit, sale date) is a nice-to-have for handing off to whoever does taxes at year-end, but isn't required for MVP.
 
+### 2.8 Phase 6 vocabulary decision — align Project accounting with Pricing
+
+This design note supersedes the rough Phase 6 field sketch above before any schema/code work happens. Pricing remains the scratch estimator for now; saved Project accounting should use compatible vocabulary so a future bridge does not require a rename pass.
+
+| Question | Decision for future Phase 6 MVP |
+|----------|----------------------------------|
+| Quantity name | Use `quantity`, not `qty`, to match Pricing. |
+| Material cost mode | Support `materialCostMode: "total" / "perItem"` plus `materialCost`, matching Pricing. |
+| Hardware and packaging | Keep `hardwareCost` and `packagingCost` separate rather than merging into `otherCosts`. They are common shop costs and already separate in Pricing. |
+| Machine vs labor time | Track `laserMinutes`, `laborMinutes`, `machineRate`, and `laborRate` separately, like Pricing. This is more useful than one generic `timeHours` field. |
+| Marketplace/payment fees | Include `feePercent`, `fixedFee`, and `fixedFeeMode` so sold-project profit can reflect Etsy/PayPal/craft-market fees when desired. |
+| Gross vs net sale price | Store `soldPrice` as gross total sale revenue for the whole Project/batch, then calculate fee cost from fee fields. If only net revenue is known, leave fee fields blank and enter the net amount by convention. |
+| Pricing-to-Project bridge | Yes, eventually, but not in the first accounting MVP. Add a "Create/Update Project from Pricing" workflow only after these Project fields exist. |
+
+**Recommended future MVP field set:**
+
+```json
+{
+  "status": "kept",
+  "quantity": 1,
+  "soldPrice": 0,
+  "saleDate": "",
+  "materialCost": 0,
+  "materialCostMode": "total",
+  "hardwareCost": 0,
+  "packagingCost": 0,
+  "laserMinutes": 0,
+  "laborMinutes": 0,
+  "machineRate": 0,
+  "laborRate": 0,
+  "feePercent": 0,
+  "fixedFee": 0,
+  "fixedFeeMode": "order",
+  "buyerNote": ""
+}
+```
+
+**Rate defaults:** Project accounting can prefill from the same local Pricing defaults (`pricingPrefs`), but each Project should store the rate values actually used. That keeps historical sold-project profit stable if default rates change later.
+
+**Computed at render time, never stored:**
+- `directCost = materialCost + hardwareCost + packagingCost`
+- `machineCost = laserMinutes / 60 * machineRate`
+- `laborCost = laborMinutes / 60 * laborRate`
+- `feeCost = soldPrice * feePercent / 100 + fixedFeeCost`
+- `profit = soldPrice - totalCost`, shown when `status === "sold"`
+- `marginPercent = profit / soldPrice`, only when `soldPrice > 0`
+
+**Future Pricing-to-Project mapping:** `name` -> Project name, plus `quantity`, `materialCost`, `materialCostMode`, `hardwareCost`, `packagingCost`, `laserMinutes`, `laborMinutes`, `machineRate`, `laborRate`, `feePercent`, `fixedFee`, `fixedFeeMode`, and `notes` can copy directly. `salePrice` should map to `soldPrice = salePrice * quantity` only when the user confirms the Project is sold or wants a sale draft. Target-margin and target-profit suggestions stay in Pricing and should not be stored on Projects for MVP.
+
+**No code/schema changes in this pass:** this section is a planning decision only. Phase 6 implementation still needs a dedicated scoped ticket before editing `index.html`.
+
 **Privacy note:** `buyerNote` may contain customer names, marketplaces, or order details. Keep it optional, avoid storing sensitive information by default, and remember that JSON backups/exports will include it.
