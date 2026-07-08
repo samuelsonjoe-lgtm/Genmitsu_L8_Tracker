@@ -19,7 +19,7 @@ The app has six views:
 - **Library** - a curated set of "best known settings" per material/thickness, promoted from log entries once you've dialed something in. This is the searchable/sortable/taggable reference sheet you check before starting a new job.
 - **Test Grids** - a power x speed test matrix planner for dialing in a brand-new material: set ranges and step sizes, get a grid, then click each cell to record a rating/notes and mark the winning combination. Any cell can be promoted straight to the Library, and recorded results can be exported as CSV.
 - **Reference** - official Genmitsu L8 20W and 40W speed/power starting points from SainSmart's resource center, selected by machine profile, plus focus, safety, maintenance, offline, and software notes pulled from the user manual. Any reference setting can be copied into the Library and tuned from there.
-- **Projects** - a searchable/sortable/taggable gallery of finished pieces with a saved settings snapshot, tags, notes, optional sale/cost/profit accounting, status filtering, accounting CSV export, and a copy-to-log action for repeating a past project. Projects can also be opened as drafts from Pricing estimates.
+- **Projects** - a searchable/sortable/taggable gallery of finished pieces with a saved settings snapshot, tags, notes, optional sale/cost/profit accounting, filtered accounting summaries, status filtering, accounting CSV export, and a copy-to-log action for repeating a past project. Projects can also be opened as drafts from Pricing estimates.
 - **Pricing** - a compact cost/profit calculator for estimating revenue, material and consumable costs, machine time, labor, fees, margin, break-even price, target sale prices, saved rate/fee defaults, printable summaries, CSV export, and a copyable summary before committing to a price.
 
 Other features:
@@ -34,6 +34,7 @@ Other features:
 - Print a simplified Library cheat sheet for shop use.
 - Pricing calculator drafts/defaults persist locally between sessions, but are not part of the main JSON backup/export yet.
 - **Create project from estimate** on the Pricing tab opens a prefilled Project draft (user must still click Save project).
+- **Accounting report** on the Projects tab summarizes filtered project revenue, cost, profit, margin, quantity, and status counts.
 - **Export accounting CSV** on the Projects tab exports one row per project with accounting inputs and calculated totals.
 - All data persists automatically in the browser (localStorage) between sessions.
 

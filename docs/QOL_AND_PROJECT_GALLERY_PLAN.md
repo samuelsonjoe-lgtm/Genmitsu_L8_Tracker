@@ -36,6 +36,7 @@
 | **Tag system polish** | Projects and Library now have visible tag pills, tag search/filtering, clear-tag actions, and comma-separated tag entry guidance |
 | **Phase 6 Project accounting MVP** | Projects now support optional saved sale/cost/profit fields and computed accounting summaries, while Pricing remains a separate scratch estimator |
 | **Project accounting bridge + export pack** | Pricing tab can open a prefilled Project draft (no auto-save); Projects tab exports accounting CSV and filters by sale/status |
+| **Project accounting reports pack 1** | Projects tab now summarizes filtered accounting totals, quantity, overall margin, status counts, and a copyable plain-text report |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
@@ -166,7 +167,7 @@ This is the one part of the feature that's constrained by where the app is archi
 | 3 | Photo capture: file input → canvas downscale → base64 `dataUrl`, primary photo display on cards | Phase 2 |
 | 4 | Print/export niceties: include Projects in JSON export (already automatic once in `state`), optional single-project print view | Phase 2 |
 | 5 | (Later, post-Tauri) Swap `dataUrl` storage for on-disk file storage + one-time migration | Tauri desktop packaging from the standalone-offline audit |
-| 6 | Expense/sale tracking on Projects — see §2.7 | Done: Project records store optional sale/cost/profit accounting fields, compute summaries, accept Pricing estimate drafts, and export accounting CSV. |
+| 6 | Expense/sale tracking on Projects — see §2.7 | Done: Project records store optional sale/cost/profit accounting fields, compute summaries, accept Pricing estimate drafts, export accounting CSV, and show filtered report totals. |
 
 Phases 1–2 are now the working Projects foundation. Phases 3–4 need nothing beyond what the app already has today (still just `index.html` + `localStorage`). Phase 5 is explicitly gated on the desktop packaging work already planned in `docs/STANDALONE_OFFLINE_AUDIT.md`. Phase 6 can slot in any time now that the Projects form/cards exist — it doesn't need photos or Tauri.
 
@@ -261,6 +262,6 @@ This design note supersedes the rough Phase 6 field sketch above before any sche
 
 **Future Pricing-to-Project mapping:** `name` -> Project name, plus `quantity`, `materialCost`, `materialCostMode`, `hardwareCost`, `packagingCost`, `machineMinutes`, `laborMinutes`, `machineRate`, `laborRate`, `feePercent`, `fixedFee`, `fixedFeeMode`, and `notes` can copy directly. `salePrice` should map to `soldPrice = salePrice * quantity` only when the user confirms the Project is sold or wants a sale draft. Target-margin and target-profit suggestions stay in Pricing and should not be stored on Projects for MVP.
 
-**Implementation status:** Phase 6 MVP accounting fields, summaries, Pricing-to-Project draft bridge, Projects status filter, and accounting CSV export are implemented in `index.html`. Pricing still does not auto-save Projects; the user must click Save project.
+**Implementation status:** Phase 6 MVP accounting fields, summaries, Pricing-to-Project draft bridge, Projects status filter, filtered accounting report panel, copyable report summary, and accounting CSV export are implemented in `index.html`. Pricing still does not auto-save Projects; the user must click Save project.
 
 **Privacy note:** `buyerNote` may contain customer names, marketplaces, or order details. Keep it optional, avoid storing sensitive information by default, and remember that JSON backups/exports will include it.

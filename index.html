@@ -692,6 +692,7 @@
           </div>
           <div class="row"><span class="pill">${filtered.length}/${state.projects.length} shown</span>${state.projectTagFilter !== 'all' ? '<button id="clearProjectTag" type="button">Clear tag</button>' : ''}${state.projectStatusFilter !== 'all' ? '<button id="clearProjectStatus" type="button">Clear status</button>' : ''}</div>
         </div>
+        ${projectAccountingReportHtml(filtered)}
         ${state.projects.length ? (filtered.length ? `<div class="grid cards">${filtered.map(projectCard).join('')}</div>` : empty('No project matches', 'Adjust the search, tag, or status filter.')) : empty('No projects yet', 'Save a finished piece here with its settings snapshot.')}
       `;
     }
@@ -1057,6 +1058,108 @@
         ${metric('Break-even price', priceSuggestionLabel(t.breakEvenPrice))}
       </div>`;
     }
+    function projectAccountingReport(projects) {
+      const accountingProjects = projects.filter(hasProjectAccounting);
+      const totals = accountingProjects.reduce((acc, project) => {
+        const t = projectAccountingTotals(project);
+        acc.revenue += t.revenue;
+        acc.cost += t.totalCost;
+        acc.profit += t.profit;
+        acc.quantity += t.quantity;
+        return acc;
+      }, { revenue: 0, cost: 0, profit: 0, quantity: 0 });
+      const statuses = projects.reduce((acc, project) => {
+        const status = project.status || 'kept';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {});
+      return {
+        projectCount: accountingProjects.length,
+        totalShown: projects.length,
+        statuses,
+        ...totals,
+        margin: totals.revenue ? totals.profit / totals.revenue * 100 : 0
+      };
+    }
+    function projectStatusBreakdownHtml(statuses) {
+      const labels = { kept: 'Kept', gifted: 'Gifted', 'for-sale': 'For sale', sold: 'Sold' };
+      return ['kept', 'gifted', 'for-sale', 'sold']
+        .filter(status => statuses[status])
+        .map(status => `<span class="pill">${labels[status]} ${statuses[status]}</span>`)
+        .join('');
+    }
+    function projectAccountingReportText(projects) {
+      const r = projectAccountingReport(projects);
+      const statusText = ['kept', 'gifted', 'for-sale', 'sold']
+        .filter(status => r.statuses[status])
+        .map(status => `${status}: ${r.statuses[status]}`)
+        .join(', ') || 'none';
+      return [
+        'Project accounting report',
+        `Projects shown: ${r.totalShown}`,
+        `Projects with accounting: ${r.projectCount}`,
+        `Quantity tracked: ${r.quantity}`,
+        `Gross revenue: ${money(r.revenue)}`,
+        `Total cost: ${money(r.cost)}`,
+        `Total profit: ${money(r.profit)}`,
+        `Overall margin: ${percent(r.margin)}`,
+        `Status breakdown: ${statusText}`,
+        '',
+        'Report respects the current Projects search, tag, and status filters.'
+      ].join('\n');
+    }
+    function projectAccountingReportHtml(projects) {
+      const r = projectAccountingReport(projects);
+      const breakdown = projectStatusBreakdownHtml(r.statuses);
+      return `<div class="panel" style="margin-bottom:14px">
+        <div class="spread">
+          <div>
+            <b>Accounting report</b>
+            <div class="small muted">Totals respect the current Projects filters.</div>
+          </div>
+          <button id="copyProjectReport" type="button">Copy report</button>
+        </div>
+        ${r.projectCount ? `<div class="metrics" style="margin-top:10px">
+          ${metric('Projects with accounting', `${r.projectCount}/${r.totalShown}`)}
+          ${metric('Quantity tracked', r.quantity)}
+          ${metric('Gross revenue', money(r.revenue))}
+          ${metric('Total cost', money(r.cost))}
+          ${metric('Total profit', money(r.profit))}
+          ${metric('Overall margin', percent(r.margin))}
+        </div>` : `<div class="small muted" style="margin-top:10px">No accounting data in the current project view yet.</div>`}
+        ${breakdown ? `<div class="row" style="margin-top:10px">${breakdown}</div>` : ''}
+        <textarea id="projectReportCopyFallback" class="span2" rows="7" readonly style="display:none; margin-top:10px"></textarea>
+      </div>`;
+    }
+    function showProjectReportCopyFallback(text) {
+      const box = document.getElementById('projectReportCopyFallback');
+      if (!box) return alert(text);
+      box.style.display = 'block';
+      box.value = text;
+      box.focus();
+      box.select();
+    }
+    function copyProjectReportSummary() {
+      const q = state.projectSearch.toLowerCase();
+      const filtered = sortBy(state.projects.filter(p => {
+        const projectTags = tagsOf(p);
+        const tagOk = state.projectTagFilter === 'all' || projectTags.includes(state.projectTagFilter);
+        const status = p.status || 'kept';
+        const statusOk = state.projectStatusFilter === 'all' || status === state.projectStatusFilter;
+        const hay = [p.name, p.material, p.notes, ...projectTags].join(' ').toLowerCase();
+        return tagOk && statusOk && (!q || hay.includes(q));
+      }), state.projectSort);
+      const text = projectAccountingReportText(filtered);
+      const button = document.getElementById('copyProjectReport');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          if (!button) return;
+          flashButton(button, 'Copied');
+        }).catch(() => showProjectReportCopyFallback(text));
+      } else {
+        showProjectReportCopyFallback(text);
+      }
+    }
     function pricingGrossRevenue(p = state.pricing) {
       const quantity = pricingQuantity(p);
       if (!hasPricingValue(p.salePrice)) return '';
@@ -1327,6 +1430,8 @@
       if (clearProjectStatus) clearProjectStatus.onclick = () => { state.projectStatusFilter = 'all'; render(); };
       const exportProjectsCsv = document.getElementById('exportProjectsCsv');
       if (exportProjectsCsv) exportProjectsCsv.onclick = exportProjectsAccountingCsv;
+      const copyProjectReport = document.getElementById('copyProjectReport');
+      if (copyProjectReport) copyProjectReport.onclick = copyProjectReportSummary;
       const projectSort = document.getElementById('projectSort');
       if (projectSort) projectSort.onchange = e => { state.projectSort = e.target.value; persist(); render(); };
       const pricingForm = document.getElementById('pricingForm');
