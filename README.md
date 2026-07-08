@@ -20,7 +20,7 @@ The app has seven views:
 - **Test Grids** - a power x speed test matrix planner for dialing in a brand-new material: set ranges and step sizes, get a grid, then click each cell to record a rating/notes and mark the winning combination. Any cell can be promoted straight to the Library, and recorded results can be exported as CSV.
 - **Reference** - official Genmitsu L8 20W and 40W speed/power starting points from SainSmart's resource center, selected by machine profile, plus focus, safety, maintenance, offline, and software notes pulled from the user manual. Any reference setting can be copied into the Library and tuned from there.
 - **Projects** - a searchable/sortable/taggable gallery of finished pieces with a saved settings snapshot, small offline photos, tags, notes, optional sale/cost/profit accounting, filtered accounting summaries, status filtering, accounting CSV export, and a copy-to-log action for repeating a past project. Projects can also be opened as drafts from Pricing estimates.
-- **Inventory** - a lightweight manual tracker for raw materials on hand and simple finished-item batches, with low-stock badges, estimated raw-material value, remaining finished counts, starter-material helpers, and CSV exports.
+- **Inventory** - a lightweight manual tracker for raw materials on hand and simple finished-item batches, with low-stock badges, estimated raw-material value, remaining finished counts, starter-material helpers, canonical material aliases, and CSV exports.
 - **Pricing** - a compact cost/profit calculator for estimating revenue, material and consumable costs, machine time, labor, fees, margin, break-even price, target sale prices, saved rate/fee defaults, printable summaries, CSV export, and a copyable summary before committing to a price.
 
 Other features:
@@ -28,7 +28,8 @@ Other features:
 - Toggle between imperial and metric units, with stored thickness/focus/Z-offset values converted when switching.
 - Export/import your data and portable app preferences as a JSON backup file, with merge or replace import modes.
 - Storage failures are caught with a warning, and photo-heavy JSON exports show an approximate size warning before download.
-- Material autocomplete includes both your saved materials and official SainSmart reference materials.
+- Material autocomplete includes saved materials, raw Inventory material names, and official SainSmart reference materials.
+- Inventory raw materials can store comma-separated aliases so Amazon-style listing titles or old shorthand can match a clean canonical material name without blocking free typing.
 - Material safety warnings flag obvious risky/unknown terms such as PVC, vinyl, chlorinated plastics, unknown plastics, fiberglass, and carbon fiber without blocking saves.
 - Laser, Project, and Pricing fields include short hover/focus help for beginner-friendly terminology.
 - Library includes a closest-saved-setting helper for matching material and thickness.
@@ -48,11 +49,11 @@ Other features:
 
 The standalone `index.html` app saves live data in the browser's `localStorage` under `genmitsu-l8-tracker-v1`. That means data is tied to the browser/profile that opened the app. Use Export regularly for portable JSON backups until a future desktop build writes to a real app data file.
 
-JSON backups include Log entries, Library profiles, Test Grids, Projects, Project photos, Inventory records, unit preference, saved sort preferences, Library match helper inputs, selected machine profile, Pricing draft, and Pricing defaults. Session-only search text, tag/status filters, active tab, and open modal state are intentionally not backed up.
+JSON backups include Log entries, Library profiles, Test Grids, Projects, Project photos, Inventory records including raw-material aliases, unit preference, saved sort preferences, Library match helper inputs, selected machine profile, Pricing draft, and Pricing defaults. Session-only search text, tag/status filters, active tab, and open modal state are intentionally not backed up.
 
 ## Fields tracked
 
-Log entries, Library profiles, Test Grids, and Projects track material, thickness, job type, power (min/max), speed, passes, line interval, air assist (on/off + pressure), overscan %, kerf offset, dither mode (for photo engraves), focus height / material Z-offset, software (e.g. LightBurn), settings file reference, result rating, and notes where applicable. Inventory tracks raw material stock counts/costs and finished-batch quantities manually; it does not auto-deduct from Projects.
+Log entries, Library profiles, Test Grids, and Projects track material, thickness, job type, power (min/max), speed, passes, line interval, air assist (on/off + pressure), overscan %, kerf offset, dither mode (for photo engraves), focus height / material Z-offset, software (e.g. LightBurn), settings file reference, result rating, and notes where applicable. Inventory tracks raw material stock counts/costs and finished-batch quantities manually, and its raw-material names/aliases can help keep material names consistent; it does not auto-deduct from Projects.
 
 ## Official source material
 

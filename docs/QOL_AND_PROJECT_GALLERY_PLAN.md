@@ -15,7 +15,7 @@
 | Open Manual button | Reference tab links to the local PDF in `docs/` |
 | Library search/filter | Library now has the same search/filter treatment as Log (was flagged as an inconsistency in the original audit) |
 | 20W focus helper | `focusSuggestion()` — enter job type + thickness, get a fixed-focus recommendation (line ~270 in `index.html`) |
-| Material autocomplete (partial) | `<datalist id="materials">` seeded from `materialNames()`, which pulls distinct values from existing Log entries + Library profiles |
+| Material autocomplete | `<datalist id="materials">` seeded from saved materials, raw Inventory material names, and official reference rows |
 | README/docs cleanup | Storage model, file roles, and data fields documented |
 | Pushed to GitHub | Repo is live and clean |
 | **Duplicate entry button** | Clone a Log entry or Library profile into a new draft with the same settings, ready for a quick tweak-and-resave (`e481745`) |
@@ -43,10 +43,11 @@
 | **Field hover help / tooltips pack 1** | Laser settings, Test Grid, Pricing, Project accounting, tags, and photo fields now have short focusable help tips for beginner terminology |
 | **Storage/search/import fix-soon pack 1** | Persist errors are caught, photo-heavy exports warn with approximate size, replace imports reset absent optional prefs, Library/Projects search is live, Project accounting CSV respects filters, and grid caps/blank speed display are clearer |
 | **Inventory MVP** | Inventory tab tracks raw materials and finished batches manually, with low-stock badges, estimated raw value, remaining batch counts, starter materials, CSV exports, and JSON backup/import support |
+| **Material naming + Inventory linking pack 1** | Raw Inventory materials now support aliases, material fields suggest canonical raw Inventory names, Project forms show a subtle Inventory match note with a user-triggered canonical-name action, Project cards can show an inventory-linked badge, and raw Inventory search/CSV include aliases |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
-**Next candidate:** Continue small workshop utility passes. Inventory MVP is now implemented as a lightweight manual tracker, without automatic Project deductions or accounting-system scope.
+**Next candidate:** Continue small workshop utility passes. Inventory MVP now has soft canonical material naming/linking, without automatic Project deductions or accounting-system scope.
 
 ### 1.3 Still open from the original backlog
 
