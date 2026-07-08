@@ -467,23 +467,25 @@
       return num(item.quantityOnHand) * num(item.unitCost);
     }
     function batchRemaining(batch) {
-      return Math.max(0, num(batch.quantitySellable) - num(batch.quantitySold));
+      return num(batch.quantitySellable) - num(batch.quantitySold);
     }
     function rawIsLow(item) {
       return String(item.lowStockThreshold ?? '').trim() !== '' && num(item.quantityOnHand) <= num(item.lowStockThreshold);
     }
     function inventoryStarterMaterials() {
       const items = [
-        ['Black slate board', 'slate', 'each'],
-        ['Teak butter spreader', 'utensil', 'each'],
-        ['Basswood 12x12 sheet', 'sheet', 'sheet'],
-        ['Walnut plywood 12x12 sheet', 'sheet', 'sheet'],
-        ['Black acrylic 12x16 sheet', 'acrylic', 'sheet'],
-        ['8 inch wood circle', 'sheet', 'each']
+        ['Black slate boards', 'slate', 'each', 'stone slate blank'],
+        ['Teak butter spreaders', 'utensil', 'each', 'wood utensil blank'],
+        ['Basswood 12x12 sheets', 'sheet', 'sheet', 'wood sheet'],
+        ['Walnut plywood 12x12 sheets', 'sheet', 'sheet', 'wood sheet'],
+        ['Black acrylic 12x16 sheets', 'acrylic', 'sheet', 'acrylic sheet'],
+        ['8 inch wood circles', 'sheet', 'each', 'wood round'],
+        ['Small shipping mailers', 'packaging', 'pack', 'shipping packaging'],
+        ['Keychain hardware packs', 'hardware', 'pack', 'hardware keychain']
       ];
-      return items.map(([name, category, unit]) => ({
+      return items.map(([name, category, unit, tags]) => ({
         id: uid(), name, category, quantityOnHand: 0, unit, unitCost: '', supplier: '',
-        purchaseDate: '', lowStockThreshold: '', notes: 'Starter inventory item. Update quantity and cost when stocked.', tags: []
+        purchaseDate: '', lowStockThreshold: 1, notes: 'Starter inventory item. Update quantity and cost when stocked.', tags: tagArray(tags)
       }));
     }
     function powerLabel(o) { return o.maxPower != null && o.maxPower !== o.minPower ? `${o.minPower}-${o.maxPower}%` : `${o.minPower}%`; }
@@ -1620,10 +1622,11 @@
     function rawMaterialCard(item) {
       const tags = tagsOf(item);
       const low = rawIsLow(item);
+      const unitCostLabel = item.unitCost === '' || item.unitCost == null ? '-' : money(num(item.unitCost));
       return `<article class="card">
         <div class="spread"><div><b>${esc(item.name)}</b><div class="small muted">${esc(item.category || 'other')} - ${fmt(item.quantityOnHand, ' ' + (item.unit || 'each'))}</div></div><span class="pill ${low ? 'warn' : 'good'}">${low ? 'low stock' : 'stocked'}</span></div>
         <div class="metrics">
-          ${metric('Unit cost', money(num(item.unitCost)))}
+          ${metric('Unit cost', unitCostLabel)}
           ${metric('Est. value', money(inventoryValue(item)))}
           ${metric('Supplier', item.supplier || '-')}
           ${metric('Low threshold', item.lowStockThreshold === '' || item.lowStockThreshold == null ? '-' : item.lowStockThreshold)}
