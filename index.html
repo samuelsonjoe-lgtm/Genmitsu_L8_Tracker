@@ -470,6 +470,10 @@
       if (kind === 'project') return {
         name: '', material: '', thicknessValue: '', thicknessUnit: state.unit, jobType: 'engrave',
         dateCreated: today(), tags: '', rating: 0, notes: '', sourceEntryId: '', sourceProfileId: '',
+        status: 'kept', quantity: '1', soldPrice: '', saleDate: '',
+        materialCost: '', materialCostMode: 'total', hardwareCost: '', packagingCost: '',
+        machineMinutes: '', machineRate: '', laborMinutes: '', laborRate: '',
+        feePercent: '', fixedFee: '', fixedFeeMode: 'order', accountingNotes: '',
         settings: settingsFromSetting({ ...base, settingsFile: '' })
       };
       if (kind === 'grid') return {
@@ -978,6 +982,89 @@
         showPricingCopyFallback(text);
       }
     }
+    function projectQuantity(p) {
+      return Math.max(0, Math.round(num(p.quantity, 1)));
+    }
+    function hasProjectAccounting(p) {
+      return ['soldPrice', 'materialCost', 'hardwareCost', 'packagingCost', 'machineMinutes', 'laserMinutes', 'laborMinutes', 'machineRate', 'laborRate', 'feePercent', 'fixedFee', 'saleDate', 'accountingNotes'].some(key => {
+        const value = p[key];
+        return typeof value === 'number' ? value !== 0 : String(value ?? '').trim() !== '';
+      }) || p.status === 'for-sale' || p.status === 'sold';
+    }
+    function projectAccountingTotals(p) {
+      const quantity = projectQuantity(p);
+      const revenue = num(p.soldPrice);
+      const materialInput = num(p.materialCost);
+      const materialCost = p.materialCostMode === 'perItem' ? materialInput * quantity : materialInput;
+      const hardwareCost = num(p.hardwareCost);
+      const packagingCost = num(p.packagingCost);
+      const machineMinutes = p.machineMinutes ?? p.laserMinutes ?? '';
+      const machineCost = num(machineMinutes) / 60 * num(p.machineRate);
+      const laborCost = num(p.laborMinutes) / 60 * num(p.laborRate);
+      const fixedFeeCost = p.fixedFeeMode === 'perItem' ? num(p.fixedFee) * quantity : num(p.fixedFee);
+      const feeCost = revenue * Math.max(0, num(p.feePercent)) / 100 + fixedFeeCost;
+      const directCost = materialCost + hardwareCost + packagingCost;
+      const totalCost = directCost + machineCost + laborCost + feeCost;
+      const profit = revenue - totalCost;
+      const feeRate = Math.max(0, num(p.feePercent)) / 100;
+      const baseCost = directCost + machineCost + laborCost + fixedFeeCost;
+      const breakEvenPrice = quantity * (1 - feeRate) > 0 ? baseCost / (quantity * (1 - feeRate)) : NaN;
+      return {
+        quantity, revenue, materialCost, hardwarePackagingCost: hardwareCost + packagingCost,
+        machineCost, laborCost, feeCost, totalCost, profit,
+        profitPerItem: quantity ? profit / quantity : 0,
+        margin: revenue ? profit / revenue * 100 : 0,
+        breakEvenPrice
+      };
+    }
+    function projectAccountingMetrics(p) {
+      const t = projectAccountingTotals(p);
+      return `
+        <div class="metrics">
+          ${metric('Revenue', money(t.revenue))}
+          ${metric('Total cost', money(t.totalCost))}
+          ${metric('Profit', money(t.profit))}
+          ${metric('Margin', percent(t.margin))}
+        </div>`;
+    }
+    function projectAccountingResultsHtml(p) {
+      const t = projectAccountingTotals(p);
+      return `<div class="metrics">
+        ${metric('Total revenue', money(t.revenue))}
+        ${metric('Material cost', money(t.materialCost))}
+        ${metric('Hardware + packaging', money(t.hardwarePackagingCost))}
+        ${metric('Machine cost', money(t.machineCost))}
+        ${metric('Labor cost', money(t.laborCost))}
+        ${metric('Fee cost', money(t.feeCost))}
+        ${metric('Total cost', money(t.totalCost))}
+        ${metric('Profit total', money(t.profit))}
+        ${metric('Profit per item', money(t.profitPerItem))}
+        ${metric('Margin', percent(t.margin))}
+        ${metric('Break-even price', priceSuggestionLabel(t.breakEvenPrice))}
+      </div>`;
+    }
+    function projectAccountingFields(data) {
+      return `
+        <h3 class="span2" style="margin:8px 0 0">Sale & cost</h3>
+        ${select('status','Status',data.status || 'kept',['kept','gifted','for-sale','sold'])}
+        ${field('quantity','Quantity',data.quantity ?? '1','number','min="0" step="1"')}
+        ${field('soldPrice','Gross sold price / revenue',data.soldPrice,'number','min="0" step="0.01"')}
+        ${field('saleDate','Sale date',data.saleDate || '','date')}
+        <label>Material cost basis<select name="materialCostMode"><option value="total" ${(data.materialCostMode || 'total') === 'total' ? 'selected' : ''}>Total</option><option value="perItem" ${data.materialCostMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
+        ${field('materialCost','Material cost',data.materialCost,'number','min="0" step="0.01"')}
+        ${field('hardwareCost','Hardware / consumables cost',data.hardwareCost,'number','min="0" step="0.01"')}
+        ${field('packagingCost','Packaging cost',data.packagingCost,'number','min="0" step="0.01"')}
+        ${field('machineMinutes','Machine time, minutes',data.machineMinutes ?? data.laserMinutes ?? '','number','min="0" step="0.1"')}
+        ${field('machineRate','Machine rate per hour',data.machineRate,'number','min="0" step="0.01"')}
+        ${field('laborMinutes','Labor time, minutes',data.laborMinutes,'number','min="0" step="0.1"')}
+        ${field('laborRate','Labor rate per hour',data.laborRate,'number','min="0" step="0.01"')}
+        ${field('feePercent','Marketplace / payment fee %',data.feePercent,'number','min="0" step="0.01"')}
+        <label>Fixed fee basis<select name="fixedFeeMode"><option value="order" ${(data.fixedFeeMode || 'order') === 'order' ? 'selected' : ''}>Per listing/batch</option><option value="perItem" ${data.fixedFeeMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
+        ${field('fixedFee','Fixed fee',data.fixedFee,'number','min="0" step="0.01"')}
+        <label class="span2">Accounting notes<textarea name="accountingNotes" rows="2">${esc(data.accountingNotes || '')}</textarea></label>
+        <div class="span2 panel" style="padding:12px"><b>Accounting summary</b><div id="projectAccountingPreview">${projectAccountingResultsHtml(data)}</div></div>
+        <div class="span2 small muted">Optional. Sold price is gross revenue for the whole project or batch; fees and costs are calculated from the fields above.</div>`;
+    }
     function referenceTable(title, rows, watts) {
       return `
         ${title ? `<h2>${esc(title)}</h2>` : ''}
@@ -1033,6 +1120,7 @@
         <div class="row" style="margin-top:8px">${tagsOf(p).map(t => `<span class="pill">${esc(t)}</span>`).join('') || '<span class="pill">untagged</span>'}</div>
         <div class="metrics">${metric('Power', powerLabel(s))}${metric('Speed', `${s.speed || 0} mm/min`)}${metric('Passes', s.passes || 1)}${metric('Line int.', fmt(s.lineInterval, 'mm'))}</div>
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(s.focusValue, s.focusUnit)} - Air: ${s.airAssist ? 'On' : 'Off'}${s.software ? ' - ' + esc(s.software) : ''}</div>
+        ${hasProjectAccounting(p) ? projectAccountingMetrics(p) : ''}
         ${p.notes ? `<p class="small">${esc(p.notes)}</p>` : ''}
         <div class="actions"><button data-edit-project="${p.id}">Edit</button><button data-project-to-entry="${p.id}">Copy to log</button><button class="danger" data-delete-project="${p.id}">Delete</button></div>
       </article>`;
@@ -1375,6 +1463,7 @@
         <div class="span2"><b class="small">Project rating</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating || 0)}" hidden></div>
         <h3 class="span2" style="margin:8px 0 0">Settings snapshot</h3>
         ${projectSettingsFields(data.settings)}
+        ${projectAccountingFields(data)}
         <label class="span2">Notes<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>
         <input name="sourceEntryId" value="${esc(data.sourceEntryId || '')}" hidden>
         <input name="sourceProfileId" value="${esc(data.sourceProfileId || '')}" hidden>
@@ -1383,6 +1472,14 @@
         <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save project</button></div></form></div>`);
       bindModal('projectModal');
       document.querySelectorAll('#projectModal .star').forEach(s => s.onclick = () => { document.querySelector('#projectModal [name=rating]').value = s.dataset.rating; document.querySelectorAll('#projectModal .star').forEach(x => x.classList.toggle('on', Number(x.dataset.rating) <= Number(s.dataset.rating))); });
+      document.getElementById('projectForm').oninput = e => {
+        const preview = document.getElementById('projectAccountingPreview');
+        if (preview) preview.innerHTML = projectAccountingResultsHtml(readForm(e.currentTarget));
+      };
+      document.getElementById('projectForm').onchange = e => {
+        const preview = document.getElementById('projectAccountingPreview');
+        if (preview) preview.innerHTML = projectAccountingResultsHtml(readForm(e.currentTarget));
+      };
       document.getElementById('projectForm').onsubmit = e => {
         e.preventDefault();
         const f = readForm(e.target);
@@ -1395,7 +1492,7 @@
     function normalizeProject(f, existingId) {
       const minPower = num(f.settingsMinPower);
       const existingProject = existingId ? state.projects.find(p => p.id === existingId) : null;
-      return {
+      const project = {
         id: existingId || uid(), name: f.name.trim(), material: f.material.trim(),
         thicknessValue: f.thicknessValue === '' ? '' : num(f.thicknessValue), thicknessUnit: f.thicknessUnit,
         jobType: f.jobType, dateCreated: f.dateCreated || today(), tags: tagArray(f.tags),
@@ -1412,6 +1509,31 @@
           focusValue: f.settingsFocusValue === '' ? '' : num(f.settingsFocusValue), focusUnit: f.settingsFocusUnit,
           software: (f.settingsSoftware || '').trim(), settingsFile: (f.settingsFile || '').trim()
         }
+      };
+      Object.assign(project, normalizeProjectAccounting(f));
+      return project;
+    }
+    function optionalMoney(value) {
+      return value === '' || value == null ? '' : num(value);
+    }
+    function normalizeProjectAccounting(f) {
+      return {
+        status: f.status || 'kept',
+        quantity: f.quantity === '' ? '' : projectQuantity(f),
+        soldPrice: optionalMoney(f.soldPrice),
+        saleDate: f.saleDate || '',
+        materialCost: optionalMoney(f.materialCost),
+        materialCostMode: f.materialCostMode || 'total',
+        hardwareCost: optionalMoney(f.hardwareCost),
+        packagingCost: optionalMoney(f.packagingCost),
+        machineMinutes: optionalMoney(f.machineMinutes),
+        machineRate: optionalMoney(f.machineRate),
+        laborMinutes: optionalMoney(f.laborMinutes),
+        laborRate: optionalMoney(f.laborRate),
+        feePercent: optionalMoney(f.feePercent),
+        fixedFee: optionalMoney(f.fixedFee),
+        fixedFeeMode: f.fixedFeeMode || 'order',
+        accountingNotes: (f.accountingNotes || '').trim()
       };
     }
     function projectDraftFromSource(source, sourceType) {

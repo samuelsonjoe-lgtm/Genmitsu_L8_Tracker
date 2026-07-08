@@ -19,7 +19,7 @@ The app has six views:
 - **Library** - a curated set of "best known settings" per material/thickness, promoted from log entries once you've dialed something in. This is the searchable/sortable/taggable reference sheet you check before starting a new job.
 - **Test Grids** - a power x speed test matrix planner for dialing in a brand-new material: set ranges and step sizes, get a grid, then click each cell to record a rating/notes and mark the winning combination. Any cell can be promoted straight to the Library, and recorded results can be exported as CSV.
 - **Reference** - official Genmitsu L8 20W and 40W speed/power starting points from SainSmart's resource center, selected by machine profile, plus focus, safety, maintenance, offline, and software notes pulled from the user manual. Any reference setting can be copied into the Library and tuned from there.
-- **Projects** - a searchable/sortable/taggable gallery of finished pieces with a saved settings snapshot, tags, notes, and a copy-to-log action for repeating a past project.
+- **Projects** - a searchable/sortable/taggable gallery of finished pieces with a saved settings snapshot, tags, notes, optional sale/cost/profit accounting, and a copy-to-log action for repeating a past project.
 - **Pricing** - a compact cost/profit calculator for estimating revenue, material and consumable costs, machine time, labor, fees, margin, break-even price, target sale prices, saved rate/fee defaults, printable summaries, CSV export, and a copyable summary before committing to a price.
 
 Other features:

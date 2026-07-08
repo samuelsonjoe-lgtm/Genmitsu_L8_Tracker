@@ -34,6 +34,7 @@
 | **Pricing polish pack 1** | Pricing now includes target margin/profit sale-price helpers, a subtle profitability badge, a short assumptions note, and copyable plain-text summaries |
 | **Pricing polish pack 2** | Pricing now has saved rate/fee defaults, compact print summaries, and one-row CSV export for the current estimate |
 | **Tag system polish** | Projects and Library now have visible tag pills, tag search/filtering, clear-tag actions, and comma-separated tag entry guidance |
+| **Phase 6 Project accounting MVP** | Projects now support optional saved sale/cost/profit fields and computed accounting summaries, while Pricing remains a separate scratch estimator |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
@@ -164,7 +165,7 @@ This is the one part of the feature that's constrained by where the app is archi
 | 3 | Photo capture: file input → canvas downscale → base64 `dataUrl`, primary photo display on cards | Phase 2 |
 | 4 | Print/export niceties: include Projects in JSON export (already automatic once in `state`), optional single-project print view | Phase 2 |
 | 5 | (Later, post-Tauri) Swap `dataUrl` storage for on-disk file storage + one-time migration | Tauri desktop packaging from the standalone-offline audit |
-| 6 | Expense/sale tracking on Projects — see §2.7 | Project foundation from Phase 2 (extends the Project form/data model, no photos/Tauri dependency). The separate Pricing calculator now covers scratch estimates and target-price helpers, but saved per-project sale/cost fields remain open. |
+| 6 | Expense/sale tracking on Projects — see §2.7 | MVP implemented: Project records can store optional sale/cost/profit accounting fields and compute summaries. Pricing-to-Project bridge remains a follow-up. |
 
 Phases 1–2 are now the working Projects foundation. Phases 3–4 need nothing beyond what the app already has today (still just `index.html` + `localStorage`). Phase 5 is explicitly gated on the desktop packaging work already planned in `docs/STANDALONE_OFFLINE_AUDIT.md`. Phase 6 can slot in any time now that the Projects form/cards exist — it doesn't need photos or Tauri.
 
@@ -219,7 +220,7 @@ This design note supersedes the rough Phase 6 field sketch above before any sche
 | Quantity name | Use `quantity`, not `qty`, to match Pricing. |
 | Material cost mode | Support `materialCostMode: "total" / "perItem"` plus `materialCost`, matching Pricing. |
 | Hardware and packaging | Keep `hardwareCost` and `packagingCost` separate rather than merging into `otherCosts`. They are common shop costs and already separate in Pricing. |
-| Machine vs labor time | Track `laserMinutes`, `laborMinutes`, `machineRate`, and `laborRate` separately, like Pricing. This is more useful than one generic `timeHours` field. |
+| Machine vs labor time | Track `machineMinutes`, `laborMinutes`, `machineRate`, and `laborRate` separately. This is more useful than one generic `timeHours` field. |
 | Marketplace/payment fees | Include `feePercent`, `fixedFee`, and `fixedFeeMode` so sold-project profit can reflect Etsy/PayPal/craft-market fees when desired. |
 | Gross vs net sale price | Store `soldPrice` as gross total sale revenue for the whole Project/batch, then calculate fee cost from fee fields. If only net revenue is known, leave fee fields blank and enter the net amount by convention. |
 | Pricing-to-Project bridge | Yes, eventually, but not in the first accounting MVP. Add a "Create/Update Project from Pricing" workflow only after these Project fields exist. |
@@ -236,7 +237,7 @@ This design note supersedes the rough Phase 6 field sketch above before any sche
   "materialCostMode": "total",
   "hardwareCost": 0,
   "packagingCost": 0,
-  "laserMinutes": 0,
+  "machineMinutes": 0,
   "laborMinutes": 0,
   "machineRate": 0,
   "laborRate": 0,
@@ -251,14 +252,14 @@ This design note supersedes the rough Phase 6 field sketch above before any sche
 
 **Computed at render time, never stored:**
 - `directCost = materialCost + hardwareCost + packagingCost`
-- `machineCost = laserMinutes / 60 * machineRate`
+- `machineCost = machineMinutes / 60 * machineRate`
 - `laborCost = laborMinutes / 60 * laborRate`
 - `feeCost = soldPrice * feePercent / 100 + fixedFeeCost`
 - `profit = soldPrice - totalCost`, shown when `status === "sold"`
 - `marginPercent = profit / soldPrice`, only when `soldPrice > 0`
 
-**Future Pricing-to-Project mapping:** `name` -> Project name, plus `quantity`, `materialCost`, `materialCostMode`, `hardwareCost`, `packagingCost`, `laserMinutes`, `laborMinutes`, `machineRate`, `laborRate`, `feePercent`, `fixedFee`, `fixedFeeMode`, and `notes` can copy directly. `salePrice` should map to `soldPrice = salePrice * quantity` only when the user confirms the Project is sold or wants a sale draft. Target-margin and target-profit suggestions stay in Pricing and should not be stored on Projects for MVP.
+**Future Pricing-to-Project mapping:** `name` -> Project name, plus `quantity`, `materialCost`, `materialCostMode`, `hardwareCost`, `packagingCost`, `machineMinutes`, `laborMinutes`, `machineRate`, `laborRate`, `feePercent`, `fixedFee`, `fixedFeeMode`, and `notes` can copy directly. `salePrice` should map to `soldPrice = salePrice * quantity` only when the user confirms the Project is sold or wants a sale draft. Target-margin and target-profit suggestions stay in Pricing and should not be stored on Projects for MVP.
 
-**No code/schema changes in this pass:** this section is a planning decision only. Phase 6 implementation still needs a dedicated scoped ticket before editing `index.html`.
+**Implementation status:** Phase 6 MVP accounting fields and summaries are implemented in `index.html`. A future Pricing-to-Project bridge remains intentionally out of scope.
 
 **Privacy note:** `buyerNote` may contain customer names, marketplaces, or order details. Keep it optional, avoid storing sensitive information by default, and remember that JSON backups/exports will include it.
