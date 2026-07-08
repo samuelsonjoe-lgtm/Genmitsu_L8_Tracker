@@ -103,9 +103,17 @@
       z-index: 10;
     }
     .modal.open { display: flex; }
-    .dialog { background: white; width: min(680px, 100%); border-radius: 10px; padding: 20px; }
+    .dialog { background: white; width: min(720px, 100%); border-radius: 10px; padding: 20px; }
     .formgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .span2 { grid-column: span 2; }
+    .project-section { border: 1px solid var(--line); border-radius: 8px; background: #fbfcfe; padding: 0; overflow: hidden; }
+    .project-section > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; font-weight: 800; cursor: pointer; }
+    .project-section > summary::-webkit-details-marker { display: none; }
+    .project-section > summary:after { content: "Open"; color: var(--muted); font-size: 12px; font-weight: 700; }
+    .project-section[open] > summary { border-bottom: 1px solid var(--line); background: #f3f6fa; }
+    .project-section[open] > summary:after { content: "Close"; }
+    .project-section-body { padding: 12px; }
+    .modal-actions { position: sticky; bottom: -20px; z-index: 2; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin: 4px -20px -20px; padding: 12px 20px; background: rgba(255, 255, 255, .96); border-top: 1px solid var(--line); }
     .unitrow { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 6px; }
     .stars { display: flex; gap: 6px; }
     .star { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line); display: grid; place-items: center; font-weight: 800; background: #f3f5f8; cursor: pointer; }
@@ -125,9 +133,13 @@
     .axis { font-size: 12px; font-weight: 800; color: var(--muted); text-align: center; }
     .print-only { display: none; }
     @media (max-width: 700px) {
+      .modal { padding: 10px 8px; }
+      .dialog { padding: 14px; }
       .formgrid { grid-template-columns: 1fr; }
       .span2 { grid-column: span 1; }
       .metrics { grid-template-columns: 1fr; }
+      .modal-actions { bottom: -14px; margin: 4px -14px -14px; padding: 10px 14px; }
+      .modal-actions button { flex: 1; }
     }
     @media print {
       body { background: white; color: #111827; }
@@ -660,11 +672,11 @@
             <a href="docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf" target="_blank" rel="noopener"><button type="button">Open Manual</button></a>
           </div>
         </div>
-        <div class="panel" style="margin-bottom:16px">
+        ${state.machineProfile === '20W' ? `<div class="panel" style="margin-bottom:16px">
           <div class="toolbar">
             <div>
               <b>20W focus helper</b>
-              <div class="small muted">Based on the fixed-focus table in the official manual.</div>
+              <div class="small muted">20W-only, based on the fixed-focus table in the official manual.</div>
             </div>
             <div class="row">
               <select id="focusJobType" style="width:130px">
@@ -675,7 +687,10 @@
               <span class="pill">${esc(focusText)}</span>
             </div>
           </div>
-        </div>
+        </div>` : `<div class="panel" style="margin-bottom:16px">
+          <b>40W focus note.</b>
+          <span class="small">The 20W fixed-focus helper is hidden while L8 40W is selected because this app does not have official 40W focus values.</span>
+        </div>`}
         <div class="panel" style="margin-bottom:14px;background:#fff8e7;border-color:#ead59f">
           <b>Material safety reminder.</b>
           <span class="small">Use ventilation and fire watch, never leave the laser unattended, and verify unknown materials before lasering. Avoid PVC, vinyl, and chlorinated plastics.</span>
@@ -1235,7 +1250,8 @@
       const form = document.getElementById('pricingForm');
       if (form) updatePricingDraft(form);
       openProject(projectDraftFromPricing(state.pricing), {
-        draftNote: 'Draft from Pricing estimate. Review the project fields and click Save project when ready. Nothing is saved until then.'
+        draftNote: 'Draft from Pricing estimate. Review the project fields and click Save project when ready. Nothing is saved until then.',
+        pricingDraft: true
       });
       if (!pendingUndo) showInfoToast('Project draft opened from Pricing. Click Save project to keep it.');
     }
@@ -1279,8 +1295,6 @@
     }
     function projectAccountingFields(data) {
       return `
-        <h3 class="span2" style="margin:8px 0 0">Sale & cost</h3>
-        ${select('status','Status',data.status || 'kept',['kept','gifted','for-sale','sold'],'Simple sale/inventory status for filtering projects.')}
         ${field('quantity','Quantity',data.quantity ?? '1','number','min="0" step="1"','How many items this Project represents.')}
         ${field('soldPrice','Gross sold price / revenue',data.soldPrice,'number','min="0" step="0.01"','Total revenue for the whole Project or batch before fees.')}
         ${field('saleDate','Sale date',data.saleDate || '','date','When the Project sold, if applicable.')}
@@ -1848,30 +1862,60 @@
       const draftBanner = options.draftNote
         ? `<div class="span2 panel" style="padding:10px 12px; background:#fff4db; border-color:#d9982f">${esc(options.draftNote)}</div>`
         : '';
+      const bridgeNote = options.pricingDraft
+        ? `<div class="span2 small" style="padding:9px 10px; border:1px solid #ead59f; border-radius:7px; background:#fffaf0">Pricing sale price per item has been copied here as Project gross sold price / total revenue. This draft is not saved until you click Save project.</div>`
+        : '';
+      const photosOpen = projectPhotosDraft.length ? ' open' : '';
+      const accountingOpen = options.pricingDraft ? ' open' : '';
       openModal('projectModal', `<div class="dialog"><div class="spread"><h2>${editingProjectId ? 'Edit project' : 'New project'}</h2><button data-close>×</button></div><form id="projectForm" class="formgrid">
         ${draftBanner}
+        ${bridgeNote}
         <label class="span2">${labelText('Project name', 'Name of the finished piece or batch.')}<input name="name" value="${esc(data.name)}"></label>
-        ${field('dateCreated','Date',data.dateCreated || today(),'date')}
-        ${select('jobType','Job type',data.jobType,['engrave','cut'],'Cut goes through material; engrave marks the surface.')}
         <label class="span2">${labelText('Material', 'What the blank is made of. Verify unknown materials before lasering.')}<input name="material" value="${esc(data.material)}" list="materials"></label>
         ${materialSafetyFieldHelp(data.material)}
-        ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit,'Actual material thickness; important for cutting and focus.')}
+        ${select('status','Status',data.status || 'kept',['kept','gifted','for-sale','sold'],'Simple sale/inventory status for filtering projects.')}
         <label>${labelText('Tags, comma-separated', 'Short labels used for filtering and search.')}<input name="tags" value="${esc(tagValue)}" placeholder="gift, coasters"></label>
         <div class="span2 small muted">Use short tags for filtering, separated by commas.</div>
-        <div class="span2"><b class="small">Project rating</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating || 0)}" hidden></div>
-        <h3 class="span2" style="margin:8px 0 0">Photos</h3>
-        <label class="span2">${labelText('Add project photos', 'Photos are compressed and stored offline inside this Project and JSON backup.')}<input id="projectPhotoInput" type="file" accept="image/*" multiple></label>
-        <div class="span2 small muted">Up to 3 photos. Images are resized to about 1200px max and compressed before saving; photos increase localStorage and JSON backup size.</div>
-        <div class="span2"><div class="spread"><b class="small">Photo previews</b><span class="pill" id="projectPhotoCount">${projectPhotosDraft.length}/3 photos</span></div><div id="projectPhotoPreview" style="margin-top:8px">${projectPhotosHtml(projectPhotosDraft)}</div></div>
-        <h3 class="span2" style="margin:8px 0 0">Settings snapshot</h3>
-        ${projectSettingsFields(data.settings)}
-        ${projectAccountingFields(data)}
-        <label class="span2">${labelText('Notes', 'General notes about this finished Project.')}<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>
+        <details class="project-section span2" open>
+          <summary>Details</summary>
+          <div class="project-section-body formgrid">
+            ${field('dateCreated','Date',data.dateCreated || today(),'date')}
+            ${select('jobType','Job type',data.jobType,['engrave','cut'],'Cut goes through material; engrave marks the surface.')}
+            ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit,'Actual material thickness; important for cutting and focus.')}
+            <div><b class="small">Project rating</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating || 0)}" hidden></div>
+          </div>
+        </details>
+        <details class="project-section span2"${photosOpen}>
+          <summary>Photos <span class="pill" id="projectPhotoCount">${projectPhotosDraft.length}/3 photos</span></summary>
+          <div class="project-section-body formgrid">
+            <label class="span2">${labelText('Add project photos', 'Photos are compressed and stored offline inside this Project and JSON backup.')}<input id="projectPhotoInput" type="file" accept="image/*" multiple></label>
+            <div class="span2 small muted">Up to 3 photos. Images are resized to about 1200px max and compressed before saving; photos increase localStorage and JSON backup size.</div>
+            <div class="span2"><div class="spread"><b class="small">Photo previews</b></div><div id="projectPhotoPreview" style="margin-top:8px">${projectPhotosHtml(projectPhotosDraft)}</div></div>
+          </div>
+        </details>
+        <details class="project-section span2">
+          <summary>Settings snapshot</summary>
+          <div class="project-section-body formgrid">
+            ${projectSettingsFields(data.settings)}
+          </div>
+        </details>
+        <details class="project-section span2"${accountingOpen}>
+          <summary>Accounting</summary>
+          <div class="project-section-body formgrid">
+            ${projectAccountingFields(data)}
+          </div>
+        </details>
+        <details class="project-section span2">
+          <summary>Notes</summary>
+          <div class="project-section-body formgrid">
+            <label class="span2">${labelText('Notes', 'General notes about this finished Project.')}<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>
+          </div>
+        </details>
         <input name="sourceEntryId" value="${esc(data.sourceEntryId || '')}" hidden>
         <input name="sourceProfileId" value="${esc(data.sourceProfileId || '')}" hidden>
         <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
         <datalist id="materials">${autocompleteMaterialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
-        <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save project</button></div></form></div>`);
+        <div class="span2 modal-actions"><button type="button" data-close>Cancel</button><button class="primary">Save project</button></div></form></div>`);
       bindModal('projectModal');
       renderProjectPhotoDraft();
       document.querySelectorAll('#projectModal .star').forEach(s => s.onclick = () => { document.querySelector('#projectModal [name=rating]').value = s.dataset.rating; document.querySelectorAll('#projectModal .star').forEach(x => x.classList.toggle('on', Number(x.dataset.rating) <= Number(s.dataset.rating))); });
