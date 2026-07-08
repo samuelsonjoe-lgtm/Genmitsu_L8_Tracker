@@ -351,6 +351,8 @@
             inventorySearch: '',
             inventoryCategoryFilter: 'all',
             inventoryBatchStatusFilter: 'all',
+            inventoryRawSort: data.inventoryRawSort || 'low-stock',
+            inventoryBatchSort: data.inventoryBatchSort || 'name-asc',
             focusMaterialMm: '',
             focusJobType: 'engrave',
             machineProfile: data.machineProfile || '20W',
@@ -359,12 +361,12 @@
           };
         }
       } catch (_) {}
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
     }
     function persist() {
-      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
+      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, inventoryRawSort, inventoryBatchSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, inventoryRawSort, inventoryBatchSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
         return true;
       } catch (err) {
         showStorageWarning();
@@ -383,6 +385,8 @@
         entrySort: state.entrySort,
         librarySort: state.librarySort,
         projectSort: state.projectSort,
+        inventoryRawSort: state.inventoryRawSort,
+        inventoryBatchSort: state.inventoryBatchSort,
         libraryMatchMaterial: state.libraryMatchMaterial,
         libraryMatchThickness: state.libraryMatchThickness,
         libraryMatchUnit: state.libraryMatchUnit,
@@ -725,7 +729,11 @@
       bindPage();
     }
     function renderTabs() {
-      document.getElementById('tabs').innerHTML = tabs.map(([id, label]) => `<button class="tab ${state.activeTab === id ? 'active' : ''}" data-tab="${id}">${label}</button>`).join('');
+      const lowStock = normalizeInventory(state.inventory).rawMaterials.filter(rawIsLow).length;
+      document.getElementById('tabs').innerHTML = tabs.map(([id, label]) => {
+        const tabLabel = id === 'inventory' && lowStock ? `${label} (${lowStock} low)` : label;
+        return `<button class="tab ${state.activeTab === id ? 'active' : ''}" data-tab="${id}">${esc(tabLabel)}</button>`;
+      }).join('');
     }
     function renderLog() {
       const materials = materialNames();
@@ -831,7 +839,7 @@
         <div class="toolbar" style="margin-bottom:14px">
           <div>
             <b>Reference tools</b>
-            <div class="small muted">Machine-specific starting points, manual link, and 20W fixed-focus helper.</div>
+            <div class="small muted">${state.machineProfile === '20W' ? 'Machine-specific starting points, manual link, and 20W fixed-focus helper.' : 'Machine-specific starting points. The 20W fixed-focus helper is hidden for the 40W profile.'}</div>
           </div>
           <div class="row" style="justify-content:flex-end">
             <select id="machineProfile" style="width:150px">
@@ -935,7 +943,13 @@
         const categoryOk = state.inventoryCategoryFilter === 'all' || item.category === state.inventoryCategoryFilter;
         const hay = [item.name, item.category, item.unit, item.supplier, item.notes, item.aliases, ...tagsOf(item), ...aliasesOf(item)].join(' ').toLowerCase();
         return categoryOk && (!q || hay.includes(q));
-      }).sort((a, b) => rawIsLow(b) - rawIsLow(a) || compareText(a.name, b.name));
+      }).sort((a, b) => {
+        if (state.inventoryRawSort === 'name-asc') return compareText(a.name, b.name);
+        if (state.inventoryRawSort === 'category-asc') return compareText(a.category, b.category) || compareText(a.name, b.name);
+        if (state.inventoryRawSort === 'value-desc') return inventoryValue(b) - inventoryValue(a) || compareText(a.name, b.name);
+        if (state.inventoryRawSort === 'quantity-asc') return num(a.quantityOnHand) - num(b.quantityOnHand) || compareText(a.name, b.name);
+        return rawIsLow(b) - rawIsLow(a) || compareText(a.name, b.name);
+      });
     }
     function filteredFinishedBatches() {
       const inv = normalizeInventory(state.inventory);
@@ -945,7 +959,12 @@
         const project = batch.projectId ? state.projects.find(p => p.id === batch.projectId) : null;
         const hay = [batch.itemName, batch.status, batch.notes, project?.name, ...tagsOf(batch)].join(' ').toLowerCase();
         return statusOk && (!q || hay.includes(q));
-      }).sort((a, b) => compareText(a.itemName, b.itemName));
+      }).sort((a, b) => {
+        if (state.inventoryBatchSort === 'status-asc') return compareText(a.status, b.status) || compareText(a.itemName, b.itemName);
+        if (state.inventoryBatchSort === 'remaining-desc') return batchRemaining(b) - batchRemaining(a) || compareText(a.itemName, b.itemName);
+        if (state.inventoryBatchSort === 'sold-desc') return num(b.quantitySold) - num(a.quantitySold) || compareText(a.itemName, b.itemName);
+        return compareText(a.itemName, b.itemName);
+      });
     }
     function renderInventory() {
       const inv = normalizeInventory(state.inventory);
@@ -964,7 +983,7 @@
         <div class="toolbar" style="margin-bottom:14px">
           <div>
             <b>Inventory</b>
-            <div class="small muted">Manual raw materials and finished batches. Nothing auto-deducts from Projects.</div>
+            <div class="small muted">Manual raw materials and finished batches. Nothing auto-deducts from Projects. Ctrl+N starts a raw material, or a finished batch when a batch status filter is active.</div>
           </div>
           <div class="row">
             <button id="addStarterInventory" type="button">Add common starter materials</button>
@@ -982,6 +1001,19 @@
             <select id="inventoryBatchStatusFilter" style="max-width:170px">
               <option value="all" ${state.inventoryBatchStatusFilter === 'all' ? 'selected' : ''}>All batch statuses</option>
               ${batchStatuses.map(s => `<option value="${esc(s)}" ${state.inventoryBatchStatusFilter === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}
+            </select>
+            <select id="inventoryRawSort" style="max-width:170px">
+              <option value="low-stock" ${state.inventoryRawSort === 'low-stock' ? 'selected' : ''}>Raw: low stock first</option>
+              <option value="name-asc" ${state.inventoryRawSort === 'name-asc' ? 'selected' : ''}>Raw: name A-Z</option>
+              <option value="category-asc" ${state.inventoryRawSort === 'category-asc' ? 'selected' : ''}>Raw: category A-Z</option>
+              <option value="quantity-asc" ${state.inventoryRawSort === 'quantity-asc' ? 'selected' : ''}>Raw: quantity low-high</option>
+              <option value="value-desc" ${state.inventoryRawSort === 'value-desc' ? 'selected' : ''}>Raw: value high-low</option>
+            </select>
+            <select id="inventoryBatchSort" style="max-width:170px">
+              <option value="name-asc" ${state.inventoryBatchSort === 'name-asc' ? 'selected' : ''}>Batches: name A-Z</option>
+              <option value="status-asc" ${state.inventoryBatchSort === 'status-asc' ? 'selected' : ''}>Batches: status A-Z</option>
+              <option value="remaining-desc" ${state.inventoryBatchSort === 'remaining-desc' ? 'selected' : ''}>Batches: remaining high-low</option>
+              <option value="sold-desc" ${state.inventoryBatchSort === 'sold-desc' ? 'selected' : ''}>Batches: sold high-low</option>
             </select>
           </div>
           <div class="row"><span class="pill">${raw.length}/${inv.rawMaterials.length} raw</span><span class="pill">${batches.length}/${inv.finishedBatches.length} batches</span></div>
@@ -2002,6 +2034,10 @@
       if (inventoryCategoryFilter) inventoryCategoryFilter.onchange = e => { state.inventoryCategoryFilter = e.target.value; render(); };
       const inventoryBatchStatusFilter = document.getElementById('inventoryBatchStatusFilter');
       if (inventoryBatchStatusFilter) inventoryBatchStatusFilter.onchange = e => { state.inventoryBatchStatusFilter = e.target.value; render(); };
+      const inventoryRawSort = document.getElementById('inventoryRawSort');
+      if (inventoryRawSort) inventoryRawSort.onchange = e => { state.inventoryRawSort = e.target.value; persist(); render(); };
+      const inventoryBatchSort = document.getElementById('inventoryBatchSort');
+      if (inventoryBatchSort) inventoryBatchSort.onchange = e => { state.inventoryBatchSort = e.target.value; persist(); render(); };
       const newRawMaterial = document.getElementById('newRawMaterial');
       if (newRawMaterial) newRawMaterial.onclick = () => openRawMaterial();
       const newFinishedBatch = document.getElementById('newFinishedBatch');
@@ -2100,7 +2136,10 @@
       if (state.activeTab === 'library') return openProfile();
       if (state.activeTab === 'grids') return openGridForm();
       if (state.activeTab === 'projects') return openProject();
-      if (state.activeTab === 'inventory') return openRawMaterial();
+      if (state.activeTab === 'inventory') {
+        if (state.inventoryBatchStatusFilter !== 'all') return openFinishedBatch();
+        return openRawMaterial();
+      }
       return false;
     }
     function activeSearchInput() {
@@ -2888,11 +2927,34 @@
       });
       return merged;
     }
+    function mergeListStats(existing, incoming) {
+      let added = 0, updated = 0;
+      (incoming || []).forEach(item => {
+        if (!item || !item.id) return;
+        if ((existing || []).some(x => x.id === item.id)) updated += 1;
+        else added += 1;
+      });
+      return { added, updated };
+    }
+    function mergeSummaryText(stats) {
+      const totals = Object.values(stats).reduce((acc, item) => {
+        acc.added += item.added;
+        acc.updated += item.updated;
+        return acc;
+      }, { added: 0, updated: 0 });
+      const details = Object.entries(stats)
+        .filter(([, item]) => item.added || item.updated)
+        .map(([label, item]) => `${label}: ${item.added} added, ${item.updated} updated`)
+        .join('; ');
+      return `Merge import complete: ${totals.added} added, ${totals.updated} updated${details ? ` (${details})` : ''}.`;
+    }
     function applyBackupPreferences(data) {
       if (!data || typeof data !== 'object') return;
       if ('entrySort' in data) state.entrySort = data.entrySort || 'date-desc';
       if ('librarySort' in data) state.librarySort = data.librarySort || 'material-asc';
       if ('projectSort' in data) state.projectSort = data.projectSort || 'date-desc';
+      if ('inventoryRawSort' in data) state.inventoryRawSort = data.inventoryRawSort || 'low-stock';
+      if ('inventoryBatchSort' in data) state.inventoryBatchSort = data.inventoryBatchSort || 'name-asc';
       if ('libraryMatchMaterial' in data) state.libraryMatchMaterial = data.libraryMatchMaterial || '';
       if ('libraryMatchThickness' in data) state.libraryMatchThickness = data.libraryMatchThickness || '';
       if ('libraryMatchUnit' in data) state.libraryMatchUnit = data.libraryMatchUnit || data.unit || state.unit;
@@ -2904,6 +2966,8 @@
       state.entrySort = 'date-desc';
       state.librarySort = 'material-asc';
       state.projectSort = 'date-desc';
+      state.inventoryRawSort = 'low-stock';
+      state.inventoryBatchSort = 'name-asc';
       state.libraryMatchMaterial = '';
       state.libraryMatchThickness = '';
       state.libraryMatchUnit = state.unit || 'in';
@@ -2922,17 +2986,26 @@
       applyBackupPreferences(data);
     }
     function mergeData(data) {
+      const incomingInventory = normalizeInventory(data.inventory);
+      const stats = {
+        log: mergeListStats(state.entries, data.entries),
+        library: mergeListStats(state.profiles, data.profiles),
+        grids: mergeListStats(state.grids, data.grids),
+        projects: mergeListStats(state.projects, data.projects),
+        raw: mergeListStats(inventoryList('rawMaterials'), incomingInventory.rawMaterials),
+        batches: mergeListStats(inventoryList('finishedBatches'), incomingInventory.finishedBatches)
+      };
       state.entries = mergeList(state.entries, data.entries);
       state.profiles = mergeList(state.profiles, data.profiles);
       state.grids = mergeList(state.grids, data.grids);
       state.projects = mergeList(state.projects, data.projects);
-      const incomingInventory = normalizeInventory(data.inventory);
       state.inventory = {
         rawMaterials: mergeList(inventoryList('rawMaterials'), incomingInventory.rawMaterials),
         finishedBatches: mergeList(inventoryList('finishedBatches'), incomingInventory.finishedBatches)
       };
       state.unit = data.unit || state.unit;
       applyBackupPreferences(data);
+      return stats;
     }
     function hideUndoToast() {
       const toast = document.getElementById('undoToast');
@@ -3086,13 +3159,15 @@
         try {
           const data = JSON.parse(reader.result);
           const merge = confirm('Import mode: OK = merge with current data, Cancel = replace everything.');
+          let mergeStats = null;
           if (merge) {
-            mergeData(data);
+            mergeStats = mergeData(data);
           } else {
             if (!confirm('Replace all current entries, library, grids, projects, and inventory?')) return;
             replaceData(data);
           }
           persist(); render();
+          if (mergeStats) showInfoToast(mergeSummaryText(mergeStats));
         } catch (_) { alert('Could not read that file. Make sure it is a valid backup JSON.'); }
       };
       reader.readAsText(file); e.target.value = '';
