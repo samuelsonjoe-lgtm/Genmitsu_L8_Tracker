@@ -33,10 +33,11 @@
 | **Pricing calculator MVP** | Dedicated Pricing view estimates total revenue, direct costs, machine/labor/fee costs, profit, margin, and break-even price without changing Project records |
 | **Pricing polish pack 1** | Pricing now includes target margin/profit sale-price helpers, a subtle profitability badge, a short assumptions note, and copyable plain-text summaries |
 | **Pricing polish pack 2** | Pricing now has saved rate/fee defaults, compact print summaries, and one-row CSV export for the current estimate |
+| **Tag system polish** | Projects and Library now have visible tag pills, tag search/filtering, clear-tag actions, and comma-separated tag entry guidance |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
-**Tag system** — add first-class tags for Projects/Library filtering without expanding the app into a full inventory system.
+**Next candidate:** Project photo capture or another narrow Project Gallery polish pass. The first tag-system pass is now complete without expanding into inventory management.
 
 ### 1.3 Still open from the original backlog
 
@@ -48,7 +49,7 @@
 | Version/schema stamp in exported JSON (`schemaVersion`) | Medium | Done — `schemaVersion: 2` is now included in storage/export with `projects: []` |
 | True desktop packaging (Tauri) — app-data file persistence, auto-backups | High (blocks real durability) | Not started; still on `localStorage` |
 | Thickness-aware Library matching ("what do I use for 3mm birch?") | Medium | Done — Library has a closest saved setting helper |
-| Tag system (`gift`, `commission`, `failed`, etc.) | Medium | Not started — would also benefit the Project Gallery below |
+| Tag system (`gift`, `commission`, `failed`, etc.) | Medium | Done — Projects and Library support comma-separated tags, visible pills, and tag filtering |
 | Test grid export (CSV / printable HTML) | Medium | Done — CSV export is available from grid detail |
 | Unit conversion on in↔mm toggle | Medium | Done — converts stored unit-bearing fields when toggled |
 | Undo delete (toast) | Medium | Done |

@@ -286,6 +286,7 @@
             materialFilter: 'all',
             librarySearch: '',
             libraryFilter: 'all',
+            libraryTagFilter: 'all',
             libraryMatchMaterial: data.libraryMatchMaterial || '',
             libraryMatchThickness: data.libraryMatchThickness || '',
             libraryMatchUnit: data.libraryMatchUnit || data.unit || 'in',
@@ -302,7 +303,7 @@
           };
         }
       } catch (_) {}
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
     }
     function persist() {
       const { entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
@@ -377,8 +378,14 @@
     function libraryMaterialNames() {
       return [...new Set(state.profiles.map(x => x.material).filter(Boolean))].sort();
     }
+    function tagsOf(item) {
+      return Array.isArray(item.tags) ? item.tags : tagArray(item.tags);
+    }
+    function libraryTags() {
+      return [...new Set(state.profiles.flatMap(tagsOf).filter(Boolean))].sort();
+    }
     function projectTags() {
-      return [...new Set(state.projects.flatMap(p => p.tags || []).filter(Boolean))].sort();
+      return [...new Set(state.projects.flatMap(tagsOf).filter(Boolean))].sort();
     }
     function powerLabel(o) { return o.maxPower != null && o.maxPower !== o.minPower ? `${o.minPower}-${o.maxPower}%` : `${o.minPower}%`; }
     function stars(r) { return `<span class="small">${'●'.repeat(Number(r) || 0)}${'○'.repeat(5 - (Number(r) || 0))}</span>`; }
@@ -529,12 +536,15 @@
     }
     function renderLibrary() {
       const materials = libraryMaterialNames();
+      const tags = libraryTags();
       const q = state.librarySearch.toLowerCase();
       const matches = libraryMatches();
       const filtered = sortBy(state.profiles.filter(p => {
         const materialOk = state.libraryFilter === 'all' || p.material === state.libraryFilter;
-        const hay = [p.material, p.notes, p.software, p.jobType, p.thicknessValue, p.thicknessUnit].join(' ').toLowerCase();
-        return materialOk && (!q || hay.includes(q));
+        const tags = tagsOf(p);
+        const tagOk = state.libraryTagFilter === 'all' || tags.includes(state.libraryTagFilter);
+        const hay = [p.material, p.notes, p.software, p.jobType, p.thicknessValue, p.thicknessUnit, ...tags].join(' ').toLowerCase();
+        return materialOk && tagOk && (!q || hay.includes(q));
       }), state.librarySort);
       return `
         <div class="toolbar" style="margin-bottom:14px">
@@ -548,13 +558,17 @@
               <option value="all">All library materials</option>
               ${materials.map(m => `<option ${state.libraryFilter === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}
             </select>
+            <select id="libraryTagFilter" style="max-width:180px">
+              <option value="all">All tags</option>
+              ${tags.map(t => `<option ${state.libraryTagFilter === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}
+            </select>
             <select id="librarySort" style="max-width:190px">
               <option value="material-asc" ${state.librarySort === 'material-asc' ? 'selected' : ''}>Material A-Z</option>
               <option value="rating-desc" ${state.librarySort === 'rating-desc' ? 'selected' : ''}>Rating high-low</option>
               <option value="speed-asc" ${state.librarySort === 'speed-asc' ? 'selected' : ''}>Speed low-high</option>
             </select>
           </div>
-          <span class="pill">${filtered.length}/${state.profiles.length} shown</span>
+          <div class="row"><span class="pill">${filtered.length}/${state.profiles.length} shown</span>${state.libraryTagFilter !== 'all' ? '<button id="clearLibraryTag" type="button">Clear tag</button>' : ''}</div>
         </div>
         <div class="panel" style="margin-bottom:14px">
           <div class="toolbar">
@@ -631,8 +645,9 @@
       const tags = projectTags();
       const q = state.projectSearch.toLowerCase();
       const filtered = sortBy(state.projects.filter(p => {
-        const tagOk = state.projectTagFilter === 'all' || (p.tags || []).includes(state.projectTagFilter);
-        const hay = [p.name, p.material, p.notes, ...(p.tags || [])].join(' ').toLowerCase();
+        const tags = tagsOf(p);
+        const tagOk = state.projectTagFilter === 'all' || tags.includes(state.projectTagFilter);
+        const hay = [p.name, p.material, p.notes, ...tags].join(' ').toLowerCase();
         return tagOk && (!q || hay.includes(q));
       }), state.projectSort);
       return `
@@ -658,7 +673,7 @@
               <option value="rating-desc" ${state.projectSort === 'rating-desc' ? 'selected' : ''}>Rating high-low</option>
             </select>
           </div>
-          <span class="pill">${filtered.length}/${state.projects.length} shown</span>
+          <div class="row"><span class="pill">${filtered.length}/${state.projects.length} shown</span>${state.projectTagFilter !== 'all' ? '<button id="clearProjectTag" type="button">Clear tag</button>' : ''}</div>
         </div>
         ${state.projects.length ? (filtered.length ? `<div class="grid cards">${filtered.map(projectCard).join('')}</div>` : empty('No project matches', 'Adjust the search or tag filter.')) : empty('No projects yet', 'Save a finished piece here with its settings snapshot.')}
       `;
@@ -994,6 +1009,7 @@
     function profileCard(p) {
       return `<article class="card">
         <div class="spread"><div><b>${esc(p.material)}</b><div class="small muted">${fmt(p.thicknessValue, p.thicknessUnit)} - ${esc(p.jobType)}</div></div><span class="pill">BEST KNOWN</span></div>
+        <div class="row" style="margin-top:8px">${tagsOf(p).map(t => `<span class="pill">${esc(t)}</span>`).join('') || '<span class="pill">untagged</span>'}</div>
         <div class="metrics">${metric('Power', powerLabel(p))}${metric('Speed', `${p.speed} mm/min`)}${metric('Passes', p.passes)}${metric('Line int.', fmt(p.lineInterval, 'mm'))}</div>
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(p.focusValue, p.focusUnit)} - Air: ${p.airAssist ? 'On' : 'Off'}${p.software ? ' - ' + esc(p.software) : ''}</div>
         ${p.notes ? `<p class="small">${esc(p.notes)}</p>` : ''}
@@ -1014,7 +1030,7 @@
       const s = p.settings || {};
       return `<article class="card">
         <div class="spread"><div><b>${esc(p.name)}</b><div class="small muted">${esc(p.material)} - ${fmt(p.thicknessValue, p.thicknessUnit)} - ${esc(p.jobType)} - ${esc(p.dateCreated)}</div></div>${stars(p.rating)}</div>
-        <div class="row" style="margin-top:8px">${(p.tags || []).map(t => `<span class="pill">${esc(t)}</span>`).join('') || '<span class="pill">untagged</span>'}</div>
+        <div class="row" style="margin-top:8px">${tagsOf(p).map(t => `<span class="pill">${esc(t)}</span>`).join('') || '<span class="pill">untagged</span>'}</div>
         <div class="metrics">${metric('Power', powerLabel(s))}${metric('Speed', `${s.speed || 0} mm/min`)}${metric('Passes', s.passes || 1)}${metric('Line int.', fmt(s.lineInterval, 'mm'))}</div>
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(s.focusValue, s.focusUnit)} - Air: ${s.airAssist ? 'On' : 'Off'}${s.software ? ' - ' + esc(s.software) : ''}</div>
         ${p.notes ? `<p class="small">${esc(p.notes)}</p>` : ''}
@@ -1102,6 +1118,10 @@
       if (librarySearch) librarySearch.onchange = e => { state.librarySearch = e.target.value; render(); };
       const libraryFilter = document.getElementById('libraryFilter');
       if (libraryFilter) libraryFilter.onchange = e => { state.libraryFilter = e.target.value; render(); };
+      const libraryTagFilter = document.getElementById('libraryTagFilter');
+      if (libraryTagFilter) libraryTagFilter.onchange = e => { state.libraryTagFilter = e.target.value; render(); };
+      const clearLibraryTag = document.getElementById('clearLibraryTag');
+      if (clearLibraryTag) clearLibraryTag.onclick = () => { state.libraryTagFilter = 'all'; render(); };
       const libraryMatchMaterial = document.getElementById('libraryMatchMaterial');
       if (libraryMatchMaterial) libraryMatchMaterial.onchange = e => { state.libraryMatchMaterial = e.target.value; persist(); render(); };
       const libraryMatchThickness = document.getElementById('libraryMatchThickness');
@@ -1120,6 +1140,8 @@
       if (projectSearch) projectSearch.onchange = e => { state.projectSearch = e.target.value; render(); };
       const projectTagFilter = document.getElementById('projectTagFilter');
       if (projectTagFilter) projectTagFilter.onchange = e => { state.projectTagFilter = e.target.value; render(); };
+      const clearProjectTag = document.getElementById('clearProjectTag');
+      if (clearProjectTag) clearProjectTag.onclick = () => { state.projectTagFilter = 'all'; render(); };
       const projectSort = document.getElementById('projectSort');
       if (projectSort) projectSort.onchange = e => { state.projectSort = e.target.value; persist(); render(); };
       const pricingForm = document.getElementById('pricingForm');
@@ -1260,6 +1282,7 @@
         <label class="row" style="margin-top:20px"><input name="airAssist" type="checkbox" ${data.airAssist ? 'checked' : ''} style="width:auto"> Air assist on</label>
         ${field('airPressure','Air pressure (psi)',data.airPressure,'number','step="any" min="0"')}
         <label>Software<input name="software" value="${esc(data.software)}" list="software"></label>
+        ${kind === 'profile' ? `<label>Tags, comma-separated<input name="tags" value="${esc(tagString(data.tags))}" placeholder="gift, acrylic, holiday"></label><div class="span2 small muted">Use short tags for filtering, separated by commas.</div>` : ''}
         ${kind === 'entry' ? `<label class="span2">Settings file / profile name<input name="settingsFile" value="${esc(data.settingsFile)}"></label><div class="span2"><b class="small">Result quality</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating)}" hidden></div>` : ''}
         <label class="span2">Notes<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>
         <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
@@ -1279,7 +1302,7 @@
     }
     function normalizeSetting(f, existingId) {
       const minPower = num(f.minPower);
-      return {
+      const setting = {
         id: existingId || uid(), material: f.material.trim(), thicknessValue: f.thicknessValue === '' ? '' : num(f.thicknessValue), thicknessUnit: f.thicknessUnit,
         jobType: f.jobType, minPower, maxPower: f.maxPower === '' ? minPower : num(f.maxPower), speed: num(f.speed),
         passes: Math.max(1, Math.round(num(f.passes, 1))), lineInterval: f.lineInterval === '' ? '' : num(f.lineInterval),
@@ -1289,6 +1312,8 @@
         materialHeightValue: f.materialHeightValue === '' ? '' : num(f.materialHeightValue), materialHeightUnit: f.materialHeightUnit,
         software: (f.software || '').trim(), notes: (f.notes || '').trim()
       };
+      if ('tags' in f) setting.tags = tagArray(f.tags);
+      return setting;
     }
     function openEntry(entry) {
       editingEntryId = entry && entry.id ? entry.id : null;
@@ -1346,6 +1371,7 @@
         <label class="span2">Material<input name="material" value="${esc(data.material)}" list="materials"></label>
         ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit)}
         <label>Tags, comma-separated<input name="tags" value="${esc(tagValue)}" placeholder="gift, coasters"></label>
+        <div class="span2 small muted">Use short tags for filtering, separated by commas.</div>
         <div class="span2"><b class="small">Project rating</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating || 0)}" hidden></div>
         <h3 class="span2" style="margin:8px 0 0">Settings snapshot</h3>
         ${projectSettingsFields(data.settings)}
