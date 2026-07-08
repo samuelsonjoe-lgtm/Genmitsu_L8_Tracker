@@ -37,6 +37,7 @@
 | **Phase 6 Project accounting MVP** | Projects now support optional saved sale/cost/profit fields and computed accounting summaries, while Pricing remains a separate scratch estimator |
 | **Project accounting bridge + export pack** | Pricing tab can open a prefilled Project draft (no auto-save); Projects tab exports accounting CSV and filters by sale/status |
 | **Project accounting reports pack 1** | Projects tab now summarizes filtered accounting totals, quantity, overall margin, status counts, and a copyable plain-text report |
+| **Material safety warning pack 1** | Material fields and cards surface warning-only guidance for PVC/vinyl/chlorinated plastics, unknown plastics, fiberglass, carbon fiber, coated unknown metal, and mystery materials |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
@@ -60,7 +61,7 @@
 
 ### 1.4 Lower priority / later
 
-Dark mode, statistics dashboard, cut/engrave color coding in Log cards, multi-machine support, G-code/job filename field, lens-cleaning reminder counter, material safety warnings surfaced from Reference notes, SD-card material test cross-link, tray icon/minimize, portable `data.json`-next-to-exe mode.
+Dark mode, statistics dashboard, cut/engrave color coding in Log cards, multi-machine support, G-code/job filename field, lens-cleaning reminder counter, SD-card material test cross-link, tray icon/minimize, portable `data.json`-next-to-exe mode.
 
 None of these block anything above — pull from this list opportunistically.
 

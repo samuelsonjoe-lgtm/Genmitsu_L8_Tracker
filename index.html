@@ -636,6 +636,10 @@
             </div>
           </div>
         </div>
+        <div class="panel" style="margin-bottom:14px;background:#fff8e7;border-color:#ead59f">
+          <b>Material safety reminder.</b>
+          <span class="small">Use ventilation and fire watch, never leave the laser unattended, and verify unknown materials before lasering. Avoid PVC, vinyl, and chlorinated plastics.</span>
+        </div>
         <div class="grid refgrid" style="margin-bottom:16px">
           ${notes.map(([title, body]) => `<div class="card"><b>${esc(title)}</b><p class="small muted">${esc(body)}</p></div>`).join('')}
         </div>
@@ -1278,9 +1282,52 @@
     }
     function stat(label, value, color) { return `<div class="card"><div class="stat-label">${label}</div><div class="stat-value" style="color:var(--${color})">${value}</div></div>`; }
     function empty(title, body) { return `<div class="empty"><b>${esc(title)}</b><div>${esc(body)}</div></div>`; }
+    function materialSafetyWarning(material) {
+      const text = String(material || '').toLowerCase();
+      if (!text.trim()) return null;
+      const unsafe = [
+        [/\bpvc\b/, 'PVC'],
+        [/\bvinyl\b/, 'vinyl'],
+        [/chlorinated/, 'chlorinated plastic'],
+        [/unknown\s+plastic|mystery\s+plastic/, 'unknown plastic'],
+        [/mystery\s+material/, 'mystery material']
+      ];
+      const caution = [
+        [/fiberglass|fibreglass/, 'fiberglass'],
+        [/carbon\s+fiber|carbon\s+fibre/, 'carbon fiber'],
+        [/coated\s+unknown\s+metal|unknown\s+coated\s+metal/, 'coated unknown metal']
+      ];
+      const unsafeHit = unsafe.find(([pattern]) => pattern.test(text));
+      if (unsafeHit) {
+        return {
+          tone: 'softbad',
+          label: `Safety: ${unsafeHit[1]}`,
+          message: `Do not laser ${unsafeHit[1]} unless you have verified it is safe for laser use.`
+        };
+      }
+      const cautionHit = caution.find(([pattern]) => pattern.test(text));
+      if (cautionHit) {
+        return {
+          tone: 'warn',
+          label: `Verify: ${cautionHit[1]}`,
+          message: `Verify ${cautionHit[1]} composition and coatings before lasering.`
+        };
+      }
+      return null;
+    }
+    function materialSafetyWarningHtml(material, compact = false) {
+      const warning = materialSafetyWarning(material);
+      if (!warning) return '';
+      if (compact) return `<span class="pill ${warning.tone}" title="${esc(warning.message)}">${esc(warning.label)}</span>`;
+      return `<div class="small" style="margin-top:6px"><span class="pill ${warning.tone}">${esc(warning.label)}</span> ${esc(warning.message)}</div>`;
+    }
+    function materialSafetyFieldHelp(material) {
+      return `<div class="span2 small muted">Avoid PVC/vinyl/chlorinated plastics. Verify unknown materials before lasering.</div><div id="materialSafetyWarning" class="span2">${materialSafetyWarningHtml(material)}</div>`;
+    }
     function entryCard(e) {
       return `<article class="card">
         <div class="spread"><div><b>${esc(e.material)}</b><div class="small muted">${fmt(e.thicknessValue, e.thicknessUnit)} - ${esc(e.jobType)} - ${esc(e.date)}</div></div>${stars(e.rating)}</div>
+        ${materialSafetyWarningHtml(e.material)}
         <div class="metrics">${metric('Power', powerLabel(e))}${metric('Speed', `${e.speed} mm/min`)}${metric('Passes', e.passes)}${metric('Line int.', fmt(e.lineInterval, 'mm'))}</div>
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(e.focusValue, e.focusUnit)} - Air: ${e.airAssist ? 'On' : 'Off'}${e.software ? ' - ' + esc(e.software) : ''}</div>
         ${e.notes ? `<p class="small">${esc(e.notes)}</p>` : ''}
@@ -1290,6 +1337,7 @@
     function profileCard(p) {
       return `<article class="card">
         <div class="spread"><div><b>${esc(p.material)}</b><div class="small muted">${fmt(p.thicknessValue, p.thicknessUnit)} - ${esc(p.jobType)}</div></div><span class="pill">BEST KNOWN</span></div>
+        ${materialSafetyWarningHtml(p.material)}
         <div class="row" style="margin-top:8px">${tagsOf(p).map(t => `<span class="pill">${esc(t)}</span>`).join('') || '<span class="pill">untagged</span>'}</div>
         <div class="metrics">${metric('Power', powerLabel(p))}${metric('Speed', `${p.speed} mm/min`)}${metric('Passes', p.passes)}${metric('Line int.', fmt(p.lineInterval, 'mm'))}</div>
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(p.focusValue, p.focusUnit)} - Air: ${p.airAssist ? 'On' : 'Off'}${p.software ? ' - ' + esc(p.software) : ''}</div>
@@ -1311,6 +1359,7 @@
       const s = p.settings || {};
       return `<article class="card">
         <div class="spread"><div><b>${esc(p.name)}</b><div class="small muted">${esc(p.material)} - ${fmt(p.thicknessValue, p.thicknessUnit)} - ${esc(p.jobType)} - ${esc(p.dateCreated)}</div></div>${stars(p.rating)}</div>
+        ${materialSafetyWarningHtml(p.material)}
         <div class="row" style="margin-top:8px">${tagsOf(p).map(t => `<span class="pill">${esc(t)}</span>`).join('') || '<span class="pill">untagged</span>'}</div>
         <div class="metrics">${metric('Power', powerLabel(s))}${metric('Speed', `${s.speed || 0} mm/min`)}${metric('Passes', s.passes || 1)}${metric('Line int.', fmt(s.lineInterval, 'mm'))}</div>
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(s.focusValue, s.focusUnit)} - Air: ${s.airAssist ? 'On' : 'Off'}${s.software ? ' - ' + esc(s.software) : ''}</div>
@@ -1324,6 +1373,7 @@
       const speeds = range(g.speedMin, g.speedMax, g.speedStep);
       return `<article class="card" data-open-grid="${g.id}" style="cursor:pointer">
         <b>${esc(g.name)}</b><div class="small muted">${esc(g.material)} - ${fmt(g.thicknessValue, g.thicknessUnit)} - ${esc(g.createdDate)}</div>
+        ${materialSafetyWarningHtml(g.material)}
         <div class="row" style="margin-top:10px"><span class="pill">${powers.length}x${speeds.length} grid</span><span class="pill">${Object.keys(g.cells || {}).length}/${powers.length * speeds.length} recorded</span></div>
       </article>`;
     }
@@ -1560,6 +1610,7 @@
         ${kind === 'entry' ? field('date','Date',data.date,'date') : ''}
         ${select('jobType','Job type',data.jobType,['engrave','cut'])}
         <label class="span2">Material<input name="material" value="${esc(data.material)}" list="materials"></label>
+        ${materialSafetyFieldHelp(data.material)}
         ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit)}
         ${unitField('focusValue','focusUnit','Focus height',data.focusValue,data.focusUnit)}
         ${field('minPower','Power min (%)',data.minPower,'number','min="0" max="100"')}
@@ -1613,6 +1664,7 @@
       openModal('entryModal', `<div class="dialog"><div class="spread"><h2>${editingEntryId ? 'Edit entry' : 'New log entry'}</h2><button data-close>×</button></div><form id="entryForm" class="formgrid">${modalFields('entry', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save entry</button></div></form></div>`);
       bindModal('entryModal');
       document.querySelectorAll('#entryModal .star').forEach(s => s.onclick = () => { document.querySelector('#entryModal [name=rating]').value = s.dataset.rating; document.querySelectorAll('#entryModal .star').forEach(x => x.classList.toggle('on', Number(x.dataset.rating) <= Number(s.dataset.rating))); });
+      document.getElementById('entryForm').oninput = e => bindMaterialSafetyWarning(e.currentTarget);
       document.getElementById('entryForm').onsubmit = e => {
         e.preventDefault();
         const f = readForm(e.target);
@@ -1627,6 +1679,7 @@
       const data = { ...formDefaults('profile'), ...(profile || {}) };
       openModal('profileModal', `<div class="dialog"><div class="spread"><h2>${editingProfileId ? 'Edit material' : 'Add material'}</h2><button data-close>×</button></div><form id="profileForm" class="formgrid">${modalFields('profile', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save material</button></div></form></div>`);
       bindModal('profileModal');
+      document.getElementById('profileForm').oninput = e => bindMaterialSafetyWarning(e.currentTarget);
       document.getElementById('profileForm').onsubmit = e => {
         e.preventDefault();
         const f = readForm(e.target);
@@ -1665,6 +1718,7 @@
         ${field('dateCreated','Date',data.dateCreated || today(),'date')}
         ${select('jobType','Job type',data.jobType,['engrave','cut'])}
         <label class="span2">Material<input name="material" value="${esc(data.material)}" list="materials"></label>
+        ${materialSafetyFieldHelp(data.material)}
         ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit)}
         <label>Tags, comma-separated<input name="tags" value="${esc(tagValue)}" placeholder="gift, coasters"></label>
         <div class="span2 small muted">Use short tags for filtering, separated by commas.</div>
@@ -1681,10 +1735,12 @@
       bindModal('projectModal');
       document.querySelectorAll('#projectModal .star').forEach(s => s.onclick = () => { document.querySelector('#projectModal [name=rating]').value = s.dataset.rating; document.querySelectorAll('#projectModal .star').forEach(x => x.classList.toggle('on', Number(x.dataset.rating) <= Number(s.dataset.rating))); });
       document.getElementById('projectForm').oninput = e => {
+        bindMaterialSafetyWarning(e.currentTarget);
         const preview = document.getElementById('projectAccountingPreview');
         if (preview) preview.innerHTML = projectAccountingResultsHtml(readForm(e.currentTarget));
       };
       document.getElementById('projectForm').onchange = e => {
+        bindMaterialSafetyWarning(e.currentTarget);
         const preview = document.getElementById('projectAccountingPreview');
         if (preview) preview.innerHTML = projectAccountingResultsHtml(readForm(e.currentTarget));
       };
@@ -1802,6 +1858,7 @@
       openModal('gridModal', `<div class="dialog"><div class="spread"><h2>New test grid</h2><button data-close>×</button></div><form id="gridForm" class="formgrid">
         ${field('name','Grid name',data.name)}${select('jobType','Job type',data.jobType,['engrave','cut'])}
         <label class="span2">Material<input name="material" value="" list="materials"></label>
+        ${materialSafetyFieldHelp('')}
         ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit)}
         ${field('passes','Passes',data.passes,'number','min="1"')}
         ${field('powerMin','Power min (%)',data.powerMin,'number')}${field('powerMax','Power max (%)',data.powerMax,'number')}${field('powerStep','Power step',data.powerStep,'number')}
@@ -1814,6 +1871,7 @@
         <datalist id="materials">${autocompleteMaterialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
         <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Create grid</button></div></form></div>`);
       bindModal('gridModal');
+      document.getElementById('gridForm').oninput = e => bindMaterialSafetyWarning(e.currentTarget);
       document.getElementById('gridForm').onsubmit = e => {
         e.preventDefault();
         const f = readForm(e.target);
@@ -1852,6 +1910,12 @@
       };
     }
     function bindModal(id) { document.querySelectorAll(`#${id} [data-close]`).forEach(b => b.onclick = () => closeModal(id)); }
+    function bindMaterialSafetyWarning(form) {
+      const material = form && form.elements.material;
+      const warning = form && form.querySelector('#materialSafetyWarning');
+      if (!material || !warning) return;
+      warning.innerHTML = materialSafetyWarningHtml(material.value);
+    }
     function upsert(key, item) {
       const list = state[key];
       const idx = list.findIndex(x => x.id === item.id);

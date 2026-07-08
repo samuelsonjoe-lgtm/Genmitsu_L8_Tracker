@@ -27,6 +27,7 @@ Other features:
 - Toggle between imperial and metric units, with stored thickness/focus/Z-offset values converted when switching.
 - Export/import your data as a JSON backup file, with merge or replace import modes.
 - Material autocomplete includes both your saved materials and official SainSmart reference materials.
+- Material safety warnings flag obvious risky/unknown terms such as PVC, vinyl, chlorinated plastics, unknown plastics, fiberglass, and carbon fiber without blocking saves.
 - Library includes a closest-saved-setting helper for matching material and thickness.
 - Keyboard shortcuts: `Ctrl+N` creates a new item in the active view, `Ctrl+S` saves the open form, `Esc` closes modals or exits grid detail, and `/` focuses the active search field.
 - Delete actions show a short undo window before the removal becomes final.
