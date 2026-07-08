@@ -28,7 +28,7 @@ Other features:
 - Toggle between imperial and metric units, with stored thickness/focus/Z-offset values converted when switching.
 - Export/import your data and portable app preferences as a JSON backup file, with merge or replace import modes.
 - Storage failures are caught with a warning, and photo-heavy JSON exports show an approximate size warning before download.
-- Material autocomplete includes saved materials, raw Inventory material names, and official SainSmart reference materials.
+- Material suggestions include saved materials, official SainSmart reference materials, and raw Inventory material names with stock status when available.
 - Inventory raw materials can store comma-separated aliases so Amazon-style listing titles or old shorthand can match a clean canonical material name without blocking free typing.
 - Material safety warnings flag obvious risky/unknown terms such as PVC, vinyl, chlorinated plastics, unknown plastics, fiberglass, and carbon fiber without blocking saves.
 - Laser, Project, and Pricing fields include short hover/focus help for beginner-friendly terminology.

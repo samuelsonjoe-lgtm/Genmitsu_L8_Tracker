@@ -115,6 +115,29 @@
     .project-section-body { padding: 12px; }
     .modal-actions { position: sticky; bottom: -20px; z-index: 2; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin: 4px -20px -20px; padding: 12px 20px; background: rgba(255, 255, 255, .96); border-top: 1px solid var(--line); }
     .unitrow { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 6px; }
+    .material-field { position: relative; display: grid; gap: 4px; }
+    .material-suggestions {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: white;
+      box-shadow: 0 12px 28px rgba(17, 24, 39, .12);
+      max-height: 220px;
+      overflow-y: auto;
+      padding: 4px;
+      z-index: 12;
+    }
+    .material-suggestion {
+      width: 100%;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      padding: 7px 8px;
+      text-align: left;
+      font-weight: 600;
+    }
+    .material-suggestion:hover, .material-suggestion.active { background: #eef1f5; }
+    .material-suggestion-main { display: block; }
+    .material-suggestion-meta { display: block; color: var(--muted); font-size: 12px; font-weight: 600; }
     .stars { display: flex; gap: 6px; }
     .star { width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--line); display: grid; place-items: center; font-weight: 800; background: #f3f5f8; cursor: pointer; }
     .star.on { background: var(--amber); color: white; border-color: var(--amber); }
@@ -470,6 +493,24 @@
         .trim()
         .replace(/\s+/g, ' ');
     }
+    function stockUnitText(quantity, unit) {
+      const q = num(quantity);
+      const cleanUnit = String(unit || 'each').trim() || 'each';
+      if (Math.abs(q) === 1 || /^(sq in|linear ft|other)$/i.test(cleanUnit)) return `${q} ${cleanUnit}`;
+      if (/^(each)$/i.test(cleanUnit)) return `${q} each`;
+      if (/s$/i.test(cleanUnit)) return `${q} ${cleanUnit}`;
+      return `${q} ${cleanUnit}s`;
+    }
+    function rawStockStatus(item) {
+      const q = num(item?.quantityOnHand);
+      if (q <= 0) return { key: 'out', text: 'out of stock' };
+      if (rawIsLow(item)) return { key: 'low', text: `low stock: ${stockUnitText(q, item.unit)}` };
+      return { key: 'in', text: `in stock: ${stockUnitText(q, item.unit)}` };
+    }
+    function rawStockSummary(item) {
+      const status = rawStockStatus(item);
+      return `${status.text}`;
+    }
     function materialInventoryMatch(material) {
       const key = materialMatchKey(material);
       if (!key) return null;
@@ -497,7 +538,37 @@
       if (!match) return '<div id="materialInventoryMatch" class="span2 small muted">No inventory match yet. Free typing is still allowed.</div>';
       const canonical = match.item.name || '';
       const canUseCanonical = materialMatchKey(typed) !== materialMatchKey(canonical);
-      return `<div id="materialInventoryMatch" class="span2 small muted">Inventory match: <b>${esc(canonical)}</b>${match.via === 'alias' ? ' via alias' : ''}${canUseCanonical ? ` <button type="button" data-use-canonical-material="${esc(canonical)}">Use canonical name</button>` : ''}</div>`;
+      return `<div id="materialInventoryMatch" class="span2 small muted">Inventory match: <b>${esc(canonical)}</b> - ${esc(rawStockSummary(match.item))}${match.via === 'alias' ? ' via alias' : ''}${canUseCanonical ? ` <button type="button" data-use-canonical-material="${esc(canonical)}">Use canonical name</button>` : ''}</div>`;
+    }
+    function materialSuggestionOptions(query = '') {
+      const q = materialMatchKey(query);
+      const seen = new Set();
+      const add = (options, option) => {
+        const key = `${materialMatchKey(option.value)}|${materialMatchKey(option.main)}`;
+        if (!option.value || seen.has(key)) return;
+        seen.add(key);
+        options.push(option);
+      };
+      const options = [];
+      rawInventoryMaterials().sort((a, b) => compareText(a.name, b.name)).forEach(item => {
+        const nameKey = materialMatchKey(item.name);
+        const aliasMatches = aliasesOf(item).filter(alias => {
+          const aliasKey = materialMatchKey(alias);
+          return q && aliasKey && aliasKey.includes(q) && aliasKey !== nameKey;
+        });
+        if (!q || nameKey.includes(q) || aliasMatches.length) {
+          add(options, { value: item.name, main: item.name, meta: rawStockSummary(item), inventory: true });
+        }
+        aliasMatches.forEach(alias => {
+          add(options, { value: item.name, main: alias, meta: `alias for ${item.name} - ${rawStockSummary(item)}`, inventory: true });
+        });
+      });
+      autocompleteMaterialNames().forEach(name => {
+        const key = materialMatchKey(name);
+        if (!key || rawInventoryMaterials().some(item => materialMatchKey(item.name) === key)) return;
+        if (!q || key.includes(q)) add(options, { value: name, main: name, meta: 'saved/reference material', inventory: false });
+      });
+      return options.slice(0, 10);
     }
     function inventoryDefaults() {
       return { rawMaterials: [], finishedBatches: [] };
@@ -733,7 +804,7 @@
               <div class="small muted">Match by material name and nearest saved thickness.</div>
             </div>
             <div class="row">
-              <input id="libraryMatchMaterial" placeholder="Material" value="${esc(state.libraryMatchMaterial)}" list="materials" style="width:190px">
+              <span class="material-field" style="width:230px"><input id="libraryMatchMaterial" placeholder="Material" value="${esc(state.libraryMatchMaterial)}" list="materials" autocomplete="off" data-material-suggest><span class="material-suggestions" data-material-suggestions hidden></span></span>
               <span class="unitrow" style="width:170px"><input id="libraryMatchThickness" type="number" step="any" min="0" placeholder="Thickness" value="${esc(state.libraryMatchThickness)}"><select id="libraryMatchUnit"><option ${state.libraryMatchUnit === 'in' ? 'selected' : ''}>in</option><option ${state.libraryMatchUnit === 'mm' ? 'selected' : ''}>mm</option></select></span>
             </div>
           </div>
@@ -1819,6 +1890,7 @@
     }
     function bindPage() {
       document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+      bindMaterialSuggestions(document.getElementById('app'));
       const search = document.getElementById('search');
       if (search) search.oninput = e => { state.search = e.target.value; render(); };
       const filter = document.getElementById('materialFilter');
@@ -2016,11 +2088,14 @@
     }
     function field(name, label, value = '', type = 'text', attrs = '', tip = '') { return `<label>${labelText(label, tip)}<input name="${name}" type="${type}" value="${esc(value)}" ${attrs}></label>`; }
     function select(name, label, value, options, tip = '') { return `<label>${labelText(label, tip)}<select name="${name}">${options.map(o => `<option value="${esc(o)}" ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`; }
+    function materialFieldHtml(value = '') {
+      return `<div class="span2 material-field"><label>${labelText('Material', 'What the blank is made of. Verify unknown materials before lasering.')}<input name="material" value="${esc(value)}" list="materials" autocomplete="off" data-material-suggest></label><div class="material-suggestions" data-material-suggestions hidden></div></div>`;
+    }
     function modalFields(kind, data) {
       return `
         ${kind === 'entry' ? field('date','Date',data.date,'date') : ''}
         ${select('jobType','Job type',data.jobType,['engrave','cut'],'Cut goes through material; engrave marks the surface.')}
-        <label class="span2">${labelText('Material', 'What the blank is made of. Verify unknown materials before lasering.')}<input name="material" value="${esc(data.material)}" list="materials"></label>
+        ${materialFieldHtml(data.material)}
         ${materialSafetyFieldHelp(data.material)}
         ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit,'Actual material thickness; important for cutting and focus.')}
         ${unitField('focusValue','focusUnit','Focus height',data.focusValue,data.focusUnit,'Lens/material focus distance used for this job.')}
@@ -2074,6 +2149,7 @@
       const data = { ...formDefaults('entry'), ...(entry || {}) };
       openModal('entryModal', `<div class="dialog"><div class="spread"><h2>${editingEntryId ? 'Edit entry' : 'New log entry'}</h2><button data-close>×</button></div><form id="entryForm" class="formgrid">${modalFields('entry', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save entry</button></div></form></div>`);
       bindModal('entryModal');
+      bindMaterialSuggestions(document.getElementById('entryForm'));
       document.querySelectorAll('#entryModal .star').forEach(s => s.onclick = () => { document.querySelector('#entryModal [name=rating]').value = s.dataset.rating; document.querySelectorAll('#entryModal .star').forEach(x => x.classList.toggle('on', Number(x.dataset.rating) <= Number(s.dataset.rating))); });
       document.getElementById('entryForm').oninput = e => bindMaterialSafetyWarning(e.currentTarget);
       document.getElementById('entryForm').onsubmit = e => {
@@ -2090,6 +2166,7 @@
       const data = { ...formDefaults('profile'), ...(profile || {}) };
       openModal('profileModal', `<div class="dialog"><div class="spread"><h2>${editingProfileId ? 'Edit material' : 'Add material'}</h2><button data-close>×</button></div><form id="profileForm" class="formgrid">${modalFields('profile', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save material</button></div></form></div>`);
       bindModal('profileModal');
+      bindMaterialSuggestions(document.getElementById('profileForm'));
       document.getElementById('profileForm').oninput = e => bindMaterialSafetyWarning(e.currentTarget);
       document.getElementById('profileForm').onsubmit = e => {
         e.preventDefault();
@@ -2133,7 +2210,7 @@
         ${draftBanner}
         ${bridgeNote}
         <label class="span2">${labelText('Project name', 'Name of the finished piece or batch.')}<input name="name" value="${esc(data.name)}"></label>
-        <label class="span2">${labelText('Material', 'What the blank is made of. Verify unknown materials before lasering.')}<input name="material" value="${esc(data.material)}" list="materials"></label>
+        ${materialFieldHtml(data.material)}
         ${materialSafetyFieldHelp(data.material)}
         ${materialInventoryMatchHtml(data.material)}
         ${select('status','Status',data.status || 'kept',['kept','gifted','for-sale','sold'],'Simple sale/inventory status for filtering projects.')}
@@ -2180,6 +2257,7 @@
         <datalist id="materials">${autocompleteMaterialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
         <div class="span2 modal-actions"><button type="button" data-close>Cancel</button><button class="primary">Save project</button></div></form></div>`);
       bindModal('projectModal');
+      bindMaterialSuggestions(document.getElementById('projectForm'));
       renderProjectPhotoDraft();
       document.querySelectorAll('#projectModal .star').forEach(s => s.onclick = () => { document.querySelector('#projectModal [name=rating]').value = s.dataset.rating; document.querySelectorAll('#projectModal .star').forEach(x => x.classList.toggle('on', Number(x.dataset.rating) <= Number(s.dataset.rating))); });
       document.getElementById('projectPhotoInput').onchange = async e => {
@@ -2429,7 +2507,7 @@
       const data = formDefaults('grid');
       openModal('gridModal', `<div class="dialog"><div class="spread"><h2>New test grid</h2><button data-close>×</button></div><form id="gridForm" class="formgrid">
         ${field('name','Grid name',data.name,'text','','Name for this material test matrix.')}${select('jobType','Job type',data.jobType,['engrave','cut'],'Cut goes through material; engrave marks the surface.')}
-        <label class="span2">${labelText('Material', 'What the blank is made of. Verify unknown materials before lasering.')}<input name="material" value="" list="materials"></label>
+        ${materialFieldHtml('')}
         ${materialSafetyFieldHelp('')}
         ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit,'Actual material thickness; important for cutting and focus.')}
         ${field('passes','Passes',data.passes,'number','min="1"','How many times the laser repeats each test cell.')}
@@ -2448,6 +2526,7 @@
         <datalist id="materials">${autocompleteMaterialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
         <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Create grid</button></div></form></div>`);
       bindModal('gridModal');
+      bindMaterialSuggestions(document.getElementById('gridForm'));
       document.getElementById('gridForm').oninput = e => bindMaterialSafetyWarning(e.currentTarget);
       document.getElementById('gridForm').onsubmit = e => {
         e.preventDefault();
@@ -2506,6 +2585,89 @@
           bindMaterialInventoryMatch(form);
         };
       }
+    }
+    function renderMaterialSuggestions(input) {
+      const field = input.closest('.material-field');
+      const panel = field && field.querySelector('[data-material-suggestions]');
+      if (!panel) return [];
+      const options = materialSuggestionOptions(input.value);
+      if (!options.length) {
+        panel.hidden = true;
+        panel.innerHTML = '';
+        input.dataset.materialSuggestionIndex = '-1';
+        return [];
+      }
+      const active = Math.max(0, Math.min(Number(input.dataset.materialSuggestionIndex || 0), options.length - 1));
+      input.dataset.materialSuggestionIndex = String(active);
+      panel.innerHTML = options.map((option, index) => `<button type="button" class="material-suggestion ${index === active ? 'active' : ''}" data-material-suggestion-index="${index}"><span class="material-suggestion-main">${esc(option.main)}</span><span class="material-suggestion-meta">${esc(option.meta)}</span></button>`).join('');
+      panel.hidden = false;
+      return options;
+    }
+    function selectMaterialSuggestion(input, option) {
+      const field = input.closest('.material-field');
+      const panel = field && field.querySelector('[data-material-suggestions]');
+      input.value = option.value || '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      if (panel) panel.hidden = true;
+      input.focus();
+    }
+    function bindMaterialSuggestions(root) {
+      (root || document).querySelectorAll('[data-material-suggest]').forEach(input => {
+        if (input.dataset.materialSuggestBound) return;
+        input.dataset.materialSuggestBound = '1';
+        input.dataset.materialSuggestionIndex = '0';
+        const field = input.closest('.material-field');
+        const panel = field && field.querySelector('[data-material-suggestions]');
+        if (!panel) return;
+        input.addEventListener('input', () => {
+          input.dataset.materialSuggestionIndex = '0';
+          renderMaterialSuggestions(input);
+        });
+        input.addEventListener('focus', () => renderMaterialSuggestions(input));
+        input.addEventListener('blur', () => setTimeout(() => { panel.hidden = true; }, 120));
+        input.addEventListener('keydown', event => {
+          if (!['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(event.key)) return;
+          const wasHidden = panel.hidden;
+          const options = wasHidden ? renderMaterialSuggestions(input) : materialSuggestionOptions(input.value);
+          if (!options.length) return;
+          let active = Number(input.dataset.materialSuggestionIndex || 0);
+          if (event.key === 'Escape') {
+            panel.hidden = true;
+            event.preventDefault();
+            return;
+          }
+          if (wasHidden && event.key !== 'Enter') {
+            event.preventDefault();
+            return;
+          }
+          if (wasHidden && event.key === 'Enter') {
+            panel.hidden = true;
+            return;
+          }
+          if (event.key === 'ArrowDown') {
+            active = Math.min(active + 1, options.length - 1);
+            input.dataset.materialSuggestionIndex = String(active);
+            renderMaterialSuggestions(input);
+            event.preventDefault();
+          } else if (event.key === 'ArrowUp') {
+            active = Math.max(active - 1, 0);
+            input.dataset.materialSuggestionIndex = String(active);
+            renderMaterialSuggestions(input);
+            event.preventDefault();
+          } else if (event.key === 'Enter' && !panel.hidden) {
+            selectMaterialSuggestion(input, options[active] || options[0]);
+            event.preventDefault();
+          }
+        });
+        panel.addEventListener('mousedown', event => event.preventDefault());
+        panel.addEventListener('click', event => {
+          const button = event.target.closest('[data-material-suggestion-index]');
+          if (!button) return;
+          const options = materialSuggestionOptions(input.value);
+          selectMaterialSuggestion(input, options[Number(button.dataset.materialSuggestionIndex)] || options[0]);
+        });
+      });
     }
     function upsert(key, item) {
       const list = state[key];

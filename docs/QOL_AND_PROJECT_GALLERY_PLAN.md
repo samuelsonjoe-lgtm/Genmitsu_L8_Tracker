@@ -44,10 +44,11 @@
 | **Storage/search/import fix-soon pack 1** | Persist errors are caught, photo-heavy exports warn with approximate size, replace imports reset absent optional prefs, Library/Projects search is live, Project accounting CSV respects filters, and grid caps/blank speed display are clearer |
 | **Inventory MVP** | Inventory tab tracks raw materials and finished batches manually, with low-stock badges, estimated raw value, remaining batch counts, starter materials, CSV exports, and JSON backup/import support |
 | **Material naming + Inventory linking pack 1** | Raw Inventory materials now support aliases, material fields suggest canonical raw Inventory names, Project forms show a subtle Inventory match note with a user-triggered canonical-name action, Project cards can show an inventory-linked badge, and raw Inventory search/CSV include aliases |
+| **Inventory-aware material suggestions** | Material fields now show a small stock-aware suggestion list for Inventory-backed options, including in-stock/low-stock/out-of-stock labels while still inserting clean canonical material names |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
-**Next candidate:** Continue small workshop utility passes. Inventory MVP now has soft canonical material naming/linking, without automatic Project deductions or accounting-system scope.
+**Next candidate:** Continue small workshop utility passes. Inventory MVP now has soft canonical material naming/linking and stock-aware material suggestions, without automatic Project deductions or accounting-system scope.
 
 ### 1.3 Still open from the original backlog
 
