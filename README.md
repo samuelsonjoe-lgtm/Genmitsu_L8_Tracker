@@ -39,6 +39,8 @@ Other features:
 - Print a simplified Library cheat sheet for shop use.
 - Pricing calculator drafts/defaults persist locally between sessions and are included in the main JSON backup/export.
 - **Create project from estimate** on the Pricing tab opens a prefilled Project draft (user must still click Save project).
+- Project accounting can copy a matched raw Inventory unit cost into the current Project as an explicit one-time action.
+- Project accounting can track optional material line items and copy their total into the Project material cost field when you choose.
 - Project photos are resized/compressed before storage and ride inside Project records; image-heavy backups can get larger.
 - **Accounting report** on the Projects tab summarizes filtered project revenue, cost, profit, margin, quantity, and status counts.
 - **Export accounting CSV** on the Projects tab exports one row per project with accounting inputs and calculated totals.

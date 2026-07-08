@@ -316,6 +316,7 @@
     let editingProfileId = null;
     let editingProjectId = null;
     let projectPhotosDraft = [];
+    let projectMaterialLinesDraft = [];
     let pendingUndo = null;
     let storageWarningShown = false;
 
@@ -1301,11 +1302,31 @@
     function projectQuantity(p) {
       return Math.max(0, Math.round(num(p.quantity, 1)));
     }
+    function materialLineDefault() {
+      return { id: uid(), name: '', quantity: 1, unit: 'each', unitCost: '', notes: '' };
+    }
+    function normalizeProjectMaterialLines(lines, keepBlank = false) {
+      const normalized = (Array.isArray(lines) ? lines : []).map(line => ({
+        id: line.id || uid(),
+        name: String(line.name || '').trim(),
+        quantity: line.quantity === '' || line.quantity == null ? '' : Math.max(0, num(line.quantity)),
+        unit: inventoryUnits.includes(line.unit) ? line.unit : 'other',
+        unitCost: line.unitCost === '' || line.unitCost == null ? '' : num(line.unitCost),
+        notes: String(line.notes || '').trim()
+      }));
+      return keepBlank ? normalized : normalized.filter(line => line.name);
+    }
+    function projectMaterialLineTotal(line) {
+      return num(line.quantity) * num(line.unitCost);
+    }
+    function projectMaterialLinesTotal(lines) {
+      return normalizeProjectMaterialLines(lines, true).reduce((sum, line) => sum + projectMaterialLineTotal(line), 0);
+    }
     function hasProjectAccounting(p) {
       return ['soldPrice', 'materialCost', 'hardwareCost', 'packagingCost', 'machineMinutes', 'laserMinutes', 'laborMinutes', 'machineRate', 'laborRate', 'feePercent', 'fixedFee', 'saleDate', 'accountingNotes'].some(key => {
         const value = p[key];
         return typeof value === 'number' ? value !== 0 : String(value ?? '').trim() !== '';
-      }) || p.status === 'for-sale' || p.status === 'sold';
+      }) || normalizeProjectMaterialLines(p.materialLines).length > 0 || p.status === 'for-sale' || p.status === 'sold';
     }
     function projectAccountingTotals(p) {
       const quantity = projectQuantity(p);
@@ -1357,6 +1378,43 @@
         ${metric('Profit per item', money(t.profitPerItem))}
         ${metric('Margin', percent(t.margin))}
         ${metric('Break-even price', priceSuggestionLabel(t.breakEvenPrice))}
+      </div>`;
+    }
+    function inventoryCostHelperHtml(material) {
+      const match = materialInventoryMatch(material);
+      if (!match) return '<div id="projectInventoryCostHelper" class="span2 small muted">No matched Inventory material cost to copy.</div>';
+      const item = match.item;
+      const unit = item.unit || 'each';
+      const unitCostSet = String(item.unitCost ?? '').trim() !== '';
+      const cautiousUnits = ['sheet', 'pack', 'sq in', 'other'];
+      const caution = cautiousUnits.includes(unit) ? ' This copies the inventory unit cost. Adjust manually if only part of a sheet/pack was used.' : '';
+      const costText = unitCostSet ? money(num(item.unitCost)) : 'not set';
+      return `<div id="projectInventoryCostHelper" class="span2 panel" style="padding:10px 12px">
+        <div class="spread"><div><b class="small">Inventory cost helper</b><div class="small muted">${esc(item.name)} - ${esc(stockUnitText(item.quantityOnHand, unit))} on hand - ${esc(rawStockSummary(item))} - unit cost: ${esc(costText)} per ${esc(unit)}</div></div>${unitCostSet ? '<button type="button" data-use-inventory-cost>Use inventory cost</button>' : ''}</div>
+        <div class="small muted" style="margin-top:6px">Copies cost into this Project only. Inventory is not deducted and future Inventory cost changes will not update saved Projects.${esc(caution)}</div>
+      </div>`;
+    }
+    function projectMaterialLineRowHtml(line, index) {
+      const match = materialInventoryMatch(line.name);
+      const total = projectMaterialLineTotal(line);
+      return `<div class="project-material-line formgrid" data-material-line="${index}" data-material-line-id="${esc(line.id || '')}" style="border:1px solid var(--line);border-radius:7px;padding:10px;margin-top:10px;background:#fbfcfe">
+        <div class="span2 material-field"><label>${labelText('Item/material name', 'Material, blank, hardware, packaging, or other item used in this Project.')}<input value="${esc(line.name)}" autocomplete="off" data-material-suggest data-material-line-field="name"></label><div class="material-suggestions" data-material-suggestions hidden></div></div>
+        <label>${labelText('Quantity used', 'Manual amount used for accounting only.')}<input type="number" min="0" step="any" value="${esc(line.quantity)}" data-material-line-field="quantity"></label>
+        <label>${labelText('Unit', 'Counting unit for this line.')}<select data-material-line-field="unit">${inventoryUnits.map(unit => `<option value="${esc(unit)}" ${unit === line.unit ? 'selected' : ''}>${esc(unit)}</option>`).join('')}</select></label>
+        <label>${labelText('Unit cost', 'Cost for one unit of this material/item.')}<input type="number" min="0" step="0.01" value="${esc(line.unitCost)}" data-material-line-field="unitCost"></label>
+        <div class="metric"><b>Line total</b><span data-line-total>${money(total)}</span></div>
+        <label class="span2">${labelText('Line notes', 'Optional source, size, or usage notes.')}<input value="${esc(line.notes)}" data-material-line-field="notes"></label>
+        <div class="span2 row">${match ? `<span class="pill good">Inventory: ${esc(match.item.name)} - ${esc(rawStockSummary(match.item))}</span>${String(match.item.unitCost ?? '').trim() !== '' ? '<button type="button" data-line-use-inventory-cost>Use inventory unit cost</button>' : ''}` : '<span class="pill">No inventory match</span>'}<button type="button" class="danger" data-remove-material-line>Remove line</button></div>
+      </div>`;
+    }
+    function projectMaterialLinesHtml(lines = projectMaterialLinesDraft) {
+      const normalized = normalizeProjectMaterialLines(lines, true);
+      const total = projectMaterialLinesTotal(normalized);
+      return `<div id="projectMaterialLines" class="span2 panel" style="padding:12px">
+        <div class="spread"><div><b>Materials used</b><div class="small muted">Optional line items for Project material accounting. These do not deduct Inventory.</div></div><button type="button" id="addProjectMaterialLine">Add material line</button></div>
+        <div id="projectMaterialLineRows">${normalized.length ? normalized.map(projectMaterialLineRowHtml).join('') : '<div class="small muted" style="margin-top:10px">No material lines yet.</div>'}</div>
+        <div class="row" style="margin-top:10px"><span class="pill">Material line total: <span data-material-lines-total>${money(total)}</span></span>${normalized.length ? '<button type="button" id="useMaterialLineTotal">Use material line total as project material cost</button>' : ''}</div>
+        <div class="small muted" style="margin-top:6px">Line totals are for planning until you click the button above; Project profit still uses the Material cost field.</div>
       </div>`;
     }
     function projectAccountingReport(projects) {
@@ -1537,6 +1595,8 @@
         ${field('quantity','Quantity',data.quantity ?? '1','number','min="0" step="1"','How many items this Project represents.')}
         ${field('soldPrice','Gross sold price / revenue',data.soldPrice,'number','min="0" step="0.01"','Total revenue for the whole Project or batch before fees.')}
         ${field('saleDate','Sale date',data.saleDate || '','date','When the Project sold, if applicable.')}
+        ${inventoryCostHelperHtml(data.material)}
+        ${projectMaterialLinesHtml(data.materialLines)}
         <label>${labelText('Material cost basis', 'Choose whether material cost is for the whole Project or each item.')}<select name="materialCostMode"><option value="total" ${(data.materialCostMode || 'total') === 'total' ? 'selected' : ''}>Total</option><option value="perItem" ${data.materialCostMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
         ${field('materialCost','Material cost',data.materialCost,'number','min="0" step="0.01"','Material cost, either total or per item depending on the basis above.')}
         ${field('hardwareCost','Hardware / consumables cost',data.hardwareCost,'number','min="0" step="0.01"','Extra supplies such as glue, finish, magnets, hooks, or masking.')}
@@ -1728,6 +1788,7 @@
       const cover = projectCoverPhoto(p);
       const speedLabel = s.speed === '' || s.speed == null ? '-' : `${s.speed} mm/min`;
       const inventoryMatch = materialInventoryMatch(p.material);
+      const materialLines = normalizeProjectMaterialLines(p.materialLines);
       const projectTagPills = tagsOf(p).map(t => `<span class="pill">${esc(t)}</span>`).join('');
       return `<article class="card">
         ${cover ? `<img class="project-cover" src="${esc(cover.dataUrl)}" alt="${esc(cover.name || p.name || 'Project photo')}" data-project-photo="${esc(p.id)}" data-photo-index="0">` : ''}
@@ -1736,6 +1797,7 @@
         <div class="row" style="margin-top:8px">${inventoryMatch ? `<span class="pill good" title="Inventory match: ${esc(inventoryMatch.item.name)}">inventory linked</span>` : ''}${projectTagPills || (!inventoryMatch ? '<span class="pill">untagged</span>' : '')}</div>
         <div class="metrics">${metric('Power', powerLabel(s))}${metric('Speed', speedLabel)}${metric('Passes', s.passes || 1)}${metric('Line int.', fmt(s.lineInterval, 'mm'))}</div>
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(s.focusValue, s.focusUnit)} - Air: ${s.airAssist ? 'On' : 'Off'}${s.software ? ' - ' + esc(s.software) : ''}</div>
+        ${materialLines.length ? `<div class="small muted" style="margin-top:8px">Materials: ${materialLines.length} line${materialLines.length === 1 ? '' : 's'} / ${money(projectMaterialLinesTotal(materialLines))} total</div>` : ''}
         ${hasProjectAccounting(p) ? projectAccountingMetrics(p) : ''}
         ${p.notes ? `<p class="small">${esc(p.notes)}</p>` : ''}
         <div class="actions"><button data-edit-project="${p.id}">Edit</button><button data-project-to-entry="${p.id}">Copy to log</button><button class="danger" data-delete-project="${p.id}">Delete</button></div>
@@ -2195,6 +2257,7 @@
       editingProjectId = project && project.id ? project.id : null;
       const data = { ...formDefaults('project'), ...(project || {}) };
       projectPhotosDraft = normalizeProjectPhotos(data.photos);
+      projectMaterialLinesDraft = normalizeProjectMaterialLines(data.materialLines);
       const tagValue = Array.isArray(data.tags) ? tagString(data.tags) : data.tags;
       const draftBanner = options.draftNote
         ? `<div class="span2 panel" style="padding:10px 12px; background:#fff4db; border-color:#d9982f">${esc(options.draftNote)}</div>`
@@ -2275,29 +2338,36 @@
       document.getElementById('projectForm').oninput = e => {
         bindMaterialSafetyWarning(e.currentTarget);
         bindMaterialInventoryMatch(e.currentTarget);
-        const preview = document.getElementById('projectAccountingPreview');
-        if (preview) preview.innerHTML = projectAccountingResultsHtml(readForm(e.currentTarget));
+        bindProjectInventoryCostHelper(e.currentTarget);
+        updateProjectMaterialLinesDraft(e.currentTarget);
+        refreshProjectMaterialLineTotals(e.currentTarget);
+        refreshProjectAccountingPreview(e.currentTarget);
       };
       document.getElementById('projectForm').onchange = e => {
         bindMaterialSafetyWarning(e.currentTarget);
         bindMaterialInventoryMatch(e.currentTarget);
-        const preview = document.getElementById('projectAccountingPreview');
-        if (preview) preview.innerHTML = projectAccountingResultsHtml(readForm(e.currentTarget));
+        bindProjectInventoryCostHelper(e.currentTarget);
+        renderProjectMaterialLinesArea(e.currentTarget);
+        refreshProjectAccountingPreview(e.currentTarget);
       };
       document.getElementById('projectForm').onsubmit = e => {
         e.preventDefault();
         const f = readForm(e.target);
+        f.materialLines = readProjectMaterialLinesFromForm(e.target);
         if (!f.name.trim() || !f.material.trim()) return alert('Add a project name and material first.');
         const projectObj = normalizeProject(f, editingProjectId);
         try {
           if (!upsert('projects', projectObj)) return;
           projectPhotosDraft = [];
+          projectMaterialLinesDraft = [];
           closeModal('projectModal');
         } catch (err) {
           alert('Could not save this project. Photos may be using too much browser storage; remove one or more photos or export a backup first.');
         }
       };
       bindMaterialInventoryMatch(document.getElementById('projectForm'));
+      bindProjectInventoryCostHelper(document.getElementById('projectForm'));
+      bindProjectMaterialLines(document.getElementById('projectForm'));
     }
     function normalizeProject(f, existingId) {
       const minPower = num(f.settingsMinPower);
@@ -2343,6 +2413,7 @@
         feePercent: optionalMoney(f.feePercent),
         fixedFee: optionalMoney(f.fixedFee),
         fixedFeeMode: f.fixedFeeMode || 'order',
+        materialLines: normalizeProjectMaterialLines(f.materialLines || projectMaterialLinesDraft),
         accountingNotes: (f.accountingNotes || '').trim()
       };
     }
@@ -2579,8 +2650,121 @@
           material.value = useCanonical.dataset.useCanonicalMaterial || '';
           bindMaterialSafetyWarning(form);
           bindMaterialInventoryMatch(form);
+          bindProjectInventoryCostHelper(form);
         };
       }
+    }
+    function refreshProjectAccountingPreview(form) {
+      const preview = document.getElementById('projectAccountingPreview');
+      if (preview) preview.innerHTML = projectAccountingResultsHtml(readForm(form));
+    }
+    function bindProjectInventoryCostHelper(form) {
+      const material = form && form.elements.material;
+      const helper = form && form.querySelector('#projectInventoryCostHelper');
+      if (!material || !helper) return;
+      helper.outerHTML = inventoryCostHelperHtml(material.value);
+      const button = form.querySelector('[data-use-inventory-cost]');
+      if (!button) return;
+      button.onclick = () => {
+        const match = materialInventoryMatch(material.value);
+        if (!match || String(match.item.unitCost ?? '').trim() === '') return;
+        const cost = num(match.item.unitCost);
+        if (form.elements.materialCost) form.elements.materialCost.value = cost.toFixed(2);
+        if (form.elements.materialCostMode) form.elements.materialCostMode.value = 'total';
+        if (form.elements.accountingNotes) {
+          const unit = match.item.unit || 'each';
+          const note = `Material cost pulled from Inventory: ${match.item.name}, ${money(cost)} per ${unit}, on ${today()}.`;
+          const current = form.elements.accountingNotes.value.trim();
+          form.elements.accountingNotes.value = current ? `${current}\n${note}` : note;
+        }
+        refreshProjectAccountingPreview(form);
+        bindProjectInventoryCostHelper(form);
+      };
+    }
+    function readProjectMaterialLinesFromForm(form) {
+      if (!form) return [];
+      return normalizeProjectMaterialLines([...form.querySelectorAll('[data-material-line]')].map(row => ({
+        id: row.dataset.materialLineId || '',
+        name: row.querySelector('[data-material-line-field="name"]')?.value || '',
+        quantity: row.querySelector('[data-material-line-field="quantity"]')?.value ?? '',
+        unit: row.querySelector('[data-material-line-field="unit"]')?.value || 'each',
+        unitCost: row.querySelector('[data-material-line-field="unitCost"]')?.value ?? '',
+        notes: row.querySelector('[data-material-line-field="notes"]')?.value || ''
+      })), true);
+    }
+    function updateProjectMaterialLinesDraft(form) {
+      projectMaterialLinesDraft = readProjectMaterialLinesFromForm(form);
+      return projectMaterialLinesDraft;
+    }
+    function refreshProjectMaterialLineTotals(form) {
+      if (!form) return;
+      [...form.querySelectorAll('[data-material-line]')].forEach(row => {
+        const line = normalizeProjectMaterialLines([{
+          name: row.querySelector('[data-material-line-field="name"]')?.value || '',
+          quantity: row.querySelector('[data-material-line-field="quantity"]')?.value ?? '',
+          unit: row.querySelector('[data-material-line-field="unit"]')?.value || 'each',
+          unitCost: row.querySelector('[data-material-line-field="unitCost"]')?.value ?? '',
+          notes: row.querySelector('[data-material-line-field="notes"]')?.value || ''
+        }], true)[0] || materialLineDefault();
+        const total = row.querySelector('[data-line-total]');
+        if (total) total.textContent = money(projectMaterialLineTotal(line));
+      });
+      const total = form.querySelector('[data-material-lines-total]');
+      if (total) total.textContent = money(projectMaterialLinesTotal(readProjectMaterialLinesFromForm(form)));
+    }
+    function renderProjectMaterialLinesArea(form) {
+      updateProjectMaterialLinesDraft(form);
+      const area = form && form.querySelector('#projectMaterialLines');
+      if (!area) return;
+      area.outerHTML = projectMaterialLinesHtml(projectMaterialLinesDraft);
+      bindProjectMaterialLines(form);
+    }
+    function bindProjectMaterialLines(form) {
+      const area = form && form.querySelector('#projectMaterialLines');
+      if (!area) return;
+      bindMaterialSuggestions(area);
+      const add = area.querySelector('#addProjectMaterialLine');
+      if (add) add.onclick = () => {
+        updateProjectMaterialLinesDraft(form);
+        projectMaterialLinesDraft.push(materialLineDefault());
+        area.outerHTML = projectMaterialLinesHtml(projectMaterialLinesDraft);
+        bindProjectMaterialLines(form);
+      };
+      area.querySelectorAll('[data-remove-material-line]').forEach(button => {
+        button.onclick = () => {
+          const row = button.closest('[data-material-line]');
+          const index = Number(row?.dataset.materialLine || 0);
+          updateProjectMaterialLinesDraft(form);
+          projectMaterialLinesDraft.splice(index, 1);
+          area.outerHTML = projectMaterialLinesHtml(projectMaterialLinesDraft);
+          bindProjectMaterialLines(form);
+          refreshProjectAccountingPreview(form);
+        };
+      });
+      area.querySelectorAll('[data-line-use-inventory-cost]').forEach(button => {
+        button.onclick = () => {
+          const row = button.closest('[data-material-line]');
+          if (!row) return;
+          const nameInput = row.querySelector('[data-material-line-field="name"]');
+          const unitInput = row.querySelector('[data-material-line-field="unit"]');
+          const costInput = row.querySelector('[data-material-line-field="unitCost"]');
+          const match = materialInventoryMatch(nameInput?.value || '');
+          if (!match || String(match.item.unitCost ?? '').trim() === '') return;
+          if (nameInput) nameInput.value = match.item.name || '';
+          if (unitInput) unitInput.value = inventoryUnits.includes(match.item.unit) ? match.item.unit : 'other';
+          if (costInput) costInput.value = num(match.item.unitCost).toFixed(2);
+          renderProjectMaterialLinesArea(form);
+          refreshProjectAccountingPreview(form);
+        };
+      });
+      const useTotal = area.querySelector('#useMaterialLineTotal');
+      if (useTotal) useTotal.onclick = () => {
+        updateProjectMaterialLinesDraft(form);
+        const total = projectMaterialLinesTotal(projectMaterialLinesDraft);
+        if (form.elements.materialCost) form.elements.materialCost.value = total.toFixed(2);
+        if (form.elements.materialCostMode) form.elements.materialCostMode.value = 'total';
+        refreshProjectAccountingPreview(form);
+      };
     }
     function renderMaterialSuggestions(input) {
       const field = input.closest('.material-field');
