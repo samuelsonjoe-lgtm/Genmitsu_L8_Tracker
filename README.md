@@ -43,7 +43,7 @@ Other features:
 - Project accounting can track optional material line items and copy their total into the Project material cost field when you choose.
 - Project photos are resized/compressed before storage and ride inside Project records; image-heavy backups can get larger.
 - **Accounting report** on the Projects tab summarizes filtered project revenue, cost, profit, margin, quantity, and status counts.
-- **Export accounting CSV** on the Projects tab exports one row per project with accounting inputs and calculated totals.
+- **Export accounting CSV** on the Projects tab exports one row per project with accounting inputs and calculated totals, including a material line count and material line total.
 - **Inventory CSV exports** save filtered raw-material stock and finished-batch counts as plain CSV files.
 - All data persists automatically in the browser (localStorage) between sessions.
 

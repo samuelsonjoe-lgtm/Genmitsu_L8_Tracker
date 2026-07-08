@@ -1587,6 +1587,7 @@
     function projectAccountingCsvRow(p) {
       const t = projectAccountingTotals(p);
       const s = p.settings || {};
+      const materialLines = normalizeProjectMaterialLines(p.materialLines);
       return [
         p.id, p.name || '', p.material || '', p.thicknessValue ?? '', p.thicknessUnit || '', p.jobType || '', p.dateCreated || '',
         tagString(tagsOf(p)), p.rating ?? '', p.notes || '', p.sourceEntryId || '', p.sourceProfileId || '',
@@ -1597,7 +1598,8 @@
         p.feePercent ?? '', p.fixedFee ?? '', p.fixedFeeMode || 'order', p.accountingNotes || '',
         t.revenue, t.materialCost, t.hardwarePackagingCost, t.machineCost, t.laborCost, t.feeCost, t.totalCost,
         t.profit, t.profitPerItem, t.margin,
-        Number.isFinite(t.breakEvenPrice) ? t.breakEvenPrice : ''
+        Number.isFinite(t.breakEvenPrice) ? t.breakEvenPrice : '',
+        materialLines.length, projectMaterialLinesTotal(materialLines)
       ];
     }
     function projectsAccountingCsv(projects = state.projects) {
@@ -1611,7 +1613,8 @@
         'fee_percent', 'fixed_fee', 'fixed_fee_mode', 'accounting_notes',
         'calc_revenue', 'calc_material_cost', 'calc_hardware_packaging_cost', 'calc_machine_cost',
         'calc_labor_cost', 'calc_fee_cost', 'calc_total_cost', 'calc_profit_total',
-        'calc_profit_per_item', 'calc_margin_percent', 'calc_break_even_price'
+        'calc_profit_per_item', 'calc_margin_percent', 'calc_break_even_price',
+        'material_line_count', 'material_line_total'
       ];
       const rows = projects.map(projectAccountingCsvRow);
       return csvRows([headers, ...rows]);
@@ -2305,7 +2308,7 @@
         ? `<div class="span2 small" style="padding:9px 10px; border:1px solid #ead59f; border-radius:7px; background:#fffaf0">Pricing sale price per item has been copied here as Project gross sold price / total revenue. This draft is not saved until you click Save project.</div>`
         : '';
       const photosOpen = projectPhotosDraft.length ? ' open' : '';
-      const accountingOpen = options.pricingDraft ? ' open' : '';
+      const accountingOpen = (options.pricingDraft || hasProjectAccounting(data)) ? ' open' : '';
       openModal('projectModal', `<div class="dialog"><div class="spread"><h2>${editingProjectId ? 'Edit project' : 'New project'}</h2><button data-close>×</button></div><form id="projectForm" class="formgrid">
         ${draftBanner}
         ${bridgeNote}
