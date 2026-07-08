@@ -40,6 +40,7 @@
 | **Material safety warning pack 1** | Material fields and cards surface warning-only guidance for PVC/vinyl/chlorinated plastics, unknown plastics, fiberglass, carbon fiber, coated unknown metal, and mystery materials |
 | **Backup/import completeness pack 1** | JSON backups now include Pricing draft/defaults, selected machine profile, saved sort preferences, and Library match helper inputs while keeping session filters/search out |
 | **Project Photos MVP** | Projects can store up to 3 compressed offline photos, show cover thumbnails in the gallery, preview photos, and export/import photos inside Project records |
+| **Field hover help / tooltips pack 1** | Laser settings, Test Grid, Pricing, Project accounting, tags, and photo fields now have short focusable help tips for beginner terminology |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 

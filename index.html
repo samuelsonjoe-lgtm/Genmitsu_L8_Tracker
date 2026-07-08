@@ -81,6 +81,8 @@
     .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
     .metric { border-radius: 7px; padding: 8px; background: #f3f6fa; }
     .metric b { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+    .help-tip { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 999px; margin-left: 5px; background: #eef1f5; color: #425166; font-size: 11px; font-weight: 800; cursor: help; vertical-align: text-bottom; }
+    .help-tip:focus { outline: 2px solid var(--blue); outline-offset: 2px; }
     .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
     .project-cover { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 7px; border: 1px solid var(--line); margin-bottom: 10px; background: #eef1f5; cursor: pointer; }
     .photo-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
@@ -751,26 +753,26 @@
         </div>
         <div class="grid refgrid">
           <form id="pricingForm" class="panel formgrid pricing-form-card">
-            <label class="span2">Project / item name<input name="name" value="${esc(p.name)}" placeholder="Walnut coaster set"></label>
-            ${field('quantity','Quantity',p.quantity,'number','min="0" step="1"')}
-            ${field('salePrice','Sale price per item',p.salePrice,'number','min="0" step="0.01"')}
-            <label>Material cost basis<select name="materialCostMode"><option value="total" ${p.materialCostMode === 'total' ? 'selected' : ''}>Total</option><option value="perItem" ${p.materialCostMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
-            ${field('materialCost','Material cost',p.materialCost,'number','min="0" step="0.01"')}
-            ${field('hardwareCost','Hardware / consumables cost',p.hardwareCost,'number','min="0" step="0.01"')}
-            ${field('packagingCost','Packaging cost',p.packagingCost,'number','min="0" step="0.01"')}
-            ${field('laserMinutes','Laser / job time, minutes',p.laserMinutes,'number','min="0" step="0.1"')}
-            ${field('laborMinutes','Labor time, minutes',p.laborMinutes,'number','min="0" step="0.1"')}
+            <label class="span2">${labelText('Project / item name', 'A short name for this estimate.')}<input name="name" value="${esc(p.name)}" placeholder="Walnut coaster set"></label>
+            ${field('quantity','Quantity',p.quantity,'number','min="0" step="1"','How many items this estimate covers.')}
+            ${field('salePrice','Sale price per item',p.salePrice,'number','min="0" step="0.01"','What you plan to charge for one item.')}
+            <label>${labelText('Material cost basis', 'Choose whether material cost is for the whole batch or each item.')}<select name="materialCostMode"><option value="total" ${p.materialCostMode === 'total' ? 'selected' : ''}>Total</option><option value="perItem" ${p.materialCostMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
+            ${field('materialCost','Material cost',p.materialCost,'number','min="0" step="0.01"','Material cost, either total or per item depending on the basis above.')}
+            ${field('hardwareCost','Hardware / consumables cost',p.hardwareCost,'number','min="0" step="0.01"','Extra supplies such as glue, finish, magnets, hooks, or masking.')}
+            ${field('packagingCost','Packaging cost',p.packagingCost,'number','min="0" step="0.01"','Boxes, bags, labels, padding, or other packaging for this job.')}
+            ${field('laserMinutes','Laser / job time, minutes',p.laserMinutes,'number','min="0" step="0.1"','Total machine runtime for this job or batch.')}
+            ${field('laborMinutes','Labor time, minutes',p.laborMinutes,'number','min="0" step="0.1"','Your hands-on time for prep, finishing, packing, and handling.')}
             <div class="span2 small muted">Hardware, packaging, laser time, and labor time are totals for this job or batch.</div>
-            ${field('machineRate','Machine rate per hour',p.machineRate,'number','min="0" step="0.01"')}
-            ${field('laborRate','Labor rate per hour',p.laborRate,'number','min="0" step="0.01"')}
+            ${field('machineRate','Machine rate per hour',p.machineRate,'number','min="0" step="0.01"','Hourly cost you assign to running the laser.')}
+            ${field('laborRate','Labor rate per hour',p.laborRate,'number','min="0" step="0.01"','Hourly value for your own time.')}
             <div class="span2 small muted">Machine rate covers running the laser; labor rate is your own time.</div>
-            ${field('feePercent','Marketplace / payment fee %',p.feePercent,'number','min="0" step="0.01"')}
-            <label>Fixed fee basis<select name="fixedFeeMode"><option value="order" ${p.fixedFeeMode === 'order' ? 'selected' : ''}>Per listing/batch</option><option value="perItem" ${p.fixedFeeMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
-            ${field('fixedFee','Fixed fee',p.fixedFee,'number','min="0" step="0.01"')}
-            ${field('targetMargin','Target margin %',p.targetMargin,'number','min="0" step="0.01"')}
-            ${field('targetProfitPerItem','Target profit per item',p.targetProfitPerItem,'number','min="0" step="0.01"')}
+            ${field('feePercent','Marketplace / payment fee %',p.feePercent,'number','min="0" step="0.01"','Percent fee charged by Etsy, PayPal, cards, or a marketplace.')}
+            <label>${labelText('Fixed fee basis', 'Choose whether a flat fee applies once per listing/batch or to every item.')}<select name="fixedFeeMode"><option value="order" ${p.fixedFeeMode === 'order' ? 'selected' : ''}>Per listing/batch</option><option value="perItem" ${p.fixedFeeMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
+            ${field('fixedFee','Fixed fee',p.fixedFee,'number','min="0" step="0.01"','Flat fee amount, such as a listing or transaction fee.')}
+            ${field('targetMargin','Target margin %',p.targetMargin,'number','min="0" step="0.01"','Profit as a percent of sale price, not markup on cost.')}
+            ${field('targetProfitPerItem','Target profit per item',p.targetProfitPerItem,'number','min="0" step="0.01"','Profit dollars you want to make on each item.')}
             <div class="span2 small muted">Margin = profit as a % of sale price, not markup on cost.</div>
-            <label class="span2">Notes<textarea name="notes" rows="3">${esc(p.notes)}</textarea></label>
+            <label class="span2">${labelText('Notes', 'Scratch notes for this estimate.')}<textarea name="notes" rows="3">${esc(p.notes)}</textarea></label>
           </form>
           <div class="panel pricing-results-card">
             <div class="spread">
@@ -1267,22 +1269,22 @@
     function projectAccountingFields(data) {
       return `
         <h3 class="span2" style="margin:8px 0 0">Sale & cost</h3>
-        ${select('status','Status',data.status || 'kept',['kept','gifted','for-sale','sold'])}
-        ${field('quantity','Quantity',data.quantity ?? '1','number','min="0" step="1"')}
-        ${field('soldPrice','Gross sold price / revenue',data.soldPrice,'number','min="0" step="0.01"')}
-        ${field('saleDate','Sale date',data.saleDate || '','date')}
-        <label>Material cost basis<select name="materialCostMode"><option value="total" ${(data.materialCostMode || 'total') === 'total' ? 'selected' : ''}>Total</option><option value="perItem" ${data.materialCostMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
-        ${field('materialCost','Material cost',data.materialCost,'number','min="0" step="0.01"')}
-        ${field('hardwareCost','Hardware / consumables cost',data.hardwareCost,'number','min="0" step="0.01"')}
-        ${field('packagingCost','Packaging cost',data.packagingCost,'number','min="0" step="0.01"')}
-        ${field('machineMinutes','Machine time, minutes',data.machineMinutes ?? data.laserMinutes ?? '','number','min="0" step="0.1"')}
-        ${field('machineRate','Machine rate per hour',data.machineRate,'number','min="0" step="0.01"')}
-        ${field('laborMinutes','Labor time, minutes',data.laborMinutes,'number','min="0" step="0.1"')}
-        ${field('laborRate','Labor rate per hour',data.laborRate,'number','min="0" step="0.01"')}
-        ${field('feePercent','Marketplace / payment fee %',data.feePercent,'number','min="0" step="0.01"')}
-        <label>Fixed fee basis<select name="fixedFeeMode"><option value="order" ${(data.fixedFeeMode || 'order') === 'order' ? 'selected' : ''}>Per listing/batch</option><option value="perItem" ${data.fixedFeeMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
-        ${field('fixedFee','Fixed fee',data.fixedFee,'number','min="0" step="0.01"')}
-        <label class="span2">Accounting notes<textarea name="accountingNotes" rows="2">${esc(data.accountingNotes || '')}</textarea></label>
+        ${select('status','Status',data.status || 'kept',['kept','gifted','for-sale','sold'],'Simple sale/inventory status for filtering projects.')}
+        ${field('quantity','Quantity',data.quantity ?? '1','number','min="0" step="1"','How many items this Project represents.')}
+        ${field('soldPrice','Gross sold price / revenue',data.soldPrice,'number','min="0" step="0.01"','Total revenue for the whole Project or batch before fees.')}
+        ${field('saleDate','Sale date',data.saleDate || '','date','When the Project sold, if applicable.')}
+        <label>${labelText('Material cost basis', 'Choose whether material cost is for the whole Project or each item.')}<select name="materialCostMode"><option value="total" ${(data.materialCostMode || 'total') === 'total' ? 'selected' : ''}>Total</option><option value="perItem" ${data.materialCostMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
+        ${field('materialCost','Material cost',data.materialCost,'number','min="0" step="0.01"','Material cost, either total or per item depending on the basis above.')}
+        ${field('hardwareCost','Hardware / consumables cost',data.hardwareCost,'number','min="0" step="0.01"','Extra supplies such as glue, finish, magnets, hooks, or masking.')}
+        ${field('packagingCost','Packaging cost',data.packagingCost,'number','min="0" step="0.01"','Boxes, bags, labels, padding, or other packaging.')}
+        ${field('machineMinutes','Machine time, minutes',data.machineMinutes ?? data.laserMinutes ?? '','number','min="0" step="0.1"','Total laser runtime for this Project or batch.')}
+        ${field('machineRate','Machine rate per hour',data.machineRate,'number','min="0" step="0.01"','Hourly cost you assign to running the laser.')}
+        ${field('laborMinutes','Labor time, minutes',data.laborMinutes,'number','min="0" step="0.1"','Your hands-on time for prep, finishing, packing, and handling.')}
+        ${field('laborRate','Labor rate per hour',data.laborRate,'number','min="0" step="0.01"','Hourly value for your own time.')}
+        ${field('feePercent','Marketplace / payment fee %',data.feePercent,'number','min="0" step="0.01"','Percent fee charged by Etsy, PayPal, cards, or a marketplace.')}
+        <label>${labelText('Fixed fee basis', 'Choose whether a flat fee applies once per listing/batch or to every item.')}<select name="fixedFeeMode"><option value="order" ${(data.fixedFeeMode || 'order') === 'order' ? 'selected' : ''}>Per listing/batch</option><option value="perItem" ${data.fixedFeeMode === 'perItem' ? 'selected' : ''}>Per item</option></select></label>
+        ${field('fixedFee','Fixed fee',data.fixedFee,'number','min="0" step="0.01"','Flat fee amount, such as a listing or transaction fee.')}
+        <label class="span2">${labelText('Accounting notes', 'Optional notes about sale, fees, or cost assumptions.')}<textarea name="accountingNotes" rows="2">${esc(data.accountingNotes || '')}</textarea></label>
         <div class="span2 panel" style="padding:12px"><b>Accounting summary</b><div id="projectAccountingPreview">${projectAccountingResultsHtml(data)}</div></div>
         <div class="span2 small muted">Optional. Sold price is gross revenue for the whole project or batch; fees and costs are calculated from the fields above.</div>`;
     }
@@ -1711,36 +1713,42 @@
         }
       }
     }
-    function field(name, label, value = '', type = 'text', attrs = '') { return `<label>${label}<input name="${name}" type="${type}" value="${esc(value)}" ${attrs}></label>`; }
-    function select(name, label, value, options) { return `<label>${label}<select name="${name}">${options.map(o => `<option value="${esc(o)}" ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`; }
+    function help(text) {
+      return text ? `<span class="help-tip" tabindex="0" title="${esc(text)}" aria-label="${esc(text)}">?</span>` : '';
+    }
+    function labelText(label, tip = '') {
+      return `${esc(label)}${help(tip)}`;
+    }
+    function field(name, label, value = '', type = 'text', attrs = '', tip = '') { return `<label>${labelText(label, tip)}<input name="${name}" type="${type}" value="${esc(value)}" ${attrs}></label>`; }
+    function select(name, label, value, options, tip = '') { return `<label>${labelText(label, tip)}<select name="${name}">${options.map(o => `<option value="${esc(o)}" ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`; }
     function modalFields(kind, data) {
       return `
         ${kind === 'entry' ? field('date','Date',data.date,'date') : ''}
-        ${select('jobType','Job type',data.jobType,['engrave','cut'])}
-        <label class="span2">Material<input name="material" value="${esc(data.material)}" list="materials"></label>
+        ${select('jobType','Job type',data.jobType,['engrave','cut'],'Cut goes through material; engrave marks the surface.')}
+        <label class="span2">${labelText('Material', 'What the blank is made of. Verify unknown materials before lasering.')}<input name="material" value="${esc(data.material)}" list="materials"></label>
         ${materialSafetyFieldHelp(data.material)}
-        ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit)}
-        ${unitField('focusValue','focusUnit','Focus height',data.focusValue,data.focusUnit)}
-        ${field('minPower','Power min (%)',data.minPower,'number','min="0" max="100"')}
-        ${field('maxPower','Power max (%)',data.maxPower,'number','min="0" max="100"')}
-        ${field('speed','Speed (mm/min)',data.speed,'number','min="0"')}
-        ${field('passes','Passes',data.passes,'number','min="1"')}
-        ${field('lineInterval','Line interval, mm',data.lineInterval,'number','step="any" min="0"')}
-        ${field('overscanPercent','Overscan (%)',data.overscanPercent,'number','step="any" min="0"')}
-        ${field('kerfOffset','Kerf offset, mm',data.kerfOffset,'number','step="any"')}
-        ${select('ditherMode','Dither mode',data.ditherMode,ditherModes)}
-        ${unitField('materialHeightValue','materialHeightUnit','Material height / Z-offset',data.materialHeightValue,data.materialHeightUnit)}
-        <label class="row" style="margin-top:20px"><input name="airAssist" type="checkbox" ${data.airAssist ? 'checked' : ''} style="width:auto"> Air assist on</label>
-        ${field('airPressure','Air pressure (psi)',data.airPressure,'number','step="any" min="0"')}
-        <label>Software<input name="software" value="${esc(data.software)}" list="software"></label>
-        ${kind === 'profile' ? `<label>Tags, comma-separated<input name="tags" value="${esc(tagString(data.tags))}" placeholder="gift, acrylic, holiday"></label><div class="span2 small muted">Use short tags for filtering, separated by commas.</div>` : ''}
-        ${kind === 'entry' ? `<label class="span2">Settings file / profile name<input name="settingsFile" value="${esc(data.settingsFile)}"></label><div class="span2"><b class="small">Result quality</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating)}" hidden></div>` : ''}
-        <label class="span2">Notes<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>
+        ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit,'Actual material thickness; important for cutting and focus.')}
+        ${unitField('focusValue','focusUnit','Focus height',data.focusValue,data.focusUnit,'Lens/material focus distance used for this job.')}
+        ${field('minPower','Power min (%)',data.minPower,'number','min="0" max="100"','Laser power percent; higher is stronger and hotter.')}
+        ${field('maxPower','Power max (%)',data.maxPower,'number','min="0" max="100"','Optional upper power for ramps; leave same as min for fixed power.')}
+        ${field('speed','Speed (mm/min)',data.speed,'number','min="0"','Laser head travel speed; slower usually burns or cuts deeper.')}
+        ${field('passes','Passes',data.passes,'number','min="1"','How many times the laser repeats the same job.')}
+        ${field('lineInterval','Line interval, mm',data.lineInterval,'number','step="any" min="0"','Distance between engraving scan lines; smaller is finer/darker but slower.')}
+        ${field('overscanPercent','Overscan (%)',data.overscanPercent,'number','step="any" min="0"','Extra travel past engraving edges to keep motion even.')}
+        ${field('kerfOffset','Kerf offset, mm',data.kerfOffset,'number','step="any"','Compensates for material removed by the laser beam.')}
+        ${select('ditherMode','Dither mode',data.ditherMode,ditherModes,'Dot pattern method for photo or grayscale engraving.')}
+        ${unitField('materialHeightValue','materialHeightUnit','Material height / Z-offset',data.materialHeightValue,data.materialHeightUnit,'Height adjustment from the material surface.')}
+        <label class="row" style="margin-top:20px"><input name="airAssist" type="checkbox" ${data.airAssist ? 'checked' : ''} style="width:auto"> Air assist on ${help('Airflow at the cut; helps reduce flame and charring.')}</label>
+        ${field('airPressure','Air pressure (psi)',data.airPressure,'number','step="any" min="0"','Rough airflow strength when air assist is on.')}
+        <label>${labelText('Software', 'Program used for the job, such as LightBurn.')}<input name="software" value="${esc(data.software)}" list="software"></label>
+        ${kind === 'profile' ? `<label>${labelText('Tags, comma-separated', 'Short labels used for filtering and search.')}<input name="tags" value="${esc(tagString(data.tags))}" placeholder="gift, acrylic, holiday"></label><div class="span2 small muted">Use short tags for filtering, separated by commas.</div>` : ''}
+        ${kind === 'entry' ? `<label class="span2">${labelText('Settings file / profile name', 'Saved LightBurn or settings file reference so you can find it later.')}<input name="settingsFile" value="${esc(data.settingsFile)}"></label><div class="span2"><b class="small">Result quality</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating)}" hidden></div>` : ''}
+        <label class="span2">${labelText('Notes', 'Record what worked, what failed, and anything to remember next time.')}<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>
         <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
         <datalist id="materials">${autocompleteMaterialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>`;
     }
-    function unitField(valueName, unitName, label, value, unit) {
-      return `<label>${label}<span class="unitrow"><input name="${valueName}" type="number" step="any" value="${esc(value)}"><select name="${unitName}"><option ${unit === 'in' ? 'selected' : ''}>in</option><option ${unit === 'mm' ? 'selected' : ''}>mm</option></select></span></label>`;
+    function unitField(valueName, unitName, label, value, unit, tip = '') {
+      return `<label>${labelText(label, tip)}<span class="unitrow"><input name="${valueName}" type="number" step="any" value="${esc(value)}"><select name="${unitName}"><option ${unit === 'in' ? 'selected' : ''}>in</option><option ${unit === 'mm' ? 'selected' : ''}>mm</option></select></span></label>`;
     }
     function readForm(form) {
       const fd = new FormData(form);
@@ -1799,19 +1807,19 @@
     function projectSettingsFields(settings) {
       const s = settings || {};
       return `
-        ${field('settingsMinPower','Power min (%)',s.minPower,'number','min="0" max="100"')}
-        ${field('settingsMaxPower','Power max (%)',s.maxPower,'number','min="0" max="100"')}
-        ${field('settingsSpeed','Speed (mm/min)',s.speed,'number','min="0"')}
-        ${field('settingsPasses','Passes',s.passes || 1,'number','min="1"')}
-        ${field('settingsLineInterval','Line interval, mm',s.lineInterval,'number','step="any" min="0"')}
-        ${field('settingsOverscanPercent','Overscan (%)',s.overscanPercent,'number','step="any" min="0"')}
-        ${field('settingsKerfOffset','Kerf offset, mm',s.kerfOffset,'number','step="any"')}
-        ${select('settingsDitherMode','Dither mode',s.ditherMode || 'none',ditherModes)}
-        ${unitField('settingsFocusValue','settingsFocusUnit','Focus height',s.focusValue,s.focusUnit || state.unit)}
-        <label class="row" style="margin-top:20px"><input name="settingsAirAssist" type="checkbox" ${s.airAssist ? 'checked' : ''} style="width:auto"> Air assist on</label>
-        ${field('settingsAirPressure','Air pressure (psi)',s.airPressure,'number','step="any" min="0"')}
-        <label>Software<input name="settingsSoftware" value="${esc(s.software || '')}" list="software"></label>
-        <label class="span2">Settings file / profile name<input name="settingsFile" value="${esc(s.settingsFile || '')}"></label>`;
+        ${field('settingsMinPower','Power min (%)',s.minPower,'number','min="0" max="100"','Laser power percent; higher is stronger and hotter.')}
+        ${field('settingsMaxPower','Power max (%)',s.maxPower,'number','min="0" max="100"','Optional upper power for ramps; leave same as min for fixed power.')}
+        ${field('settingsSpeed','Speed (mm/min)',s.speed,'number','min="0"','Laser head travel speed; slower usually burns or cuts deeper.')}
+        ${field('settingsPasses','Passes',s.passes || 1,'number','min="1"','How many times the laser repeats the same job.')}
+        ${field('settingsLineInterval','Line interval, mm',s.lineInterval,'number','step="any" min="0"','Distance between engraving scan lines; smaller is finer/darker but slower.')}
+        ${field('settingsOverscanPercent','Overscan (%)',s.overscanPercent,'number','step="any" min="0"','Extra travel past engraving edges to keep motion even.')}
+        ${field('settingsKerfOffset','Kerf offset, mm',s.kerfOffset,'number','step="any"','Compensates for material removed by the laser beam.')}
+        ${select('settingsDitherMode','Dither mode',s.ditherMode || 'none',ditherModes,'Dot pattern method for photo or grayscale engraving.')}
+        ${unitField('settingsFocusValue','settingsFocusUnit','Focus height',s.focusValue,s.focusUnit || state.unit,'Lens/material focus distance used for this Project.')}
+        <label class="row" style="margin-top:20px"><input name="settingsAirAssist" type="checkbox" ${s.airAssist ? 'checked' : ''} style="width:auto"> Air assist on ${help('Airflow at the cut; helps reduce flame and charring.')}</label>
+        ${field('settingsAirPressure','Air pressure (psi)',s.airPressure,'number','step="any" min="0"','Rough airflow strength when air assist is on.')}
+        <label>${labelText('Software', 'Program used for the job, such as LightBurn.')}<input name="settingsSoftware" value="${esc(s.software || '')}" list="software"></label>
+        <label class="span2">${labelText('Settings file / profile name', 'Saved LightBurn or settings file reference so you can find it later.')}<input name="settingsFile" value="${esc(s.settingsFile || '')}"></label>`;
     }
     function openProject(project, options = {}) {
       editingProjectId = project && project.id ? project.id : null;
@@ -1823,23 +1831,23 @@
         : '';
       openModal('projectModal', `<div class="dialog"><div class="spread"><h2>${editingProjectId ? 'Edit project' : 'New project'}</h2><button data-close>×</button></div><form id="projectForm" class="formgrid">
         ${draftBanner}
-        <label class="span2">Project name<input name="name" value="${esc(data.name)}"></label>
+        <label class="span2">${labelText('Project name', 'Name of the finished piece or batch.')}<input name="name" value="${esc(data.name)}"></label>
         ${field('dateCreated','Date',data.dateCreated || today(),'date')}
-        ${select('jobType','Job type',data.jobType,['engrave','cut'])}
-        <label class="span2">Material<input name="material" value="${esc(data.material)}" list="materials"></label>
+        ${select('jobType','Job type',data.jobType,['engrave','cut'],'Cut goes through material; engrave marks the surface.')}
+        <label class="span2">${labelText('Material', 'What the blank is made of. Verify unknown materials before lasering.')}<input name="material" value="${esc(data.material)}" list="materials"></label>
         ${materialSafetyFieldHelp(data.material)}
-        ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit)}
-        <label>Tags, comma-separated<input name="tags" value="${esc(tagValue)}" placeholder="gift, coasters"></label>
+        ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit,'Actual material thickness; important for cutting and focus.')}
+        <label>${labelText('Tags, comma-separated', 'Short labels used for filtering and search.')}<input name="tags" value="${esc(tagValue)}" placeholder="gift, coasters"></label>
         <div class="span2 small muted">Use short tags for filtering, separated by commas.</div>
         <div class="span2"><b class="small">Project rating</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating || 0)}" hidden></div>
         <h3 class="span2" style="margin:8px 0 0">Photos</h3>
-        <label class="span2">Add project photos<input id="projectPhotoInput" type="file" accept="image/*" multiple></label>
+        <label class="span2">${labelText('Add project photos', 'Photos are compressed and stored offline inside this Project and JSON backup.')}<input id="projectPhotoInput" type="file" accept="image/*" multiple></label>
         <div class="span2 small muted">Up to 3 photos. Images are resized to about 1200px max and compressed before saving; photos increase localStorage and JSON backup size.</div>
         <div class="span2"><div class="spread"><b class="small">Photo previews</b><span class="pill" id="projectPhotoCount">${projectPhotosDraft.length}/3 photos</span></div><div id="projectPhotoPreview" style="margin-top:8px">${projectPhotosHtml(projectPhotosDraft)}</div></div>
         <h3 class="span2" style="margin:8px 0 0">Settings snapshot</h3>
         ${projectSettingsFields(data.settings)}
         ${projectAccountingFields(data)}
-        <label class="span2">Notes<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>
+        <label class="span2">${labelText('Notes', 'General notes about this finished Project.')}<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>
         <input name="sourceEntryId" value="${esc(data.sourceEntryId || '')}" hidden>
         <input name="sourceProfileId" value="${esc(data.sourceProfileId || '')}" hidden>
         <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
@@ -1990,17 +1998,22 @@
     function openGridForm() {
       const data = formDefaults('grid');
       openModal('gridModal', `<div class="dialog"><div class="spread"><h2>New test grid</h2><button data-close>×</button></div><form id="gridForm" class="formgrid">
-        ${field('name','Grid name',data.name)}${select('jobType','Job type',data.jobType,['engrave','cut'])}
-        <label class="span2">Material<input name="material" value="" list="materials"></label>
+        ${field('name','Grid name',data.name,'text','','Name for this material test matrix.')}${select('jobType','Job type',data.jobType,['engrave','cut'],'Cut goes through material; engrave marks the surface.')}
+        <label class="span2">${labelText('Material', 'What the blank is made of. Verify unknown materials before lasering.')}<input name="material" value="" list="materials"></label>
         ${materialSafetyFieldHelp('')}
-        ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit)}
-        ${field('passes','Passes',data.passes,'number','min="1"')}
-        ${field('powerMin','Power min (%)',data.powerMin,'number')}${field('powerMax','Power max (%)',data.powerMax,'number')}${field('powerStep','Power step',data.powerStep,'number')}
-        ${field('speedMin','Speed min',data.speedMin,'number')}${field('speedMax','Speed max',data.speedMax,'number')}${field('speedStep','Speed step',data.speedStep,'number')}
-        ${field('lineInterval','Line interval, mm',data.lineInterval,'number','step="any"')}${select('ditherMode','Dither mode',data.ditherMode,ditherModes)}
-        <label class="row" style="margin-top:20px"><input name="airAssist" type="checkbox" style="width:auto"> Air assist on</label>
-        ${field('airPressure','Air pressure (psi)',data.airPressure,'number','step="any"')}
-        <label>Software<input name="software" value="${esc(data.software)}" list="software"></label>
+        ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit,'Actual material thickness; important for cutting and focus.')}
+        ${field('passes','Passes',data.passes,'number','min="1"','How many times the laser repeats each test cell.')}
+        ${field('powerMin','Power min (%)',data.powerMin,'number','','Lowest laser power to test.')}
+        ${field('powerMax','Power max (%)',data.powerMax,'number','','Highest laser power to test.')}
+        ${field('powerStep','Power step',data.powerStep,'number','','How much power changes between grid columns or rows.')}
+        ${field('speedMin','Speed min',data.speedMin,'number','','Slowest travel speed to test; slower usually burns deeper.')}
+        ${field('speedMax','Speed max',data.speedMax,'number','','Fastest travel speed to test.')}
+        ${field('speedStep','Speed step',data.speedStep,'number','','How much speed changes between grid cells.')}
+        ${field('lineInterval','Line interval, mm',data.lineInterval,'number','step="any"','Distance between engraving scan lines; smaller is finer/darker but slower.')}
+        ${select('ditherMode','Dither mode',data.ditherMode,ditherModes,'Dot pattern method for photo or grayscale engraving.')}
+        <label class="row" style="margin-top:20px"><input name="airAssist" type="checkbox" style="width:auto"> Air assist on ${help('Airflow at the cut; helps reduce flame and charring.')}</label>
+        ${field('airPressure','Air pressure (psi)',data.airPressure,'number','step="any"','Rough airflow strength when air assist is on.')}
+        <label>${labelText('Software', 'Program used for the grid, such as LightBurn.')}<input name="software" value="${esc(data.software)}" list="software"></label>
         <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
         <datalist id="materials">${autocompleteMaterialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
         <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Create grid</button></div></form></div>`);
@@ -2027,9 +2040,9 @@
       const g = state.grids.find(x => x.id === activeGridId);
       const existing = (g.cells || {})[key] || { rating: 0, notes: '', best: false };
       openModal('cellModal', `<div class="dialog" style="max-width:420px"><div class="spread"><h2>${esc(key.replace('_', '% - '))} mm/min</h2><button data-close>×</button></div><form id="cellForm" class="grid">
-        <label>Rating<select name="rating">${[0,1,2,3,4,5].map(n => `<option ${n === existing.rating ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-        <label class="row"><input type="checkbox" name="best" ${existing.best ? 'checked' : ''} style="width:auto"> Mark as best setting</label>
-        <label>Notes<textarea name="notes" rows="3">${esc(existing.notes)}</textarea></label>
+        <label>${labelText('Rating', 'Score this power/speed result from unusable to excellent.')}<select name="rating">${[0,1,2,3,4,5].map(n => `<option ${n === existing.rating ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <label class="row"><input type="checkbox" name="best" ${existing.best ? 'checked' : ''} style="width:auto"> Mark as best setting ${help('Marks this cell as the winner for the material test.')}</label>
+        <label>${labelText('Notes', 'What happened in this cell: cut through, scorch, weak mark, good result, etc.')}<textarea name="notes" rows="3">${esc(existing.notes)}</textarea></label>
         <div class="actions"><button type="button" id="clearCell">Clear</button><button type="button" id="cellToLibrary">Save to library</button><button class="primary">Save</button></div>
       </form></div>`);
       bindModal('cellModal');
