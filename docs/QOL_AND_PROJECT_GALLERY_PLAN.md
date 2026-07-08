@@ -14,14 +14,14 @@
 | Standalone offline baseline | `index.html` has no `support.js`/x-dc or Google Fonts dependency — opens straight from disk |
 | Open Manual button | Reference tab links to the local PDF in `docs/` |
 | Library search/filter | Library now has the same search/filter treatment as Log (was flagged as an inconsistency in the original audit) |
-| 20W focus helper | `focusSuggestion()` — enter job type + thickness, get a fixed-focus recommendation (line ~270 in `index.html`) |
-| Material autocomplete | `<datalist id="materials">` seeded from saved materials, raw Inventory material names, and official reference rows |
+| 20W focus helper | `focusSuggestion()` gives fixed-focus guidance for 20W and is hidden/reworded when the 40W profile is selected |
+| Material autocomplete | Custom material suggestions draw from saved materials, raw Inventory material names, and official reference rows |
 | README/docs cleanup | Storage model, file roles, and data fields documented |
 | Pushed to GitHub | Repo is live and clean |
 | **Duplicate entry button** | Clone a Log entry or Library profile into a new draft with the same settings, ready for a quick tweak-and-resave (`e481745`) |
 | **Print-friendly Library view** | Print Library button + dedicated print stylesheet renders a clean shop cheat sheet (`e481745`) |
 | **Import merge mode** | Import now prompts: OK = merge into current data by `id`, Cancel = replace everything (with a second confirmation) (`e481745`) |
-| **Sort controls** | Log, Library, and Projects now have sort dropdowns with locally remembered preferences |
+| **Sort controls** | Log, Library, Projects, and Inventory now have sort dropdowns with locally remembered preferences |
 | **Reference-seeded material autocomplete** | Material fields now suggest both saved user materials and official SainSmart reference materials |
 | **Keyboard shortcuts** | `Ctrl+N`, `Ctrl+S`, `Esc`, and `/` cover new-item, save-form, close/back, and search-focus flows |
 | **Full local 20W chart** | `docs/L8_Engraving_Speed_Power_Reference_Chart_20W.pdf` is linked from Reference and its rows are reflected in the 20W table |
