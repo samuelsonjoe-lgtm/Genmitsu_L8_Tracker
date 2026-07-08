@@ -39,10 +39,11 @@
 | **Project accounting reports pack 1** | Projects tab now summarizes filtered accounting totals, quantity, overall margin, status counts, and a copyable plain-text report |
 | **Material safety warning pack 1** | Material fields and cards surface warning-only guidance for PVC/vinyl/chlorinated plastics, unknown plastics, fiberglass, carbon fiber, coated unknown metal, and mystery materials |
 | **Backup/import completeness pack 1** | JSON backups now include Pricing draft/defaults, selected machine profile, saved sort preferences, and Library match helper inputs while keeping session filters/search out |
+| **Project Photos MVP** | Projects can store up to 3 compressed offline photos, show cover thumbnails in the gallery, preview photos, and export/import photos inside Project records |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
-**Next candidate:** Project photo capture or another narrow Project Gallery polish pass. The first tag-system pass is now complete without expanding into inventory management.
+**Next candidate:** Another narrow Project Gallery polish pass. The first tag-system pass and Project Photos MVP are complete without expanding into inventory management.
 
 ### 1.3 Still open from the original backlog
 
@@ -166,7 +167,7 @@ This is the one part of the feature that's constrained by where the app is archi
 |-------|------|------------|
 | 1 | Data model + `schemaVersion: 2`, `projects: []` added to state/load/save, migration for old exports (missing `projects`/`schemaVersion` defaults to `[]`/`1`) | Done in `d73220f` |
 | 2 | Projects tab: card grid, search/filter/sort, create/edit/delete, "Save as Project" from Log & Library, "Copy to Log" from Projects | Done across `d73220f` and the sort-control follow-up |
-| 3 | Photo capture: file input → canvas downscale → base64 `dataUrl`, primary photo display on cards | Phase 2 |
+| 3 | Photo capture: file input → canvas downscale → base64 `dataUrl`, primary photo display on cards | Done: up to 3 compressed photos per Project with gallery cover thumbnails and simple preview |
 | 4 | Print/export niceties: include Projects in JSON export (already automatic once in `state`), optional single-project print view | Phase 2 |
 | 5 | (Later, post-Tauri) Swap `dataUrl` storage for on-disk file storage + one-time migration | Tauri desktop packaging from the standalone-offline audit |
 | 6 | Expense/sale tracking on Projects — see §2.7 | Done: Project records store optional sale/cost/profit accounting fields, compute summaries, accept Pricing estimate drafts, export accounting CSV, and show filtered report totals. |

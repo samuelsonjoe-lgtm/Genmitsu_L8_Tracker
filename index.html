@@ -82,6 +82,12 @@
     .metric { border-radius: 7px; padding: 8px; background: #f3f6fa; }
     .metric b { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; }
     .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .project-cover { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 7px; border: 1px solid var(--line); margin-bottom: 10px; background: #eef1f5; cursor: pointer; }
+    .photo-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+    .photo-thumb { border: 1px solid var(--line); border-radius: 7px; padding: 7px; background: #f8fafc; }
+    .photo-thumb img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 5px; display: block; }
+    .photo-thumb button { width: 100%; margin-top: 6px; padding: 6px; }
+    .photo-preview-large { max-width: 100%; max-height: 72vh; border-radius: 8px; display: block; margin: 10px auto 0; }
     .empty { text-align: center; padding: 48px 20px; color: var(--muted); }
     .modal {
       position: fixed;
@@ -267,6 +273,7 @@
     let editingEntryId = null;
     let editingProfileId = null;
     let editingProjectId = null;
+    let projectPhotosDraft = [];
     let pendingUndo = null;
 
     function loadState() {
@@ -1371,9 +1378,90 @@
         <div class="actions"><button data-edit-profile="${p.id}">Edit</button><button data-duplicate-profile="${p.id}">Duplicate</button><button data-project-profile="${p.id}">Save as project</button></div>
       </article>`;
     }
+    function normalizeProjectPhotos(photos) {
+      if (!Array.isArray(photos)) return [];
+      return photos.map((photo, index) => {
+        if (typeof photo === 'string') return { id: uid(), dataUrl: photo, name: `Photo ${index + 1}`, type: 'image', addedAt: '' };
+        if (!photo || typeof photo !== 'object' || !photo.dataUrl) return null;
+        return {
+          id: photo.id || uid(),
+          dataUrl: photo.dataUrl,
+          name: photo.name || `Photo ${index + 1}`,
+          type: photo.type || 'image/jpeg',
+          addedAt: photo.addedAt || '',
+          caption: photo.caption || '',
+          width: photo.width || '',
+          height: photo.height || ''
+        };
+      }).filter(Boolean).slice(0, 3);
+    }
+    function projectCoverPhoto(project) {
+      return normalizeProjectPhotos(project.photos)[0] || null;
+    }
+    function projectPhotosHtml(photos = projectPhotosDraft) {
+      const normalized = normalizeProjectPhotos(photos);
+      return `<div class="photo-strip">${normalized.map(photo => `<div class="photo-thumb">
+        <img src="${esc(photo.dataUrl)}" alt="${esc(photo.name || 'Project photo')}">
+        <button type="button" data-remove-project-photo="${esc(photo.id)}">Remove</button>
+      </div>`).join('') || '<div class="small muted">No photos added yet.</div>'}</div>`;
+    }
+    function renderProjectPhotoDraft() {
+      const count = document.getElementById('projectPhotoCount');
+      if (count) count.textContent = `${projectPhotosDraft.length}/3 photos`;
+      const preview = document.getElementById('projectPhotoPreview');
+      if (preview) preview.innerHTML = projectPhotosHtml(projectPhotosDraft);
+      document.querySelectorAll('[data-remove-project-photo]').forEach(button => {
+        button.onclick = () => {
+          projectPhotosDraft = projectPhotosDraft.filter(photo => photo.id !== button.dataset.removeProjectPhoto);
+          renderProjectPhotoDraft();
+        };
+      });
+    }
+    function compressProjectPhoto(file) {
+      return new Promise((resolve, reject) => {
+        if (!file || !file.type || !file.type.startsWith('image/')) return reject(new Error('Choose an image file.'));
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Could not read image file.'));
+        reader.onload = () => {
+          const img = new Image();
+          img.onerror = () => reject(new Error('Could not load image file.'));
+          img.onload = () => {
+            const maxSide = 1200;
+            const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+            const width = Math.max(1, Math.round(img.width * scale));
+            const height = Math.max(1, Math.round(img.height * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve({
+              id: uid(),
+              dataUrl: canvas.toDataURL('image/jpeg', 0.72),
+              name: file.name || 'Project photo',
+              type: 'image/jpeg',
+              addedAt: new Date().toISOString(),
+              width,
+              height
+            });
+          };
+          img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    function openProjectPhotoViewer(projectId, photoIndex = 0) {
+      const project = state.projects.find(p => p.id === projectId);
+      const photo = project && normalizeProjectPhotos(project.photos)[photoIndex];
+      if (!photo) return;
+      openModal('cellModal', `<div class="dialog"><div class="spread"><h2>${esc(project.name || 'Project photo')}</h2><button data-close>×</button></div><img class="photo-preview-large" src="${esc(photo.dataUrl)}" alt="${esc(photo.name || project.name || 'Project photo')}"><div class="small muted" style="margin-top:8px">${esc(photo.name || '')}</div></div>`);
+      bindModal('cellModal');
+    }
     function projectCard(p) {
       const s = p.settings || {};
+      const cover = projectCoverPhoto(p);
       return `<article class="card">
+        ${cover ? `<img class="project-cover" src="${esc(cover.dataUrl)}" alt="${esc(cover.name || p.name || 'Project photo')}" data-project-photo="${esc(p.id)}" data-photo-index="0">` : ''}
         <div class="spread"><div><b>${esc(p.name)}</b><div class="small muted">${esc(p.material)} - ${fmt(p.thicknessValue, p.thicknessUnit)} - ${esc(p.jobType)} - ${esc(p.dateCreated)}</div></div>${stars(p.rating)}</div>
         ${materialSafetyWarningHtml(p.material)}
         <div class="row" style="margin-top:8px">${tagsOf(p).map(t => `<span class="pill">${esc(t)}</span>`).join('') || '<span class="pill">untagged</span>'}</div>
@@ -1562,6 +1650,10 @@
       document.querySelectorAll('[data-edit-project]').forEach(b => b.onclick = () => openProject(state.projects.find(p => p.id === b.dataset.editProject)));
       document.querySelectorAll('[data-delete-project]').forEach(b => b.onclick = () => del('projects', b.dataset.deleteProject, 'Delete this project?', 'Project'));
       document.querySelectorAll('[data-project-to-entry]').forEach(b => b.onclick = () => projectToEntry(b.dataset.projectToEntry));
+      document.querySelectorAll('[data-project-photo]').forEach(img => img.onclick = e => {
+        e.stopPropagation();
+        openProjectPhotoViewer(img.dataset.projectPhoto, Number(img.dataset.photoIndex || 0));
+      });
       document.querySelectorAll('[data-open-grid]').forEach(c => c.onclick = () => { activeGridId = c.dataset.openGrid; render(); });
       document.querySelectorAll('[data-cell]').forEach(c => c.onclick = () => openCell(c.dataset.cell));
       document.querySelectorAll('[data-ref]').forEach(b => b.onclick = () => saveReference(b.dataset.ref));
@@ -1724,6 +1816,7 @@
     function openProject(project, options = {}) {
       editingProjectId = project && project.id ? project.id : null;
       const data = { ...formDefaults('project'), ...(project || {}) };
+      projectPhotosDraft = normalizeProjectPhotos(data.photos);
       const tagValue = Array.isArray(data.tags) ? tagString(data.tags) : data.tags;
       const draftBanner = options.draftNote
         ? `<div class="span2 panel" style="padding:10px 12px; background:#fff4db; border-color:#d9982f">${esc(options.draftNote)}</div>`
@@ -1739,6 +1832,10 @@
         <label>Tags, comma-separated<input name="tags" value="${esc(tagValue)}" placeholder="gift, coasters"></label>
         <div class="span2 small muted">Use short tags for filtering, separated by commas.</div>
         <div class="span2"><b class="small">Project rating</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating || 0)}" hidden></div>
+        <h3 class="span2" style="margin:8px 0 0">Photos</h3>
+        <label class="span2">Add project photos<input id="projectPhotoInput" type="file" accept="image/*" multiple></label>
+        <div class="span2 small muted">Up to 3 photos. Images are resized to about 1200px max and compressed before saving; photos increase localStorage and JSON backup size.</div>
+        <div class="span2"><div class="spread"><b class="small">Photo previews</b><span class="pill" id="projectPhotoCount">${projectPhotosDraft.length}/3 photos</span></div><div id="projectPhotoPreview" style="margin-top:8px">${projectPhotosHtml(projectPhotosDraft)}</div></div>
         <h3 class="span2" style="margin:8px 0 0">Settings snapshot</h3>
         ${projectSettingsFields(data.settings)}
         ${projectAccountingFields(data)}
@@ -1749,7 +1846,23 @@
         <datalist id="materials">${autocompleteMaterialNames().map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
         <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save project</button></div></form></div>`);
       bindModal('projectModal');
+      renderProjectPhotoDraft();
       document.querySelectorAll('#projectModal .star').forEach(s => s.onclick = () => { document.querySelector('#projectModal [name=rating]').value = s.dataset.rating; document.querySelectorAll('#projectModal .star').forEach(x => x.classList.toggle('on', Number(x.dataset.rating) <= Number(s.dataset.rating))); });
+      document.getElementById('projectPhotoInput').onchange = async e => {
+        const files = [...e.target.files];
+        for (const file of files) {
+          if (projectPhotosDraft.length >= 3) break;
+          try {
+            const photo = await compressProjectPhoto(file);
+            projectPhotosDraft.push(photo);
+            renderProjectPhotoDraft();
+          } catch (err) {
+            alert(err.message || 'Could not add that photo.');
+          }
+        }
+        e.target.value = '';
+        if (files.length && projectPhotosDraft.length >= 3) showInfoToast('Project photo limit is 3 photos.');
+      };
       document.getElementById('projectForm').oninput = e => {
         bindMaterialSafetyWarning(e.currentTarget);
         const preview = document.getElementById('projectAccountingPreview');
@@ -1765,8 +1878,13 @@
         const f = readForm(e.target);
         if (!f.name.trim() || !f.material.trim()) return alert('Add a project name and material first.');
         const projectObj = normalizeProject(f, editingProjectId);
-        upsert('projects', projectObj);
-        closeModal('projectModal');
+        try {
+          upsert('projects', projectObj);
+          projectPhotosDraft = [];
+          closeModal('projectModal');
+        } catch (err) {
+          alert('Could not save this project. Photos may be using too much browser storage; remove one or more photos or export a backup first.');
+        }
       };
     }
     function normalizeProject(f, existingId) {
@@ -1778,7 +1896,7 @@
         jobType: f.jobType, dateCreated: f.dateCreated || today(), tags: tagArray(f.tags),
         rating: num(f.rating, 0), notes: (f.notes || '').trim(),
         sourceEntryId: f.sourceEntryId || null, sourceProfileId: f.sourceProfileId || null,
-        photos: existingProject && Array.isArray(existingProject.photos) ? existingProject.photos : [],
+        photos: normalizeProjectPhotos(projectPhotosDraft),
         settings: {
           minPower, maxPower: f.settingsMaxPower === '' ? minPower : num(f.settingsMaxPower), speed: num(f.settingsSpeed),
           passes: Math.max(1, Math.round(num(f.settingsPasses, 1))), lineInterval: f.settingsLineInterval === '' ? '' : num(f.settingsLineInterval),
