@@ -41,6 +41,7 @@
 | **Backup/import completeness pack 1** | JSON backups now include Pricing draft/defaults, selected machine profile, saved sort preferences, and Library match helper inputs while keeping session filters/search out |
 | **Project Photos MVP** | Projects can store up to 3 compressed offline photos, show cover thumbnails in the gallery, preview photos, and export/import photos inside Project records |
 | **Field hover help / tooltips pack 1** | Laser settings, Test Grid, Pricing, Project accounting, tags, and photo fields now have short focusable help tips for beginner terminology |
+| **Storage/search/import fix-soon pack 1** | Persist errors are caught, photo-heavy exports warn with approximate size, replace imports reset absent optional prefs, Library/Projects search is live, Project accounting CSV respects filters, and grid caps/blank speed display are clearer |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 

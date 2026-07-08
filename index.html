@@ -277,6 +277,7 @@
     let editingProjectId = null;
     let projectPhotosDraft = [];
     let pendingUndo = null;
+    let storageWarningShown = false;
 
     function loadState() {
       try {
@@ -317,7 +318,13 @@
     }
     function persist() {
       const { entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
+        return true;
+      } catch (err) {
+        showStorageWarning();
+        return false;
+      }
     }
     function backupObject() {
       return {
@@ -337,6 +344,14 @@
         pricing: state.pricing,
         pricingPrefs: state.pricingPrefs
       };
+    }
+    function formatBytes(bytes) {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    }
+    function projectPhotoCount(projects = state.projects) {
+      return projects.reduce((sum, project) => sum + normalizeProjectPhotos(project.photos).length, 0);
     }
     function setTab(tab) { state.activeTab = tab; render(); }
     function roundUnitValue(value) {
@@ -675,10 +690,9 @@
         ${referenceTable(`${state.machineProfile} official starting points`, activeRows, state.machineProfile)}
       `;
     }
-    function renderProjects() {
-      const tags = projectTags();
+    function filteredProjects() {
       const q = state.projectSearch.toLowerCase();
-      const filtered = sortBy(state.projects.filter(p => {
+      return sortBy(state.projects.filter(p => {
         const tags = tagsOf(p);
         const tagOk = state.projectTagFilter === 'all' || tags.includes(state.projectTagFilter);
         const status = p.status || 'kept';
@@ -686,6 +700,10 @@
         const hay = [p.name, p.material, p.notes, ...tags].join(' ').toLowerCase();
         return tagOk && statusOk && (!q || hay.includes(q));
       }), state.projectSort);
+    }
+    function renderProjects() {
+      const tags = projectTags();
+      const filtered = filteredProjects();
       return `
         <div class="toolbar" style="margin-bottom:14px">
           <div>
@@ -693,7 +711,7 @@
             <div class="small muted">Finished pieces with their exact repeatable settings snapshot.</div>
           </div>
           <div class="row">
-            <button id="exportProjectsCsv" type="button">Export accounting CSV</button>
+            <button id="exportProjectsCsv" type="button">Export filtered accounting CSV</button>
             <button class="primary" id="newProject">New Project</button>
           </div>
         </div>
@@ -1169,16 +1187,7 @@
       box.select();
     }
     function copyProjectReportSummary() {
-      const q = state.projectSearch.toLowerCase();
-      const filtered = sortBy(state.projects.filter(p => {
-        const projectTags = tagsOf(p);
-        const tagOk = state.projectTagFilter === 'all' || projectTags.includes(state.projectTagFilter);
-        const status = p.status || 'kept';
-        const statusOk = state.projectStatusFilter === 'all' || status === state.projectStatusFilter;
-        const hay = [p.name, p.material, p.notes, ...projectTags].join(' ').toLowerCase();
-        return tagOk && statusOk && (!q || hay.includes(q));
-      }), state.projectSort);
-      const text = projectAccountingReportText(filtered);
+      const text = projectAccountingReportText(filteredProjects());
       const button = document.getElementById('copyProjectReport');
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => {
@@ -1246,7 +1255,7 @@
         Number.isFinite(t.breakEvenPrice) ? t.breakEvenPrice : ''
       ];
     }
-    function projectsAccountingCsv() {
+    function projectsAccountingCsv(projects = state.projects) {
       const headers = [
         'project_id', 'name', 'material', 'thickness_value', 'thickness_unit', 'job_type', 'date_created',
         'tags', 'rating', 'notes', 'source_entry_id', 'source_profile_id',
@@ -1259,12 +1268,14 @@
         'calc_labor_cost', 'calc_fee_cost', 'calc_total_cost', 'calc_profit_total',
         'calc_profit_per_item', 'calc_margin_percent', 'calc_break_even_price'
       ];
-      const rows = sortBy([...state.projects], state.projectSort).map(projectAccountingCsvRow);
+      const rows = projects.map(projectAccountingCsvRow);
       return csvRows([headers, ...rows]);
     }
     function exportProjectsAccountingCsv() {
+      const projects = filteredProjects();
       if (!state.projects.length) return alert('No projects to export yet.');
-      downloadTextFile(`l8-projects-accounting-${today()}.csv`, projectsAccountingCsv(), 'text/csv;charset=utf-8');
+      if (!projects.length) return alert('No projects match the current filters.');
+      downloadTextFile(`l8-projects-accounting-filtered-${today()}.csv`, projectsAccountingCsv(projects), 'text/csv;charset=utf-8');
     }
     function projectAccountingFields(data) {
       return `
@@ -1462,12 +1473,13 @@
     function projectCard(p) {
       const s = p.settings || {};
       const cover = projectCoverPhoto(p);
+      const speedLabel = s.speed === '' || s.speed == null ? '-' : `${s.speed} mm/min`;
       return `<article class="card">
         ${cover ? `<img class="project-cover" src="${esc(cover.dataUrl)}" alt="${esc(cover.name || p.name || 'Project photo')}" data-project-photo="${esc(p.id)}" data-photo-index="0">` : ''}
         <div class="spread"><div><b>${esc(p.name)}</b><div class="small muted">${esc(p.material)} - ${fmt(p.thicknessValue, p.thicknessUnit)} - ${esc(p.jobType)} - ${esc(p.dateCreated)}</div></div>${stars(p.rating)}</div>
         ${materialSafetyWarningHtml(p.material)}
         <div class="row" style="margin-top:8px">${tagsOf(p).map(t => `<span class="pill">${esc(t)}</span>`).join('') || '<span class="pill">untagged</span>'}</div>
-        <div class="metrics">${metric('Power', powerLabel(s))}${metric('Speed', `${s.speed || 0} mm/min`)}${metric('Passes', s.passes || 1)}${metric('Line int.', fmt(s.lineInterval, 'mm'))}</div>
+        <div class="metrics">${metric('Power', powerLabel(s))}${metric('Speed', speedLabel)}${metric('Passes', s.passes || 1)}${metric('Line int.', fmt(s.lineInterval, 'mm'))}</div>
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(s.focusValue, s.focusUnit)} - Air: ${s.airAssist ? 'On' : 'Off'}${s.software ? ' - ' + esc(s.software) : ''}</div>
         ${hasProjectAccounting(p) ? projectAccountingMetrics(p) : ''}
         ${p.notes ? `<p class="small">${esc(p.notes)}</p>` : ''}
@@ -1477,10 +1489,11 @@
     function gridCard(g) {
       const powers = range(g.powerMin, g.powerMax, g.powerStep);
       const speeds = range(g.speedMin, g.speedMax, g.speedStep);
+      const truncated = rangeIsTruncated(g.powerMin, g.powerMax, g.powerStep) || rangeIsTruncated(g.speedMin, g.speedMax, g.speedStep);
       return `<article class="card" data-open-grid="${g.id}" style="cursor:pointer">
         <b>${esc(g.name)}</b><div class="small muted">${esc(g.material)} - ${fmt(g.thicknessValue, g.thicknessUnit)} - ${esc(g.createdDate)}</div>
         ${materialSafetyWarningHtml(g.material)}
-        <div class="row" style="margin-top:10px"><span class="pill">${powers.length}x${speeds.length} grid</span><span class="pill">${Object.keys(g.cells || {}).length}/${powers.length * speeds.length} recorded</span></div>
+        <div class="row" style="margin-top:10px"><span class="pill">${powers.length}x${speeds.length} grid</span><span class="pill">${Object.keys(g.cells || {}).length}/${powers.length * speeds.length} recorded</span>${truncated ? '<span class="pill warn">range capped</span>' : ''}</div>
       </article>`;
     }
     function metric(label, value) { return `<div class="metric"><b>${esc(label)}</b>${esc(value)}</div>`; }
@@ -1489,6 +1502,10 @@
       const mn = num(min), mx = num(max), st = Math.max(num(step, 1), 0.01);
       for (let v = mn; v <= mx + 1e-6 && out.length < 60; v += st) out.push(Math.round(v * 100) / 100);
       return out.length ? out : [mn];
+    }
+    function rangeIsTruncated(min, max, step) {
+      const mn = num(min), mx = num(max), st = Math.max(num(step, 1), 0.01);
+      return mn <= mx && Math.floor((mx - mn) / st) + 1 > 60;
     }
     function csvValue(value) {
       const text = String(value ?? '');
@@ -1530,7 +1547,9 @@
       if (!g) { activeGridId = null; return renderGrids(); }
       const powers = range(g.powerMin, g.powerMax, g.powerStep);
       const speeds = range(g.speedMin, g.speedMax, g.speedStep);
+      const truncated = rangeIsTruncated(g.powerMin, g.powerMax, g.powerStep) || rangeIsTruncated(g.speedMin, g.speedMax, g.speedStep);
       let html = `<div class="toolbar" style="margin-bottom:12px"><div class="row"><button id="backGrids">Back</button><div><b>${esc(g.name)}</b><div class="small muted">${esc(g.material)} - ${fmt(g.thicknessValue, g.thicknessUnit)} - ${esc(g.jobType)} - ${g.passes} pass(es)</div></div></div><div class="row"><button id="exportGridCsv">Export CSV</button><button class="danger" id="deleteGrid">Delete grid</button></div></div>`;
+      if (truncated) html += '<div class="panel" style="margin-bottom:12px;background:#fff8e7;border-color:#ead59f"><b>Grid range capped.</b> <span class="small">Power or speed ranges are limited to 60 steps to keep the browser responsive. Increase the step size or narrow the range to test every value.</span></div>';
       html += '<div class="grid-table"><div class="matrix" style="grid-template-columns:70px ' + speeds.map(() => '76px').join(' ') + '">';
       html += '<div></div>' + speeds.map(s => `<div class="axis">${s}<br>mm/min</div>`).join('');
       powers.forEach(p => {
@@ -1553,7 +1572,7 @@
       const entrySort = document.getElementById('entrySort');
       if (entrySort) entrySort.onchange = e => { state.entrySort = e.target.value; persist(); render(); };
       const librarySearch = document.getElementById('librarySearch');
-      if (librarySearch) librarySearch.onchange = e => { state.librarySearch = e.target.value; render(); };
+      if (librarySearch) librarySearch.oninput = e => { state.librarySearch = e.target.value; render(); };
       const libraryFilter = document.getElementById('libraryFilter');
       if (libraryFilter) libraryFilter.onchange = e => { state.libraryFilter = e.target.value; render(); };
       const libraryTagFilter = document.getElementById('libraryTagFilter');
@@ -1575,7 +1594,7 @@
       const machineProfile = document.getElementById('machineProfile');
       if (machineProfile) machineProfile.onchange = e => { state.machineProfile = e.target.value; persist(); render(); };
       const projectSearch = document.getElementById('projectSearch');
-      if (projectSearch) projectSearch.onchange = e => { state.projectSearch = e.target.value; render(); };
+      if (projectSearch) projectSearch.oninput = e => { state.projectSearch = e.target.value; render(); };
       const projectTagFilter = document.getElementById('projectTagFilter');
       if (projectTagFilter) projectTagFilter.onchange = e => { state.projectTagFilter = e.target.value; render(); };
       const clearProjectTag = document.getElementById('clearProjectTag');
@@ -1887,7 +1906,7 @@
         if (!f.name.trim() || !f.material.trim()) return alert('Add a project name and material first.');
         const projectObj = normalizeProject(f, editingProjectId);
         try {
-          upsert('projects', projectObj);
+          if (!upsert('projects', projectObj)) return;
           projectPhotosDraft = [];
           closeModal('projectModal');
         } catch (err) {
@@ -2066,8 +2085,15 @@
     function upsert(key, item) {
       const list = state[key];
       const idx = list.findIndex(x => x.id === item.id);
+      const previous = idx >= 0 ? list[idx] : null;
       if (idx >= 0) list[idx] = item; else list.unshift(item);
-      persist(); render();
+      const saved = persist();
+      if (!saved) {
+        if (idx >= 0) list[idx] = previous;
+        else list.shift();
+      }
+      render();
+      return saved;
     }
     function mergeList(existing, incoming) {
       const merged = [...existing];
@@ -2090,12 +2116,24 @@
       if (data.pricing && typeof data.pricing === 'object') state.pricing = { ...pricingDefaults(), ...data.pricing };
       if (data.pricingPrefs && typeof data.pricingPrefs === 'object') state.pricingPrefs = { ...pricingPreferenceDefaults(), ...data.pricingPrefs };
     }
+    function resetBackupPreferences() {
+      state.entrySort = 'date-desc';
+      state.librarySort = 'material-asc';
+      state.projectSort = 'date-desc';
+      state.libraryMatchMaterial = '';
+      state.libraryMatchThickness = '';
+      state.libraryMatchUnit = state.unit || 'in';
+      state.machineProfile = '20W';
+      state.pricing = pricingDefaults();
+      state.pricingPrefs = pricingPreferenceDefaults();
+    }
     function replaceData(data) {
       state.entries = data.entries || [];
       state.profiles = data.profiles || [];
       state.grids = data.grids || [];
       state.projects = data.projects || [];
       state.unit = data.unit || state.unit;
+      resetBackupPreferences();
       applyBackupPreferences(data);
     }
     function mergeData(data) {
@@ -2124,6 +2162,11 @@
           toast.innerHTML = '';
         }
       }, ms);
+    }
+    function showStorageWarning() {
+      if (storageWarningShown) return;
+      storageWarningShown = true;
+      alert('Browser storage is full or unavailable, so the latest change may not be saved. Export a JSON backup now, then remove Project photos or older data if needed.');
     }
     function showUndoToast(label) {
       const toast = document.getElementById('undoToast');
@@ -2157,7 +2200,12 @@
       const [item] = state[key].splice(index, 1);
       pendingUndo = { key, index, item, label };
       if (key === 'grids' && activeGridId === id) activeGridId = null;
-      persist();
+      if (!persist()) {
+        state[key].splice(index, 0, item);
+        pendingUndo = null;
+        render();
+        return;
+      }
       render();
       showUndoToast(label);
     }
@@ -2212,7 +2260,10 @@
     document.getElementById('unitIn').onclick = () => setUnit('in');
     document.getElementById('unitMm').onclick = () => setUnit('mm');
     document.getElementById('exportBtn').onclick = () => {
-      const blob = new Blob([JSON.stringify(backupObject(), null, 2)], { type: 'application/json' });
+      const backupJson = JSON.stringify(backupObject(), null, 2);
+      const blob = new Blob([backupJson], { type: 'application/json' });
+      const photos = projectPhotoCount();
+      if (photos && !confirm(`This JSON backup is about ${formatBytes(blob.size)} and includes ${photos} embedded project photo(s). Photos can make backups and browser storage large. Continue export?`)) return;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = `l8-tracker-backup-${today()}.json`; a.click();
