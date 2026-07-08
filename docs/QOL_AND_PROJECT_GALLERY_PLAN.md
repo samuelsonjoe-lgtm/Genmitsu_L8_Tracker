@@ -42,10 +42,11 @@
 | **Project Photos MVP** | Projects can store up to 3 compressed offline photos, show cover thumbnails in the gallery, preview photos, and export/import photos inside Project records |
 | **Field hover help / tooltips pack 1** | Laser settings, Test Grid, Pricing, Project accounting, tags, and photo fields now have short focusable help tips for beginner terminology |
 | **Storage/search/import fix-soon pack 1** | Persist errors are caught, photo-heavy exports warn with approximate size, replace imports reset absent optional prefs, Library/Projects search is live, Project accounting CSV respects filters, and grid caps/blank speed display are clearer |
+| **Inventory MVP** | Inventory tab tracks raw materials and finished batches manually, with low-stock badges, estimated raw value, remaining batch counts, starter materials, CSV exports, and JSON backup/import support |
 
 ### 1.2 Next up (agreed priority — biggest workshop value before Tauri)
 
-**Next candidate:** Another narrow Project Gallery polish pass. The first tag-system pass and Project Photos MVP are complete without expanding into inventory management.
+**Next candidate:** Continue small workshop utility passes. Inventory MVP is now implemented as a lightweight manual tracker, without automatic Project deductions or accounting-system scope.
 
 ### 1.3 Still open from the original backlog
 

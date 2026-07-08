@@ -13,13 +13,14 @@ Getting clean, repeatable cuts and engraves out of a diode laser depends on a pi
 
 ## What it does
 
-The app has six views:
+The app has seven views:
 
 - **Log** - a quick-entry record of every job you run: material, thickness, job type (cut/engrave), power (with optional min/max ramp), speed, passes, line interval, air assist + pressure, overscan %, kerf offset, dither mode, focus height/material Z-offset, software used, settings file name, a 1-5 result rating, and free-form notes. Searchable, sortable, and filterable by material.
 - **Library** - a curated set of "best known settings" per material/thickness, promoted from log entries once you've dialed something in. This is the searchable/sortable/taggable reference sheet you check before starting a new job.
 - **Test Grids** - a power x speed test matrix planner for dialing in a brand-new material: set ranges and step sizes, get a grid, then click each cell to record a rating/notes and mark the winning combination. Any cell can be promoted straight to the Library, and recorded results can be exported as CSV.
 - **Reference** - official Genmitsu L8 20W and 40W speed/power starting points from SainSmart's resource center, selected by machine profile, plus focus, safety, maintenance, offline, and software notes pulled from the user manual. Any reference setting can be copied into the Library and tuned from there.
 - **Projects** - a searchable/sortable/taggable gallery of finished pieces with a saved settings snapshot, small offline photos, tags, notes, optional sale/cost/profit accounting, filtered accounting summaries, status filtering, accounting CSV export, and a copy-to-log action for repeating a past project. Projects can also be opened as drafts from Pricing estimates.
+- **Inventory** - a lightweight manual tracker for raw materials on hand and simple finished-item batches, with low-stock badges, estimated raw-material value, remaining finished counts, starter-material helpers, and CSV exports.
 - **Pricing** - a compact cost/profit calculator for estimating revenue, material and consumable costs, machine time, labor, fees, margin, break-even price, target sale prices, saved rate/fee defaults, printable summaries, CSV export, and a copyable summary before committing to a price.
 
 Other features:
@@ -40,17 +41,18 @@ Other features:
 - Project photos are resized/compressed before storage and ride inside Project records; image-heavy backups can get larger.
 - **Accounting report** on the Projects tab summarizes filtered project revenue, cost, profit, margin, quantity, and status counts.
 - **Export accounting CSV** on the Projects tab exports one row per project with accounting inputs and calculated totals.
+- **Inventory CSV exports** save filtered raw-material stock and finished-batch counts as plain CSV files.
 - All data persists automatically in the browser (localStorage) between sessions.
 
 ## Current storage model
 
 The standalone `index.html` app saves live data in the browser's `localStorage` under `genmitsu-l8-tracker-v1`. That means data is tied to the browser/profile that opened the app. Use Export regularly for portable JSON backups until a future desktop build writes to a real app data file.
 
-JSON backups include Log entries, Library profiles, Test Grids, Projects, Project photos, unit preference, saved sort preferences, Library match helper inputs, selected machine profile, Pricing draft, and Pricing defaults. Session-only search text, tag/status filters, active tab, and open modal state are intentionally not backed up.
+JSON backups include Log entries, Library profiles, Test Grids, Projects, Project photos, Inventory records, unit preference, saved sort preferences, Library match helper inputs, selected machine profile, Pricing draft, and Pricing defaults. Session-only search text, tag/status filters, active tab, and open modal state are intentionally not backed up.
 
 ## Fields tracked
 
-Log entries, Library profiles, Test Grids, and Projects track material, thickness, job type, power (min/max), speed, passes, line interval, air assist (on/off + pressure), overscan %, kerf offset, dither mode (for photo engraves), focus height / material Z-offset, software (e.g. LightBurn), settings file reference, result rating, and notes where applicable.
+Log entries, Library profiles, Test Grids, and Projects track material, thickness, job type, power (min/max), speed, passes, line interval, air assist (on/off + pressure), overscan %, kerf offset, dither mode (for photo engraves), focus height / material Z-offset, software (e.g. LightBurn), settings file reference, result rating, and notes where applicable. Inventory tracks raw material stock counts/costs and finished-batch quantities manually; it does not auto-deduct from Projects.
 
 ## Official source material
 

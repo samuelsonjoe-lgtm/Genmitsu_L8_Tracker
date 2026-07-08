@@ -186,6 +186,7 @@
   <div class="modal" id="entryModal"></div>
   <div class="modal" id="profileModal"></div>
   <div class="modal" id="projectModal"></div>
+  <div class="modal" id="inventoryModal"></div>
   <div class="modal" id="gridModal"></div>
   <div class="modal" id="cellModal"></div>
   <div class="toast" id="undoToast"></div>
@@ -200,6 +201,7 @@
       ['grids', 'Test Grids'],
       ['reference', 'Reference'],
       ['projects', 'Projects'],
+      ['inventory', 'Inventory'],
       ['pricing', 'Pricing']
     ];
     const reference20w = [
@@ -273,6 +275,9 @@
     ];
     const softwareList = ['LightBurn', 'LaserGRBL', 'CutLabX', 'Inkscape + LightBurn'];
     const ditherModes = ['none', 'threshold', 'floyd-steinberg', 'jarvis', 'stucki', 'newsprint'];
+    const rawMaterialCategories = ['sheet', 'slate', 'utensil', 'acrylic', 'hardware', 'packaging', 'other'];
+    const inventoryUnits = ['each', 'sheet', 'pack', 'sq in', 'linear ft', 'other'];
+    const batchStatuses = ['planned', 'made', 'for-sale', 'sold-out', 'archived'];
     const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     const today = () => new Date().toISOString().slice(0, 10);
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -304,6 +309,7 @@
             profiles: data.profiles || [],
             grids: data.grids || [],
             projects: data.projects || [],
+            inventory: normalizeInventory(data.inventory),
             search: '',
             materialFilter: 'all',
             librarySearch: '',
@@ -318,6 +324,9 @@
             projectSearch: '',
             projectTagFilter: 'all',
             projectStatusFilter: 'all',
+            inventorySearch: '',
+            inventoryCategoryFilter: 'all',
+            inventoryBatchStatusFilter: 'all',
             focusMaterialMm: '',
             focusJobType: 'engrave',
             machineProfile: data.machineProfile || '20W',
@@ -326,12 +335,12 @@
           };
         }
       } catch (_) {}
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
     }
     function persist() {
-      const { entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
+      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
         return true;
       } catch (err) {
         showStorageWarning();
@@ -345,6 +354,7 @@
         profiles: state.profiles,
         grids: state.grids,
         projects: state.projects,
+        inventory: state.inventory,
         unit: state.unit,
         entrySort: state.entrySort,
         librarySort: state.librarySort,
@@ -439,6 +449,42 @@
     }
     function projectTags() {
       return [...new Set(state.projects.flatMap(tagsOf).filter(Boolean))].sort();
+    }
+    function inventoryDefaults() {
+      return { rawMaterials: [], finishedBatches: [] };
+    }
+    function normalizeInventory(inventory) {
+      return {
+        rawMaterials: Array.isArray(inventory?.rawMaterials) ? inventory.rawMaterials : [],
+        finishedBatches: Array.isArray(inventory?.finishedBatches) ? inventory.finishedBatches : []
+      };
+    }
+    function inventoryTags() {
+      const inv = normalizeInventory(state.inventory);
+      return [...new Set([...inv.rawMaterials, ...inv.finishedBatches].flatMap(tagsOf).filter(Boolean))].sort();
+    }
+    function inventoryValue(item) {
+      return num(item.quantityOnHand) * num(item.unitCost);
+    }
+    function batchRemaining(batch) {
+      return Math.max(0, num(batch.quantitySellable) - num(batch.quantitySold));
+    }
+    function rawIsLow(item) {
+      return String(item.lowStockThreshold ?? '').trim() !== '' && num(item.quantityOnHand) <= num(item.lowStockThreshold);
+    }
+    function inventoryStarterMaterials() {
+      const items = [
+        ['Black slate board', 'slate', 'each'],
+        ['Teak butter spreader', 'utensil', 'each'],
+        ['Basswood 12x12 sheet', 'sheet', 'sheet'],
+        ['Walnut plywood 12x12 sheet', 'sheet', 'sheet'],
+        ['Black acrylic 12x16 sheet', 'acrylic', 'sheet'],
+        ['8 inch wood circle', 'sheet', 'each']
+      ];
+      return items.map(([name, category, unit]) => ({
+        id: uid(), name, category, quantityOnHand: 0, unit, unitCost: '', supplier: '',
+        purchaseDate: '', lowStockThreshold: '', notes: 'Starter inventory item. Update quantity and cost when stocked.', tags: []
+      }));
     }
     function powerLabel(o) { return o.maxPower != null && o.maxPower !== o.minPower ? `${o.minPower}-${o.maxPower}%` : `${o.minPower}%`; }
     function stars(r) { return `<span class="small">${'●'.repeat(Number(r) || 0)}${'○'.repeat(5 - (Number(r) || 0))}</span>`; }
@@ -550,6 +596,7 @@
       if (state.activeTab === 'grids') root.innerHTML = renderGrids();
       if (state.activeTab === 'reference') root.innerHTML = renderReference();
       if (state.activeTab === 'projects') root.innerHTML = renderProjects();
+      if (state.activeTab === 'inventory') root.innerHTML = renderInventory();
       if (state.activeTab === 'pricing') root.innerHTML = renderPricing();
       bindPage();
     }
@@ -756,6 +803,76 @@
         </div>
         ${projectAccountingReportHtml(filtered)}
         ${state.projects.length ? (filtered.length ? `<div class="grid cards">${filtered.map(projectCard).join('')}</div>` : empty('No project matches', 'Adjust the search, tag, or status filter.')) : empty('No projects yet', 'Save a finished piece here with its settings snapshot.')}
+      `;
+    }
+    function filteredRawMaterials() {
+      const inv = normalizeInventory(state.inventory);
+      const q = state.inventorySearch.toLowerCase();
+      return inv.rawMaterials.filter(item => {
+        const categoryOk = state.inventoryCategoryFilter === 'all' || item.category === state.inventoryCategoryFilter;
+        const hay = [item.name, item.category, item.unit, item.supplier, item.notes, ...tagsOf(item)].join(' ').toLowerCase();
+        return categoryOk && (!q || hay.includes(q));
+      }).sort((a, b) => rawIsLow(b) - rawIsLow(a) || compareText(a.name, b.name));
+    }
+    function filteredFinishedBatches() {
+      const inv = normalizeInventory(state.inventory);
+      const q = state.inventorySearch.toLowerCase();
+      return inv.finishedBatches.filter(batch => {
+        const statusOk = state.inventoryBatchStatusFilter === 'all' || batch.status === state.inventoryBatchStatusFilter;
+        const project = batch.projectId ? state.projects.find(p => p.id === batch.projectId) : null;
+        const hay = [batch.itemName, batch.status, batch.notes, project?.name, ...tagsOf(batch)].join(' ').toLowerCase();
+        return statusOk && (!q || hay.includes(q));
+      }).sort((a, b) => compareText(a.itemName, b.itemName));
+    }
+    function renderInventory() {
+      const inv = normalizeInventory(state.inventory);
+      const raw = filteredRawMaterials();
+      const batches = filteredFinishedBatches();
+      const rawValue = inv.rawMaterials.reduce((sum, item) => sum + inventoryValue(item), 0);
+      const lowCount = inv.rawMaterials.filter(rawIsLow).length;
+      const remaining = inv.finishedBatches.reduce((sum, batch) => sum + batchRemaining(batch), 0);
+      return `
+        <div class="grid stats">
+          ${stat('Raw value', money(rawValue), 'green')}
+          ${stat('Low stock', lowCount, 'amber')}
+          ${stat('Finished batches', inv.finishedBatches.length, 'violet')}
+          ${stat('Remaining items', remaining, 'blue')}
+        </div>
+        <div class="toolbar" style="margin-bottom:14px">
+          <div>
+            <b>Inventory</b>
+            <div class="small muted">Manual raw materials and finished batches. Nothing auto-deducts from Projects.</div>
+          </div>
+          <div class="row">
+            <button id="addStarterInventory" type="button">Add common starter materials</button>
+            <button id="exportRawInventoryCsv" type="button">Export raw CSV</button>
+            <button id="exportBatchInventoryCsv" type="button">Export batches CSV</button>
+          </div>
+        </div>
+        <div class="toolbar" style="margin-bottom:14px">
+          <div class="row" style="flex:1">
+            <input id="inventorySearch" placeholder="Search inventory, supplier, notes, tags..." value="${esc(state.inventorySearch)}" style="min-width:230px; flex:1">
+            <select id="inventoryCategoryFilter" style="max-width:180px">
+              <option value="all" ${state.inventoryCategoryFilter === 'all' ? 'selected' : ''}>All material categories</option>
+              ${rawMaterialCategories.map(c => `<option value="${esc(c)}" ${state.inventoryCategoryFilter === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+            </select>
+            <select id="inventoryBatchStatusFilter" style="max-width:170px">
+              <option value="all" ${state.inventoryBatchStatusFilter === 'all' ? 'selected' : ''}>All batch statuses</option>
+              ${batchStatuses.map(s => `<option value="${esc(s)}" ${state.inventoryBatchStatusFilter === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="row"><span class="pill">${raw.length}/${inv.rawMaterials.length} raw</span><span class="pill">${batches.length}/${inv.finishedBatches.length} batches</span></div>
+        </div>
+        <div class="toolbar" style="margin-bottom:12px">
+          <div><b>Raw materials</b><div class="small muted">Stock on hand, unit cost, supplier, and low-stock notes.</div></div>
+          <button class="primary" id="newRawMaterial">New raw material</button>
+        </div>
+        ${inv.rawMaterials.length ? (raw.length ? `<div class="grid cards" style="margin-bottom:18px">${raw.map(rawMaterialCard).join('')}</div>` : empty('No raw materials match', 'Adjust search or category filters.')) : empty('No raw materials yet', 'Add sheets, slate, blanks, hardware, packaging, and other shop supplies.')}
+        <div class="toolbar" style="margin:18px 0 12px">
+          <div><b>Finished batches</b><div class="small muted">Manual count of made, sellable, rejected, sold, and remaining items.</div></div>
+          <button class="primary" id="newFinishedBatch">New finished batch</button>
+        </div>
+        ${inv.finishedBatches.length ? (batches.length ? `<div class="grid cards">${batches.map(finishedBatchCard).join('')}</div>` : empty('No batches match', 'Adjust search or status filter.')) : empty('No finished batches yet', 'Track small batches of finished items without creating invoices or SKUs.')}
       `;
     }
     function renderPricing() {
@@ -1500,6 +1617,41 @@
         <div class="actions"><button data-edit-project="${p.id}">Edit</button><button data-project-to-entry="${p.id}">Copy to log</button><button class="danger" data-delete-project="${p.id}">Delete</button></div>
       </article>`;
     }
+    function rawMaterialCard(item) {
+      const tags = tagsOf(item);
+      const low = rawIsLow(item);
+      return `<article class="card">
+        <div class="spread"><div><b>${esc(item.name)}</b><div class="small muted">${esc(item.category || 'other')} - ${fmt(item.quantityOnHand, ' ' + (item.unit || 'each'))}</div></div><span class="pill ${low ? 'warn' : 'good'}">${low ? 'low stock' : 'stocked'}</span></div>
+        <div class="metrics">
+          ${metric('Unit cost', money(num(item.unitCost)))}
+          ${metric('Est. value', money(inventoryValue(item)))}
+          ${metric('Supplier', item.supplier || '-')}
+          ${metric('Low threshold', item.lowStockThreshold === '' || item.lowStockThreshold == null ? '-' : item.lowStockThreshold)}
+        </div>
+        ${item.purchaseDate ? `<div class="small muted" style="margin-top:8px">Purchased ${esc(item.purchaseDate)}</div>` : ''}
+        ${item.notes ? `<p class="small">${esc(item.notes)}</p>` : ''}
+        ${tags.length ? `<div class="row">${tags.map(t => `<span class="pill">${esc(t)}</span>`).join('')}</div>` : ''}
+        <div class="actions"><button data-edit-raw-material="${item.id}">Edit</button><button class="danger" data-delete-raw-material="${item.id}">Delete</button></div>
+      </article>`;
+    }
+    function finishedBatchCard(batch) {
+      const project = batch.projectId ? state.projects.find(p => p.id === batch.projectId) : null;
+      const tags = tagsOf(batch);
+      return `<article class="card">
+        <div class="spread"><div><b>${esc(batch.itemName)}</b><div class="small muted">${project ? `Project: ${esc(project.name)}` : 'No linked Project'}</div></div><span class="pill">${esc(batch.status || 'made')}</span></div>
+        <div class="metrics">
+          ${metric('Made', batch.quantityMade || 0)}
+          ${metric('Sellable', batch.quantitySellable || 0)}
+          ${metric('Reject/test', batch.quantityReject || 0)}
+          ${metric('Sold', batch.quantitySold || 0)}
+          ${metric('Remaining', batchRemaining(batch))}
+          ${metric('Unit sale', batch.unitSalePrice === '' || batch.unitSalePrice == null ? '-' : money(num(batch.unitSalePrice)))}
+        </div>
+        ${batch.notes ? `<p class="small">${esc(batch.notes)}</p>` : ''}
+        ${tags.length ? `<div class="row">${tags.map(t => `<span class="pill">${esc(t)}</span>`).join('')}</div>` : ''}
+        <div class="actions"><button data-edit-finished-batch="${batch.id}">Edit</button><button class="danger" data-delete-finished-batch="${batch.id}">Delete</button></div>
+      </article>`;
+    }
     function gridCard(g) {
       const powers = range(g.powerMin, g.powerMax, g.powerStep);
       const speeds = range(g.speedMin, g.speedMax, g.speedStep);
@@ -1555,6 +1707,37 @@
         ];
       }).sort((a, b) => Number(a[20]) - Number(b[20]) || Number(a[21]) - Number(b[21]));
       return csvRows([headers, ...rows]);
+    }
+    function rawInventoryCsv(items = normalizeInventory(state.inventory).rawMaterials) {
+      const headers = ['id', 'name', 'category', 'quantity_on_hand', 'unit', 'unit_cost', 'estimated_value', 'supplier', 'purchase_date', 'low_stock_threshold', 'low_stock', 'tags', 'notes'];
+      const rows = items.map(item => [
+        item.id, item.name, item.category, item.quantityOnHand, item.unit, item.unitCost, inventoryValue(item),
+        item.supplier, item.purchaseDate, item.lowStockThreshold, rawIsLow(item) ? 'yes' : 'no', tagString(tagsOf(item)), item.notes
+      ]);
+      return csvRows([headers, ...rows]);
+    }
+    function finishedBatchInventoryCsv(batches = normalizeInventory(state.inventory).finishedBatches) {
+      const headers = ['id', 'item_name', 'project_id', 'project_name', 'quantity_made', 'quantity_sellable', 'quantity_reject', 'quantity_sold', 'quantity_remaining', 'unit_sale_price', 'status', 'tags', 'notes'];
+      const rows = batches.map(batch => {
+        const project = batch.projectId ? state.projects.find(p => p.id === batch.projectId) : null;
+        return [
+          batch.id, batch.itemName, batch.projectId || '', project?.name || '', batch.quantityMade, batch.quantitySellable,
+          batch.quantityReject, batch.quantitySold, batchRemaining(batch), batch.unitSalePrice, batch.status, tagString(tagsOf(batch)), batch.notes
+        ];
+      });
+      return csvRows([headers, ...rows]);
+    }
+    function exportRawInventoryCsv() {
+      const raw = filteredRawMaterials();
+      if (!normalizeInventory(state.inventory).rawMaterials.length) return alert('No raw materials to export yet.');
+      if (!raw.length) return alert('No raw materials match the current filters.');
+      downloadTextFile(`l8-raw-materials-${today()}.csv`, rawInventoryCsv(raw), 'text/csv;charset=utf-8');
+    }
+    function exportFinishedBatchInventoryCsv() {
+      const batches = filteredFinishedBatches();
+      if (!normalizeInventory(state.inventory).finishedBatches.length) return alert('No finished batches to export yet.');
+      if (!batches.length) return alert('No finished batches match the current filters.');
+      downloadTextFile(`l8-finished-batches-${today()}.csv`, finishedBatchInventoryCsv(batches), 'text/csv;charset=utf-8');
     }
     function renderGridDetail() {
       const g = state.grids.find(x => x.id === activeGridId);
@@ -1623,6 +1806,22 @@
       if (copyProjectReport) copyProjectReport.onclick = copyProjectReportSummary;
       const projectSort = document.getElementById('projectSort');
       if (projectSort) projectSort.onchange = e => { state.projectSort = e.target.value; persist(); render(); };
+      const inventorySearch = document.getElementById('inventorySearch');
+      if (inventorySearch) inventorySearch.oninput = e => { state.inventorySearch = e.target.value; render(); };
+      const inventoryCategoryFilter = document.getElementById('inventoryCategoryFilter');
+      if (inventoryCategoryFilter) inventoryCategoryFilter.onchange = e => { state.inventoryCategoryFilter = e.target.value; render(); };
+      const inventoryBatchStatusFilter = document.getElementById('inventoryBatchStatusFilter');
+      if (inventoryBatchStatusFilter) inventoryBatchStatusFilter.onchange = e => { state.inventoryBatchStatusFilter = e.target.value; render(); };
+      const newRawMaterial = document.getElementById('newRawMaterial');
+      if (newRawMaterial) newRawMaterial.onclick = () => openRawMaterial();
+      const newFinishedBatch = document.getElementById('newFinishedBatch');
+      if (newFinishedBatch) newFinishedBatch.onclick = () => openFinishedBatch();
+      const addStarterInventoryBtn = document.getElementById('addStarterInventory');
+      if (addStarterInventoryBtn) addStarterInventoryBtn.onclick = addStarterInventory;
+      const exportRawInventoryCsvBtn = document.getElementById('exportRawInventoryCsv');
+      if (exportRawInventoryCsvBtn) exportRawInventoryCsvBtn.onclick = exportRawInventoryCsv;
+      const exportBatchInventoryCsvBtn = document.getElementById('exportBatchInventoryCsv');
+      if (exportBatchInventoryCsvBtn) exportBatchInventoryCsvBtn.onclick = exportFinishedBatchInventoryCsv;
       const pricingForm = document.getElementById('pricingForm');
       if (pricingForm) {
         const refreshPricing = () => {
@@ -1685,6 +1884,10 @@
       document.querySelectorAll('[data-edit-project]').forEach(b => b.onclick = () => openProject(state.projects.find(p => p.id === b.dataset.editProject)));
       document.querySelectorAll('[data-delete-project]').forEach(b => b.onclick = () => del('projects', b.dataset.deleteProject, 'Delete this project?', 'Project'));
       document.querySelectorAll('[data-project-to-entry]').forEach(b => b.onclick = () => projectToEntry(b.dataset.projectToEntry));
+      document.querySelectorAll('[data-edit-raw-material]').forEach(b => b.onclick = () => openRawMaterial(inventoryList('rawMaterials').find(item => item.id === b.dataset.editRawMaterial)));
+      document.querySelectorAll('[data-delete-raw-material]').forEach(b => b.onclick = () => delInventory('rawMaterials', b.dataset.deleteRawMaterial, 'Delete this raw material?', 'Raw material'));
+      document.querySelectorAll('[data-edit-finished-batch]').forEach(b => b.onclick = () => openFinishedBatch(inventoryList('finishedBatches').find(batch => batch.id === b.dataset.editFinishedBatch)));
+      document.querySelectorAll('[data-delete-finished-batch]').forEach(b => b.onclick = () => delInventory('finishedBatches', b.dataset.deleteFinishedBatch, 'Delete this finished batch?', 'Finished batch'));
       document.querySelectorAll('[data-project-photo]').forEach(img => img.onclick = e => {
         e.stopPropagation();
         openProjectPhotoViewer(img.dataset.projectPhoto, Number(img.dataset.photoIndex || 0));
@@ -1707,12 +1910,14 @@
       if (state.activeTab === 'library') return openProfile();
       if (state.activeTab === 'grids') return openGridForm();
       if (state.activeTab === 'projects') return openProject();
+      if (state.activeTab === 'inventory') return openRawMaterial();
       return false;
     }
     function activeSearchInput() {
       if (state.activeTab === 'log') return document.getElementById('search');
       if (state.activeTab === 'library') return document.getElementById('librarySearch');
       if (state.activeTab === 'projects') return document.getElementById('projectSearch');
+      if (state.activeTab === 'inventory') return document.getElementById('inventorySearch');
       return null;
     }
     function handleShortcuts(e) {
@@ -2058,6 +2263,105 @@
         notes: `Replicated from project "${project.name}". ${project.notes || ''}`.trim()
       });
     }
+    function normalizeRawMaterial(f, existingId) {
+      return {
+        id: existingId || uid(),
+        name: (f.name || '').trim(),
+        category: rawMaterialCategories.includes(f.category) ? f.category : 'other',
+        quantityOnHand: f.quantityOnHand === '' ? '' : num(f.quantityOnHand),
+        unit: inventoryUnits.includes(f.unit) ? f.unit : 'other',
+        unitCost: f.unitCost === '' ? '' : num(f.unitCost),
+        supplier: (f.supplier || '').trim(),
+        purchaseDate: f.purchaseDate || '',
+        lowStockThreshold: f.lowStockThreshold === '' ? '' : num(f.lowStockThreshold),
+        notes: (f.notes || '').trim(),
+        tags: tagArray(f.tags)
+      };
+    }
+    function normalizeFinishedBatch(f, existingId) {
+      const made = Math.max(0, Math.round(num(f.quantityMade)));
+      const sellable = Math.max(0, Math.round(num(f.quantitySellable)));
+      const reject = Math.max(0, Math.round(num(f.quantityReject)));
+      const sold = Math.max(0, Math.round(num(f.quantitySold)));
+      return {
+        id: existingId || uid(),
+        itemName: (f.itemName || '').trim(),
+        projectId: f.projectId || '',
+        quantityMade: made,
+        quantitySellable: sellable,
+        quantityReject: reject,
+        quantitySold: sold,
+        unitSalePrice: f.unitSalePrice === '' ? '' : num(f.unitSalePrice),
+        status: batchStatuses.includes(f.status) ? f.status : 'made',
+        notes: (f.notes || '').trim(),
+        tags: tagArray(f.tags)
+      };
+    }
+    function openRawMaterial(item) {
+      const editingId = item && item.id ? item.id : null;
+      const data = { name: '', category: 'sheet', quantityOnHand: '', unit: 'each', unitCost: '', supplier: '', purchaseDate: today(), lowStockThreshold: '', notes: '', tags: [], ...(item || {}) };
+      openModal('inventoryModal', `<div class="dialog"><div class="spread"><h2>${editingId ? 'Edit raw material' : 'New raw material'}</h2><button data-close>×</button></div><form id="rawMaterialForm" class="formgrid">
+        <label class="span2">${labelText('Name', 'Material, blank, hardware, or packaging name.')}<input name="name" value="${esc(data.name)}"></label>
+        ${select('category','Category',data.category || 'sheet',rawMaterialCategories,'Simple category for filtering raw inventory.')}
+        ${field('quantityOnHand','Quantity on hand',data.quantityOnHand,'number','min="0" step="any"','Current manual count on hand.')}
+        ${select('unit','Unit',data.unit || 'each',inventoryUnits,'Counting unit for this material.')}
+        ${field('unitCost','Unit cost',data.unitCost,'number','min="0" step="0.01"','Approximate cost for one unit.')}
+        ${field('supplier','Supplier',data.supplier || '','text','','Where you bought or plan to buy it.')}
+        ${field('purchaseDate','Purchase date',data.purchaseDate || '','date','','When this stock was purchased.')}
+        ${field('lowStockThreshold','Low stock threshold',data.lowStockThreshold,'number','min="0" step="any"','Shows low-stock when quantity is at or below this number.')}
+        <label>${labelText('Tags, comma-separated', 'Short labels used for search.')}<input name="tags" value="${esc(tagString(tagsOf(data)))}" placeholder="coasters, blanks"></label>
+        <label class="span2">${labelText('Notes', 'Anything to remember about size, finish, quality, or storage.')}<textarea name="notes" rows="3">${esc(data.notes || '')}</textarea></label>
+        <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save raw material</button></div>
+      </form></div>`);
+      bindModal('inventoryModal');
+      document.getElementById('rawMaterialForm').onsubmit = e => {
+        e.preventDefault();
+        const f = readForm(e.target);
+        if (!f.name.trim()) return alert('Add a raw material name first.');
+        if (upsertInventory('rawMaterials', normalizeRawMaterial(f, editingId))) closeModal('inventoryModal');
+      };
+    }
+    function projectOptions(selectedId) {
+      return `<option value="">No linked Project</option>${state.projects.map(project => `<option value="${esc(project.id)}" ${project.id === selectedId ? 'selected' : ''}>${esc(project.name || project.material || 'Untitled Project')}</option>`).join('')}`;
+    }
+    function openFinishedBatch(batch) {
+      const editingId = batch && batch.id ? batch.id : null;
+      const data = { itemName: '', projectId: '', quantityMade: '', quantitySellable: '', quantityReject: '', quantitySold: '', unitSalePrice: '', status: 'made', notes: '', tags: [], ...(batch || {}) };
+      openModal('inventoryModal', `<div class="dialog"><div class="spread"><h2>${editingId ? 'Edit finished batch' : 'New finished batch'}</h2><button data-close>×</button></div><form id="finishedBatchForm" class="formgrid">
+        <label class="span2">${labelText('Item name', 'Finished item or small batch name.')}<input name="itemName" value="${esc(data.itemName)}"></label>
+        <label class="span2">${labelText('Linked Project', 'Optional Project recipe/accounting record this batch came from.')}<select name="projectId">${projectOptions(data.projectId || '')}</select></label>
+        ${field('quantityMade','Quantity made',data.quantityMade,'number','min="0" step="1"','Total pieces made in this batch.')}
+        ${field('quantitySellable','Quantity sellable',data.quantitySellable,'number','min="0" step="1"','Pieces good enough to sell or keep as finished stock.')}
+        ${field('quantityReject','Quantity reject/test/not for sale',data.quantityReject,'number','min="0" step="1"','Test pieces, rejects, or personal-use pieces.')}
+        ${field('quantitySold','Quantity sold',data.quantitySold,'number','min="0" step="1"','Manual sold count. Remaining is sellable minus sold.')}
+        ${field('unitSalePrice','Unit sale price',data.unitSalePrice,'number','min="0" step="0.01"','Optional sale price per finished item.')}
+        ${select('status','Status',data.status || 'made',batchStatuses,'Simple batch status for filtering.')}
+        <label>${labelText('Tags, comma-separated', 'Short labels used for search.')}<input name="tags" value="${esc(tagString(tagsOf(data)))}" placeholder="craft fair, coasters"></label>
+        <label class="span2">${labelText('Notes', 'Anything to remember about this finished batch.')}<textarea name="notes" rows="3">${esc(data.notes || '')}</textarea></label>
+        <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save finished batch</button></div>
+      </form></div>`);
+      bindModal('inventoryModal');
+      document.getElementById('finishedBatchForm').onsubmit = e => {
+        e.preventDefault();
+        const f = readForm(e.target);
+        if (!f.itemName.trim()) return alert('Add an item name first.');
+        if (upsertInventory('finishedBatches', normalizeFinishedBatch(f, editingId))) closeModal('inventoryModal');
+      };
+    }
+    function addStarterInventory() {
+      const list = inventoryList('rawMaterials');
+      const existing = new Set(list.map(item => normalizeText(item.name)));
+      const starters = inventoryStarterMaterials().filter(item => !existing.has(normalizeText(item.name)));
+      if (!starters.length) return alert('Starter materials are already in raw inventory.');
+      list.unshift(...starters);
+      if (!persist()) {
+        list.splice(0, starters.length);
+        render();
+        return;
+      }
+      render();
+      showInfoToast(`Added ${starters.length} starter material${starters.length === 1 ? '' : 's'}.`);
+    }
     function openGridForm() {
       const data = formDefaults('grid');
       openModal('gridModal', `<div class="dialog"><div class="spread"><h2>New test grid</h2><button data-close>×</button></div><form id="gridForm" class="formgrid">
@@ -2139,6 +2443,23 @@
       render();
       return saved;
     }
+    function inventoryList(kind) {
+      state.inventory = normalizeInventory(state.inventory);
+      return kind === 'rawMaterials' ? state.inventory.rawMaterials : state.inventory.finishedBatches;
+    }
+    function upsertInventory(kind, item) {
+      const list = inventoryList(kind);
+      const idx = list.findIndex(x => x.id === item.id);
+      const previous = idx >= 0 ? list[idx] : null;
+      if (idx >= 0) list[idx] = item; else list.unshift(item);
+      const saved = persist();
+      if (!saved) {
+        if (idx >= 0) list[idx] = previous;
+        else list.shift();
+      }
+      render();
+      return saved;
+    }
     function mergeList(existing, incoming) {
       const merged = [...existing];
       (incoming || []).forEach(item => {
@@ -2176,6 +2497,7 @@
       state.profiles = data.profiles || [];
       state.grids = data.grids || [];
       state.projects = data.projects || [];
+      state.inventory = normalizeInventory(data.inventory);
       state.unit = data.unit || state.unit;
       resetBackupPreferences();
       applyBackupPreferences(data);
@@ -2185,6 +2507,11 @@
       state.profiles = mergeList(state.profiles, data.profiles);
       state.grids = mergeList(state.grids, data.grids);
       state.projects = mergeList(state.projects, data.projects);
+      const incomingInventory = normalizeInventory(data.inventory);
+      state.inventory = {
+        rawMaterials: mergeList(inventoryList('rawMaterials'), incomingInventory.rawMaterials),
+        finishedBatches: mergeList(inventoryList('finishedBatches'), incomingInventory.finishedBatches)
+      };
       state.unit = data.unit || state.unit;
       applyBackupPreferences(data);
     }
@@ -2224,7 +2551,8 @@
       const undo = pendingUndo;
       if (undo.timer) clearTimeout(undo.timer);
       pendingUndo = null;
-      state[undo.key].splice(Math.min(undo.index, state[undo.key].length), 0, undo.item);
+      const list = undo.inventoryKind ? inventoryList(undo.inventoryKind) : state[undo.key];
+      list.splice(Math.min(undo.index, list.length), 0, undo.item);
       if (undo.key === 'grids' && state.activeTab === 'grids') activeGridId = undo.item.id;
       persist();
       render();
@@ -2246,6 +2574,23 @@
       if (key === 'grids' && activeGridId === id) activeGridId = null;
       if (!persist()) {
         state[key].splice(index, 0, item);
+        pendingUndo = null;
+        render();
+        return;
+      }
+      render();
+      showUndoToast(label);
+    }
+    function delInventory(kind, id, message, label = 'Inventory item') {
+      if (!confirm(`${message} You can undo for a few seconds.`)) return;
+      hideUndoToast();
+      const list = inventoryList(kind);
+      const index = list.findIndex(x => x.id === id);
+      if (index < 0) return;
+      const [item] = list.splice(index, 1);
+      pendingUndo = { key: 'inventory', inventoryKind: kind, index, item, label };
+      if (!persist()) {
+        list.splice(index, 0, item);
         pendingUndo = null;
         render();
         return;
@@ -2325,7 +2670,7 @@
           if (merge) {
             mergeData(data);
           } else {
-            if (!confirm('Replace all current entries, library, grids, and projects?')) return;
+            if (!confirm('Replace all current entries, library, grids, projects, and inventory?')) return;
             replaceData(data);
           }
           persist(); render();
