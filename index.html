@@ -212,6 +212,7 @@
   <div class="modal" id="inventoryModal"></div>
   <div class="modal" id="gridModal"></div>
   <div class="modal" id="cellModal"></div>
+  <div class="modal" id="testModal"></div>
   <div class="toast" id="undoToast"></div>
 
   <script>
@@ -314,6 +315,7 @@
     let activeCellKey = null;
     let editingEntryId = null;
     let editingProfileId = null;
+    let profileDraftTests = [];
     let editingProjectId = null;
     let projectPhotosDraft = [];
     let projectMaterialLinesDraft = [];
@@ -711,6 +713,7 @@
         overscanPercent: '', kerfOffset: '', ditherMode: 'none',
         materialHeightValue: '', materialHeightUnit: state.unit, software: ''
       };
+      if (kind === 'profile') return { ...base, tests: [] };
       return base;
     }
     function render() {
@@ -1708,6 +1711,68 @@
     function materialSafetyFieldHelp(material) {
       return `<div class="span2 small muted">Avoid PVC/vinyl/chlorinated plastics. Verify unknown materials before lasering.</div><div id="materialSafetyWarning" class="span2">${materialSafetyWarningHtml(material)}</div>`;
     }
+    const materialTestTypes = ['engrave_matrix', 'interval', 'cut', 'kerf', 'photo', 'other'];
+    const materialTestStatuses = ['recommended', 'experimental', 'failed', 'archived'];
+    function normalizeMaterialTests(tests) {
+      return Array.isArray(tests) ? tests.filter(test => test && typeof test === 'object').map(test => ({
+        id: test.id || uid(), date: test.date || '', machine: test.machine || '',
+        testType: materialTestTypes.includes(test.testType) ? test.testType : 'other',
+        status: materialTestStatuses.includes(test.status) ? test.status : 'experimental',
+        notes: test.notes || '', winningSpeed: test.winningSpeed ?? '', winningPower: test.winningPower ?? '',
+        winningInterval: test.winningInterval ?? '', winningPasses: test.winningPasses ?? '',
+        airAssist: !!test.airAssist, confidence: Math.max(0, Math.min(5, num(test.confidence))),
+        attachments: Array.isArray(test.attachments) ? test.attachments : []
+      })) : [];
+    }
+    function materialTestLabel(type) {
+      return String(type || 'other').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+    function materialTestsSummaryHtml(tests) {
+      const normalized = normalizeMaterialTests(tests);
+      if (!normalized.length) return '<div class="small muted">No material tests yet.</div>';
+      const latest = [...normalized].sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+      return `<div class="small muted">${normalized.length} test${normalized.length === 1 ? '' : 's'}</div><div style="margin-top:8px"><b>Latest:</b><br>${esc(materialTestLabel(latest.testType))}<br>${esc(latest.date || '-')}<br><span class="small">${'★'.repeat(latest.confidence || 0)}${'☆'.repeat(5 - (latest.confidence || 0))}</span></div>`;
+    }
+    function materialTestsEditorHtml() {
+      const tests = normalizeMaterialTests(profileDraftTests);
+      return `<details id="materialTestsSection" class="span2" style="margin-top:8px"><summary><b>Material Tests</b> <span class="small muted">(${tests.length})</span></summary><div style="margin-top:10px">${tests.length ? tests.map(test => `<div class="panel" style="margin-bottom:8px"><div class="spread"><div><b>${esc(materialTestLabel(test.testType))}</b><div class="small muted">${esc(test.date || '-')} - ${esc(test.status)}</div></div><span class="small">${'★'.repeat(test.confidence || 0)}${'☆'.repeat(5 - (test.confidence || 0))}</span></div><div class="actions"><button type="button" data-edit-material-test="${esc(test.id)}">Edit Test</button><button type="button" class="danger" data-delete-material-test="${esc(test.id)}">Delete Test</button></div></div>`).join('') : '<div class="small muted" style="margin-bottom:10px">No material tests yet.</div>'}<button type="button" id="addMaterialTest">Add Test</button></div></details>`;
+    }
+    function refreshMaterialTestsEditor() {
+      const section = document.getElementById('materialTestsSection');
+      if (!section) return;
+      const replacement = document.createElement('div');
+      replacement.innerHTML = materialTestsEditorHtml();
+      section.replaceWith(replacement.firstElementChild);
+      bindMaterialTestsEditor();
+    }
+    function bindMaterialTestsEditor() {
+      const add = document.getElementById('addMaterialTest');
+      if (add) add.onclick = () => openMaterialTest();
+      document.querySelectorAll('[data-edit-material-test]').forEach(button => button.onclick = () => openMaterialTest(profileDraftTests.find(test => test.id === button.dataset.editMaterialTest)));
+      document.querySelectorAll('[data-delete-material-test]').forEach(button => button.onclick = () => {
+        if (!confirm('Delete this material test?')) return;
+        profileDraftTests = profileDraftTests.filter(test => test.id !== button.dataset.deleteMaterialTest);
+        refreshMaterialTestsEditor();
+      });
+    }
+    function materialTestFields(data) {
+      return `${field('date', 'Date', data.date, 'date')}${field('machine', 'Machine', data.machine)}${select('testType', 'Test type', data.testType, materialTestTypes)}${select('status', 'Status', data.status, materialTestStatuses)}${field('winningSpeed', 'Winning speed', data.winningSpeed, 'number', 'step="any"')}${field('winningPower', 'Winning power (%)', data.winningPower, 'number', 'step="any" min="0" max="100"')}${field('winningInterval', 'Winning interval', data.winningInterval, 'number', 'step="any"')}${field('winningPasses', 'Winning passes', data.winningPasses, 'number', 'step="1" min="1"')}<label class="row"><input name="airAssist" type="checkbox" ${data.airAssist ? 'checked' : ''} style="width:auto"> Air assist on</label><label>${labelText('Confidence', 'How repeatable and trustworthy this result is, from 1 to 5.')}<select name="confidence">${[1,2,3,4,5].map(n => `<option value="${n}" ${Number(data.confidence) === n ? 'selected' : ''}>${n}</option>`).join('')}</select></label><label class="span2">${labelText('Notes')}<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>`;
+    }
+    function openMaterialTest(test) {
+      const data = { id: '', date: today(), machine: '', testType: 'engrave_matrix', status: 'experimental', notes: '', winningSpeed: '', winningPower: '', winningInterval: '', winningPasses: '', airAssist: false, confidence: 3, ...normalizeMaterialTests(test ? [test] : [])[0] };
+      openModal('testModal', `<div class="dialog"><div class="spread"><h2>${test ? 'Edit Test' : 'Add Test'}</h2><button data-close>×</button></div><form id="materialTestForm" class="formgrid">${materialTestFields(data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save Test</button></div></form></div>`);
+      bindModal('testModal');
+      document.getElementById('materialTestForm').onsubmit = event => {
+        event.preventDefault();
+        const form = event.target;
+        const f = readForm(form);
+        const normalized = normalizeMaterialTests([{ ...data, ...f, id: data.id || uid(), airAssist: !!form.airAssist.checked, confidence: Math.max(1, Math.min(5, Math.round(num(f.confidence, 3)))) }])[0];
+        const index = profileDraftTests.findIndex(item => item.id === normalized.id);
+        if (index >= 0) profileDraftTests[index] = normalized; else profileDraftTests.unshift(normalized);
+        closeModal('testModal');
+        refreshMaterialTestsEditor();
+      };
+    }
     function entryCard(e) {
       return `<article class="card">
         <div class="spread"><div><b>${esc(e.material)}</b><div class="small muted">${fmt(e.thicknessValue, e.thicknessUnit)} - ${esc(e.jobType)} - ${esc(e.date)}</div></div>${stars(e.rating)}</div>
@@ -1726,6 +1791,7 @@
         <div class="metrics">${metric('Power', powerLabel(p))}${metric('Speed', `${p.speed} mm/min`)}${metric('Passes', p.passes)}${metric('Line int.', fmt(p.lineInterval, 'mm'))}</div>
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(p.focusValue, p.focusUnit)} - Air: ${p.airAssist ? 'On' : 'Off'}${p.software ? ' - ' + esc(p.software) : ''}</div>
         ${p.notes ? `<p class="small">${esc(p.notes)}</p>` : ''}
+        <div class="panel" style="margin-top:10px"><b>Material Tests</b>${materialTestsSummaryHtml(p.tests)}</div>
         <div class="actions"><button data-edit-profile="${p.id}">Edit</button><button data-duplicate-profile="${p.id}">Duplicate</button><button data-project-profile="${p.id}">Save as project</button><button class="danger" data-delete-profile="${p.id}">Delete</button></div>
       </article>`;
     }
@@ -2217,6 +2283,7 @@
         ${kind === 'profile' ? `<label>${labelText('Tags, comma-separated', 'Short labels used for filtering and search.')}<input name="tags" value="${esc(tagString(data.tags))}" placeholder="gift, acrylic, holiday"></label><div class="span2 small muted">Use short tags for filtering, separated by commas.</div>` : ''}
         ${kind === 'entry' ? `<label class="span2">${labelText('Settings file / profile name', 'Saved LightBurn or settings file reference so you can find it later.')}<input name="settingsFile" value="${esc(data.settingsFile)}"></label><div class="span2"><b class="small">Result quality</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating)}" hidden></div>` : ''}
         <label class="span2">${labelText('Notes', 'Record what worked, what failed, and anything to remember next time.')}<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>
+        ${kind === 'profile' ? materialTestsEditorHtml() : ''}
         <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>`;
     }
     function unitField(valueName, unitName, label, value, unit, tip = '') {
@@ -2266,15 +2333,20 @@
     function openProfile(profile) {
       editingProfileId = profile && profile.id ? profile.id : null;
       const data = { ...formDefaults('profile'), ...(profile || {}) };
+      profileDraftTests = normalizeMaterialTests(data.tests);
       openModal('profileModal', `<div class="dialog"><div class="spread"><h2>${editingProfileId ? 'Edit material' : 'Add material'}</h2><button data-close>×</button></div><form id="profileForm" class="formgrid">${modalFields('profile', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save material</button></div></form></div>`);
       bindModal('profileModal');
+      bindMaterialTestsEditor();
       bindMaterialSuggestions(document.getElementById('profileForm'));
       document.getElementById('profileForm').oninput = e => bindMaterialSafetyWarning(e.currentTarget);
       document.getElementById('profileForm').onsubmit = e => {
         e.preventDefault();
         const f = readForm(e.target);
         if (!f.material.trim()) return alert('Add a material name first.');
-        upsert('profiles', normalizeSetting(f, editingProfileId));
+        const profileObj = normalizeSetting(f, editingProfileId);
+        profileObj.tests = normalizeMaterialTests(profileDraftTests);
+        upsert('profiles', profileObj);
+        profileDraftTests = [];
         closeModal('profileModal');
       };
     }
