@@ -1921,10 +1921,7 @@
       const generic = () => starter ? resolve('starter', `Starter profile: ${starter.aliases[0]}`, {}) : resolve('generic', `Generic ${family.label} recommendation`, {});
       const selectedWinner = testHasUsableWinner(selected) ? selected : null;
       // Explicit sources are authoritative; only automatic mode may use a selected prior test opportunistically.
-      if (draft.baselineSource === 'manual') {
-        if (hasUsableNumber(draft.manualBaselineSpeed) || hasUsableNumber(draft.manualBaselinePower)) return resolve('manual', 'Manually entered baseline', { speed: draft.manualBaselineSpeed, power: draft.manualBaselinePower, interval: draft.manualBaselineInterval, passes: draft.manualBaselinePasses, airAssist: draft.manualBaselineAirAssist });
-        return latest ? fromTest(latest, 'latest') : library() || generic();
-      }
+      if (draft.baselineSource === 'manual') return resolve('manual', 'Manually entered baseline', { speed: draft.manualBaselineSpeed, power: draft.manualBaselinePower, interval: draft.manualBaselineInterval, passes: draft.manualBaselinePasses, airAssist: draft.manualBaselineAirAssist });
       if (draft.baselineSource === 'prior') return selectedWinner ? fromTest(selectedWinner, 'prior') : latest ? fromTest(latest, 'latest') : library() || generic();
       if (draft.baselineSource === 'latest') return latest ? fromTest(latest, 'latest') : library() || generic();
       if (draft.baselineSource === 'library') return library() || (latest ? fromTest(latest, 'latest') : generic());
@@ -1956,7 +1953,8 @@
         ['Automatic without tests but with usable Library setting', draft(), profile, [], 'library'],
         ['Automatic with currentKnowledge never', draft({ currentKnowledge: 'never' }), genericProfile, [selected, latest], 'generic'],
         ['Explicit Library unavailable, stale selected ID, latest available', draft({ baselineSource: 'library', baselineTestId: selected.id }), emptyProfile, [selected, latest], 'latest'],
-        ['Explicit Latest unavailable, stale selected ID, Library available', draft({ baselineSource: 'latest', baselineTestId: staleInvalid.id }), profile, [staleInvalid], 'library']
+        ['Explicit Latest unavailable, stale selected ID, Library available', draft({ baselineSource: 'latest', baselineTestId: staleInvalid.id }), profile, [staleInvalid], 'library'],
+        ['Explicit Manual with blank values and stale prior ID', draft({ baselineSource: 'manual', baselineTestId: selected.id }), profile, [selected, latest], 'manual']
       ];
       const results = fixtures.map(([name, fixtureDraft, fixtureProfile, history, expected]) => {
         const actual = resolveTestBaselineFromContext(fixtureDraft, fixtureProfile, history).source;
