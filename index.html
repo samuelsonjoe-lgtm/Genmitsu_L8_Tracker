@@ -1747,7 +1747,19 @@
         notes: test.notes || '', winningSpeed: test.winningSpeed ?? '', winningPower: test.winningPower ?? '',
         winningInterval: test.winningInterval ?? '', winningPasses: test.winningPasses ?? '',
         airAssist: !!test.airAssist, confidence: Math.max(0, Math.min(5, num(test.confidence))),
-        attachments: Array.isArray(test.attachments) ? test.attachments : []
+        attachments: Array.isArray(test.attachments) ? test.attachments : [],
+        overallResult: typeof test.overallResult === 'string' ? test.overallResult : '',
+        observedTraits: Array.isArray(test.observedTraits) ? test.observedTraits.filter(trait => typeof trait === 'string') : [],
+        winnerLocation: typeof test.winnerLocation === 'string' ? test.winnerLocation.trim() : '',
+        winnerComment: typeof test.winnerComment === 'string' ? test.winnerComment.trim() : '',
+        resultSummary: typeof test.resultSummary === 'string' ? test.resultSummary.trim() : '',
+        intendedOperation: typeof test.intendedOperation === 'string' ? test.intendedOperation : '',
+        adaptiveMode: typeof test.adaptiveMode === 'string' ? test.adaptiveMode : '',
+        optimizationGoal: typeof test.optimizationGoal === 'string' ? test.optimizationGoal : '',
+        recommendationRationale: typeof test.recommendationRationale === 'string' ? test.recommendationRationale : '',
+        baselineSource: typeof test.baselineSource === 'string' ? test.baselineSource : '',
+        baselineLabel: typeof test.baselineLabel === 'string' ? test.baselineLabel : '',
+        baselineTestId: typeof test.baselineTestId === 'string' ? test.baselineTestId : ''
       })) : [];
     }
     function normalizeLibraryProfiles(profiles) {
@@ -1781,6 +1793,34 @@
       return { passed, failed, results };
     }
     window.runMaterialTestNormalizationFixtures = runMaterialTestNormalizationFixtures;
+    function runWizardMetadataFixtures() {
+      const baseline = { source: 'latest', sourceLabel: 'Most recently saved winner', label: 'Most recently saved winner', test: { id: 'baseline-test-1' } };
+      const draft = () => ({ date: '2026-07-12', machine: 'Genmitsu L8 20W', intendedOperation: 'engrave_vector', adaptiveMode: 'auto', optimizationGoal: 'Best overall', testFocus: 'material', notes: 'Fixture notes', plan: { baseline, adaptiveMode: 'refine', rationale: 'Stay near the known winner.', intervalSpeed: 18000, intervalPower: 55, intervalMin: .08, intervalMax: .14, intervalSteps: 7, intervalSize: 10, intervalFillMode: 'simple_fill', intervalAirAssist: false, focusGuidance: 'Surface focus.', verticalCount: 7, verticalParameter: 'Speed', verticalMin: 14000, verticalMax: 22000, verticalHeight: 10, horizontalCount: 7, horizontalParameter: 'Power', horizontalMin: 40, horizontalMax: 70, horizontalWidth: 10, materialMode: 'Fill', lineInterval: .10, passes: 1, scanAngle: 0, bidirectionalFill: true, overscanning: 2.5, airAssist: false, constantPowerMode: true, zOffset: 0, textSpeed: 18000, textPower: 55, textMode: 'Fill', textPasses: 1, borderEnabled: true, borderSetting: 'Frame', title: 'Fixture test' }, results: { status: 'recommended', winningSpeed: '18000', winningPower: '55', winningInterval: '.10', winningPasses: '1', airAssist: false, confidence: 5, overallResult: 'Excellent', observedTraits: ['Clean', 'Crisp detail'], winnerLocation: 'Row 3, Column 4', winnerComment: 'Best balance', resultSummary: 'Clean and crisp' } });
+      const fixture = (name, check) => ({ name, ...check() });
+      const results = [
+        fixture('Result fields persisted', () => { const record = buildWizardMaterialTestRecord(draft(), { id: 'fixture-id', baseline }); return { expected: 'Excellent / winner text', actual: `${record.overallResult}|${record.winnerLocation}|${record.winnerComment}|${record.resultSummary}`, pass: record.overallResult === 'Excellent' && record.winnerLocation === 'Row 3, Column 4' && record.winnerComment === 'Best balance' && record.resultSummary === 'Clean and crisp' }; }),
+        fixture('Observed traits persisted', () => { const record = buildWizardMaterialTestRecord(draft(), { id: 'fixture-id', baseline }); return { expected: 'Clean, Crisp detail', actual: record.observedTraits.join(', '), pass: record.observedTraits.join('|') === 'Clean|Crisp detail' }; }),
+        fixture('Traits array is copied', () => { const source = draft(); const record = buildWizardMaterialTestRecord(source, { id: 'fixture-id', baseline }); source.results.observedTraits.push('Mutated'); return { expected: '2 saved traits', actual: `${record.observedTraits.length} saved traits`, pass: record.observedTraits.length === 2 && !record.observedTraits.includes('Mutated') }; }),
+        fixture('Resolved baseline metadata persisted', () => { const record = buildWizardMaterialTestRecord(draft(), { id: 'fixture-id', baseline }); return { expected: 'latest / baseline-test-1', actual: `${record.baselineSource}|${record.baselineTestId}`, pass: record.baselineSource === 'latest' && record.baselineTestId === 'baseline-test-1' }; }),
+        fixture('Baseline label persisted', () => { const record = buildWizardMaterialTestRecord(draft(), { id: 'fixture-id', baseline }); return { expected: 'Most recently saved winner', actual: record.baselineLabel, pass: record.baselineLabel === 'Most recently saved winner' }; }),
+        fixture('Baseline without saved test has blank ID', () => { const manual = { source: 'manual', label: 'Manually entered baseline' }; const record = buildWizardMaterialTestRecord(draft(), { id: 'fixture-id', baseline: manual }); return { expected: 'blank baseline ID', actual: record.baselineTestId || '(blank)', pass: record.baselineTestId === '' }; }),
+        fixture('Actual adaptive mode persisted', () => { const record = buildWizardMaterialTestRecord(draft(), { id: 'fixture-id', baseline }); return { expected: 'refine', actual: record.adaptiveMode, pass: record.adaptiveMode === 'refine' }; }),
+        fixture('Optimization context persisted', () => { const record = buildWizardMaterialTestRecord(draft(), { id: 'fixture-id', baseline }); return { expected: 'operation, goal, rationale', actual: `${record.intendedOperation}|${record.optimizationGoal}|${record.recommendationRationale}`, pass: record.intendedOperation === 'engrave_vector' && record.optimizationGoal === 'Best overall' && record.recommendationRationale === 'Stay near the known winner.' }; }),
+        fixture('Winner conversions retained', () => { const record = buildWizardMaterialTestRecord(draft(), { id: 'fixture-id', baseline }); return { expected: 'numeric winners / recommended / 5', actual: `${record.winningSpeed}|${record.winningPower}|${record.winningInterval}|${record.winningPasses}|${record.status}|${record.confidence}`, pass: record.winningSpeed === 18000 && record.winningPower === 55 && record.winningInterval === .1 && record.winningPasses === 1 && record.status === 'recommended' && record.confidence === 5 && record.airAssist === false }; }),
+        fixture('Readable notes retained', () => { const record = buildWizardMaterialTestRecord(draft(), { id: 'fixture-id', baseline }); return { expected: 'adaptive and result sections', actual: record.notes.includes('Adaptive recommendation') && record.notes.includes('Overall: Excellent') && record.notes.includes('Observed traits: Clean, Crisp detail') && record.notes.includes('Winner location: Row 3, Column 4') ? 'present' : 'missing', pass: record.notes.includes('Adaptive recommendation') && record.notes.includes('Overall: Excellent') && record.notes.includes('Observed traits: Clean, Crisp detail') && record.notes.includes('Winner location: Row 3, Column 4') }; }),
+        fixture('Normalization preserves structured fields', () => { const record = buildWizardMaterialTestRecord(draft(), { id: 'fixture-id', baseline }); const normalized = normalizeMaterialTests([record])[0]; return { expected: 'metadata retained', actual: `${normalized.overallResult}|${normalized.observedTraits.length}|${normalized.baselineSource}|${normalized.baselineTestId}`, pass: normalized.overallResult === 'Excellent' && normalized.observedTraits.join('|') === 'Clean|Crisp detail' && normalized.baselineSource === 'latest' && normalized.baselineTestId === 'baseline-test-1' }; }),
+        fixture('Builder does not mutate source draft', () => { const source = draft(); const before = JSON.stringify(source); buildWizardMaterialTestRecord(source, { id: 'fixture-id', baseline }); return { expected: 'unchanged source draft', actual: before === JSON.stringify(source) ? 'unchanged' : 'changed', pass: before === JSON.stringify(source) }; })
+      ];
+      const passed = results.filter(result => result.pass).length;
+      const failed = results.length - passed;
+      console.group('Wizard metadata fixtures');
+      console.table(results);
+      console.log(`${passed} passed`);
+      console.log(`${failed} failed`);
+      console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runWizardMetadataFixtures = runWizardMetadataFixtures;
     function materialTestLabel(type) {
       return String(type || 'other').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
     }
@@ -2267,13 +2307,30 @@
         navigator.clipboard.writeText(text).then(() => flashButton(document.getElementById(kind === 'interval' ? 'copyIntervalSetup' : 'copyMaterialSetup'), 'Copied')).catch(() => { if (box) { box.focus(); box.select(); } });
       } else if (box) { box.focus(); box.select(); }
     }
+    function buildWizardMaterialTestRecord(draft, options = {}) {
+      const r = draft.results || {};
+      const baseline = options.baseline || draft.plan?.baseline || resolveTestBaseline(draft);
+      const plan = { ...(draft.plan || {}), baseline };
+      const notesDraft = { ...draft, plan };
+      const overallResult = typeof r.overallResult === 'string' && r.overallResult ? r.overallResult : 'Usable';
+      const observedTraits = Array.isArray(r.observedTraits) ? r.observedTraits.filter(trait => typeof trait === 'string').slice() : [];
+      const winnerLocation = typeof r.winnerLocation === 'string' ? r.winnerLocation.trim() : '';
+      const winnerComment = typeof r.winnerComment === 'string' ? r.winnerComment.trim() : '';
+      const resultSummary = typeof r.resultSummary === 'string' ? r.resultSummary.trim() : '';
+      const notes = [draft.notes, `Adaptive recommendation\nMode: ${plan.adaptiveMode || draft.adaptiveMode}\nGoal: ${draft.optimizationGoal}\nBaseline: ${baseline.label || baseline.sourceLabel || ''}\nRationale: ${plan.rationale || ''}`, `Interval setup:\n${wizardIntervalSummary(notesDraft)}`, `Material test setup:\n${wizardMaterialSummary(notesDraft)}`, `Result\nOverall: ${overallResult}\nObserved traits: ${observedTraits.join(', ') || 'None recorded'}\nWinner location: ${winnerLocation || 'Not specified'}${winnerComment ? `\nWinner comment: ${winnerComment}` : ''}`, resultSummary ? `Result summary: ${resultSummary}` : ''].filter(Boolean).join('\n\n');
+      return normalizeMaterialTests([{
+        id: options.id || uid(), date: draft.date || today(), machine: draft.machine, testType: wizardStoredTestType(draft), status: materialTestStatuses.includes(r.status) ? r.status : 'experimental', notes,
+        winningSpeed: r.winningSpeed === '' ? '' : num(r.winningSpeed), winningPower: r.winningPower === '' ? '' : num(r.winningPower), winningInterval: r.winningInterval === '' ? '' : num(r.winningInterval), winningPasses: r.winningPasses === '' ? '' : Math.max(1, Math.round(num(r.winningPasses, 1))), airAssist: !!r.airAssist, confidence: Math.max(1, Math.min(5, Math.round(num(r.confidence, 3)))), attachments: [],
+        overallResult, observedTraits, winnerLocation, winnerComment, resultSummary,
+        intendedOperation: typeof draft.intendedOperation === 'string' ? draft.intendedOperation : '', adaptiveMode: typeof plan.adaptiveMode === 'string' ? plan.adaptiveMode : '', optimizationGoal: typeof draft.optimizationGoal === 'string' ? draft.optimizationGoal : '', recommendationRationale: typeof plan.rationale === 'string' ? plan.rationale : '', baselineSource: typeof baseline.source === 'string' ? baseline.source : '', baselineLabel: typeof (baseline.label || baseline.sourceLabel) === 'string' ? (baseline.label || baseline.sourceLabel) : '', baselineTestId: typeof baseline.test?.id === 'string' ? baseline.test.id : ''
+      }])[0];
+    }
     function saveMaterialTestWizard() {
       const draft = materialTestWizard;
       const profile = draft && state.profiles.find(item => item.id === draft.materialId);
       if (!profile) return alert('The selected material is no longer available.');
       const r = draft.results;
-      const notes = [draft.notes, `Adaptive recommendation\nMode: ${draft.plan.adaptiveMode || draft.adaptiveMode}\nGoal: ${draft.optimizationGoal}\nBaseline: ${draft.plan.baseline?.label || resolveTestBaseline(draft).label}\nRationale: ${draft.plan.rationale || ''}`, `Interval setup:\n${wizardIntervalSummary(draft)}`, `Material test setup:\n${wizardMaterialSummary(draft)}`, `Result\nOverall: ${r.overallResult || 'Usable'}\nObserved traits: ${(r.observedTraits || []).join(', ') || 'None recorded'}\nWinner location: ${r.winnerLocation || 'Not specified'}${r.winnerComment ? `\nWinner comment: ${r.winnerComment}` : ''}`, r.resultSummary ? `Result summary: ${r.resultSummary}` : ''].filter(Boolean).join('\n\n');
-      const test = { id: uid(), date: draft.date || today(), machine: draft.machine, testType: wizardStoredTestType(draft), status: materialTestStatuses.includes(r.status) ? r.status : 'experimental', notes, winningSpeed: r.winningSpeed === '' ? '' : num(r.winningSpeed), winningPower: r.winningPower === '' ? '' : num(r.winningPower), winningInterval: r.winningInterval === '' ? '' : num(r.winningInterval), winningPasses: r.winningPasses === '' ? '' : Math.max(1, Math.round(num(r.winningPasses, 1))), airAssist: !!r.airAssist, confidence: Math.max(1, Math.min(5, Math.round(num(r.confidence, 3)))), attachments: [] };
+      const test = buildWizardMaterialTestRecord(draft);
       const previousTests = profile.tests;
       const previousSettings = {};
       profile.tests = [...(Array.isArray(profile.tests) ? profile.tests : []), test];
@@ -3799,6 +3856,7 @@
     const selftest = new URLSearchParams(window.location.search).get('selftest');
     if (selftest === 'baseline' || selftest === 'all') runBaselineResolutionFixtures();
     if (selftest === 'normalization' || selftest === 'all') runMaterialTestNormalizationFixtures();
+    if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
     render();
   })();
   </script>
