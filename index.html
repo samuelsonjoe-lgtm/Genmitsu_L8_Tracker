@@ -1801,7 +1801,7 @@
       ['engrave_matrix', 'Engrave Speed/Power Matrix'], ['interval', 'Interval Test'], ['cut', 'Cut Test'], ['kerf', 'Kerf Test'], ['other', 'Other / Manual']
     ];
     const lightBurnMaterialFamilies = {
-      wood: { label: 'Wood / plywood', speed: 12000, power: 60, intervalMin: 0.08, intervalMax: 0.16, matrixSpeedMin: 6000, matrixSpeedMax: 22000, matrixPowerMin: 20, matrixPowerMax: 100, lineInterval: 0.10, airAssist: false },
+      wood: { label: 'Wood / plywood', speed: 12000, power: 60, intervalMin: 0.08, intervalMax: 0.16, matrixSpeedMin: 8000, matrixSpeedMax: 24000, matrixPowerMin: 20, matrixPowerMax: 100, lineInterval: 0.10, airAssist: false },
       slate: { label: 'Slate / stone', speed: 20000, power: 60, intervalMin: 0.08, intervalMax: 0.16, matrixSpeedMin: 10000, matrixSpeedMax: 30000, matrixPowerMin: 20, matrixPowerMax: 100, lineInterval: 0.10, airAssist: false, cutBlocked: true },
       coated_metal: { label: 'Coated metal', speed: 18000, power: 55, intervalMin: 0.08, intervalMax: 0.16, matrixSpeedMin: 8000, matrixSpeedMax: 26000, matrixPowerMin: 20, matrixPowerMax: 100, lineInterval: 0.10, airAssist: false, cutBlocked: true },
       anodized_aluminum: { label: 'Anodized aluminum', speed: 18000, power: 45, intervalMin: 0.08, intervalMax: 0.16, matrixSpeedMin: 8000, matrixSpeedMax: 26000, matrixPowerMin: 15, matrixPowerMax: 85, lineInterval: 0.10, airAssist: false },
@@ -1855,7 +1855,7 @@
     function recommendedWizardPlan(draft) {
       const profile = state.profiles.find(item => item.id === draft.materialId);
       const family = lightBurnMaterialFamilies[draft.materialFamily] || lightBurnMaterialFamilies.other;
-      const size = draft.testSize === 'quick' ? { steps: 5, slots: 5, size: 10 } : draft.testSize === 'broad' ? { steps: 11, slots: 11, size: 20 } : { steps: 9, slots: 9, size: 15 };
+      const size = draft.testSize === 'quick' ? { steps: 5, slots: 5, size: 7 } : draft.testSize === 'broad' ? { steps: 9, slots: 9, size: 12 } : { steps: 7, slots: 7, size: 10 };
       const machinePowerScale = draft.machine === 'Genmitsu L8 40W' ? 0.75 : 1;
       const priorKnown = draft.currentKnowledge === 'prior' || draft.currentKnowledge === 'narrowing';
       const priorSpeed = wizardNumber(profile && profile.speed, family.speed);
@@ -1874,6 +1874,84 @@
         textSpeed: Math.round(speedCenter), textPower: Math.max(1, Math.min(100, Math.round(powerCenter))), textMode: 'Fill', textPasses: 1, borderEnabled: true, borderSetting: 'Frame with low-power visible-light preview before running', title: `${family.label} ${operation === 'cut' ? 'cut' : operation === 'kerf' ? 'kerf' : 'engrave'} test`, cutBlocked: !!family.cutBlocked && operation === 'cut'
       };
     }
+    const engraveGoals = ['Best overall', 'Faster production', 'Darker engraving', 'Lighter / subtle engraving', 'Cleaner engraving', 'More detail', 'Photo engraving', 'Lower power', 'Less soot or scorching', 'Find minimum usable power', 'Find maximum usable speed'];
+    const cutGoals = ['Reliable cut-through', 'Faster cutting', 'Fewer passes', 'Cleaner edge', 'Less charring', 'Find minimum cut-through power', 'Find maximum cut-through speed', 'Kerf refinement'];
+    function getMaterialTestHistory(profile) {
+      return Array.isArray(profile?.tests) ? profile.tests.filter(test => test && typeof test === 'object') : [];
+    }
+    function testHasUsableWinner(test) {
+      return test && ['winningSpeed', 'winningPower', 'winningInterval', 'winningPasses'].some(key => test[key] !== '' && test[key] != null && Number.isFinite(Number(test[key])));
+    }
+    function hasUsableNumber(value) { return value !== '' && value != null && Number.isFinite(Number(value)); }
+    function resolveTestBaseline(draft) {
+      const profile = state.profiles.find(item => item.id === draft.materialId);
+      const history = getMaterialTestHistory(profile);
+      const selected = history.find(test => test.id === draft.baselineTestId);
+      const latest = [...history].filter(testHasUsableWinner).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0];
+      const fromTest = (test, source) => test ? { source, label: `${source === 'prior' ? 'Prior test' : 'Most recently saved winner'}${test.date ? ` from ${test.date}` : ''}`, speed: wizardNumber(test.winningSpeed, ''), power: wizardNumber(test.winningPower, ''), interval: wizardNumber(test.winningInterval, ''), passes: wizardNumber(test.winningPasses, ''), airAssist: !!test.airAssist, test } : null;
+      if (draft.baselineSource === 'manual') return { source: 'manual', label: 'Manually entered baseline', speed: wizardNumber(draft.manualBaselineSpeed, ''), power: wizardNumber(draft.manualBaselinePower, ''), interval: wizardNumber(draft.manualBaselineInterval, ''), passes: wizardNumber(draft.manualBaselinePasses, ''), airAssist: !!draft.manualBaselineAirAssist };
+      if (draft.baselineSource === 'auto' && draft.currentKnowledge === 'never') return { source: 'generic', label: `Generic ${lightBurnMaterialFamilies[draft.materialFamily]?.label || 'material'} starting range`, speed: '', power: '', interval: '', passes: '' };
+      if (draft.baselineSource === 'prior' && selected) return fromTest(selected, 'prior');
+      if (draft.baselineSource === 'latest' && latest) return fromTest(latest, 'latest');
+      if (draft.baselineSource === 'library' && profile && (hasUsableNumber(profile.speed) || hasUsableNumber(profile.minPower))) return { source: 'library', label: 'Library primary setting', speed: wizardNumber(profile.speed, ''), power: wizardNumber(profile.minPower, ''), interval: wizardNumber(profile.lineInterval, ''), passes: wizardNumber(profile.passes, ''), airAssist: !!profile.airAssist };
+      if (selected) return fromTest(selected, 'prior');
+      if (latest) return fromTest(latest, 'latest');
+      if (profile && (hasUsableNumber(profile.speed) || hasUsableNumber(profile.minPower))) return { source: 'library', label: 'Library primary setting', speed: wizardNumber(profile.speed, ''), power: wizardNumber(profile.minPower, ''), interval: wizardNumber(profile.lineInterval, ''), passes: wizardNumber(profile.passes, ''), airAssist: !!profile.airAssist };
+      return { source: 'generic', label: `Generic ${lightBurnMaterialFamilies[draft.materialFamily]?.label || 'material'} starting range`, speed: '', power: '', interval: '', passes: '' };
+    }
+    function chooseAdaptiveTestMode(draft, baseline) {
+      if (draft.adaptiveMode && draft.adaptiveMode !== 'auto') return draft.adaptiveMode;
+      if (/Find minimum|Find maximum/.test(draft.optimizationGoal || '')) return 'boundary';
+      if (draft.optimizationGoal && draft.optimizationGoal !== 'Best overall') return 'goal';
+      if (baseline.source === 'prior' || baseline.source === 'latest' || baseline.source === 'manual') return 'refine';
+      if (baseline.source === 'library') return 'confirm';
+      return 'discovery';
+    }
+    function adaptiveRange(center, lowFactor, highFactor, minimum, maximum, step) {
+      const round = value => Math.round(value / step) * step;
+      return [Math.max(minimum, round(center * lowFactor)), Math.min(maximum, round(center * highFactor))];
+    }
+    function recommendEngraveRange(draft, baseline, plan, mode) {
+      if (!Number.isFinite(Number(baseline.speed)) || !Number.isFinite(Number(baseline.power))) return plan;
+      const family = lightBurnMaterialFamilies[draft.materialFamily] || lightBurnMaterialFamilies.other;
+      let speed = adaptiveRange(Number(baseline.speed), mode === 'refine' ? .8 : .75, mode === 'refine' ? 1.2 : 1.25, family.matrixSpeedMin, family.matrixSpeedMax, 100);
+      let power = adaptiveRange(Number(baseline.power), mode === 'refine' ? .75 : .7, mode === 'refine' ? 1.25 : 1.3, family.matrixPowerMin, family.matrixPowerMax, 5);
+      const goal = draft.optimizationGoal || 'Best overall';
+      if (goal === 'Faster production' || goal === 'Find maximum usable speed') { speed = adaptiveRange(Number(baseline.speed), goal === 'Faster production' ? 1 : .95, 1.55, family.matrixSpeedMin, family.matrixSpeedMax, 100); power = adaptiveRange(Number(baseline.power), .9, 1.35, family.matrixPowerMin, family.matrixPowerMax, 5); }
+      if (goal === 'Darker engraving') { speed = adaptiveRange(Number(baseline.speed), .7, 1.05, family.matrixSpeedMin, family.matrixSpeedMax, 100); power = adaptiveRange(Number(baseline.power), 1, 1.3, family.matrixPowerMin, family.matrixPowerMax, 5); }
+      if (goal === 'Lighter / subtle engraving' || goal === 'Lower power' || goal === 'Find minimum usable power') { speed = adaptiveRange(Number(baseline.speed), .9, 1.1, family.matrixSpeedMin, family.matrixSpeedMax, 100); power = adaptiveRange(Number(baseline.power), goal === 'Find minimum usable power' ? .4 : .55, 1.05, family.matrixPowerMin, family.matrixPowerMax, 5); }
+      return { ...plan, verticalMin: speed[0], verticalMax: speed[1], horizontalMin: power[0], horizontalMax: power[1], verticalCount: mode === 'refine' ? 5 : 7, horizontalCount: mode === 'refine' ? 5 : 7, verticalHeight: mode === 'refine' ? 8 : plan.verticalHeight, horizontalWidth: mode === 'refine' ? 8 : plan.horizontalWidth, intervalSpeed: Number(baseline.speed), intervalPower: Number(baseline.power), lineInterval: baseline.interval === '' ? plan.lineInterval : baseline.interval, passes: baseline.passes === '' ? plan.passes : baseline.passes };
+    }
+    function recommendCutRange(draft, baseline, plan, mode) {
+      if (plan.cutBlocked || !Number.isFinite(Number(baseline.speed)) || !Number.isFinite(Number(baseline.power))) return plan;
+      const family = lightBurnMaterialFamilies[draft.materialFamily] || lightBurnMaterialFamilies.other;
+      const speed = adaptiveRange(Number(baseline.speed), mode === 'refine' ? .8 : .7, draft.optimizationGoal === 'Faster cutting' ? 1.35 : mode === 'refine' ? 1.2 : 1.25, family.matrixSpeedMin, family.matrixSpeedMax, 100);
+      const power = adaptiveRange(Number(baseline.power), draft.optimizationGoal === 'Find minimum cut-through power' ? .5 : .8, 1.2, family.matrixPowerMin, family.matrixPowerMax, 5);
+      return { ...plan, verticalMin: speed[0], verticalMax: speed[1], horizontalMin: power[0], horizontalMax: power[1], verticalCount: mode === 'refine' ? 5 : 7, horizontalCount: mode === 'refine' ? 5 : 7, horizontalParameter: draft.optimizationGoal === 'Fewer passes' ? 'Passes' : 'Power', intervalSpeed: Number(baseline.speed), intervalPower: Number(baseline.power) };
+    }
+    function recommendIntervalRange(draft, baseline, plan) {
+      if (!Number.isFinite(Number(baseline.interval))) return plan;
+      const range = draft.adaptiveMode === 'refine' ? .02 : .04;
+      return { ...plan, intervalMin: Math.max(.02, Math.round((Number(baseline.interval) - range) * 100) / 100), intervalMax: Math.round((Number(baseline.interval) + range) * 100) / 100, intervalSteps: draft.adaptiveMode === 'refine' ? 5 : 7 };
+    }
+    function buildNextTestRationale(draft, baseline, mode) {
+      if (mode === 'discovery') return `No reliable winner is available, so this is a conservative broad discovery test within the selected material family limits.`;
+      if (mode === 'boundary') return `This keeps one value near the baseline while exploring the requested usable boundary.`;
+      if (mode === 'goal') return `This test biases the range toward “${draft.optimizationGoal}” while keeping a practical comparison around the baseline.`;
+      if (mode === 'refine') return `Because ${baseline.label.toLowerCase()} is available, this test stays close to it with smaller practical increments.`;
+      return `This confirms whether nearby settings improve on ${baseline.label.toLowerCase()} before treating it as a stable winner.`;
+    }
+    function recommendAdaptivePlan(draft) {
+      const baseline = resolveTestBaseline(draft);
+      const mode = chooseAdaptiveTestMode(draft, baseline);
+      let plan = recommendedWizardPlan(draft);
+      plan = draft.intendedOperation === 'cut' ? recommendCutRange(draft, baseline, plan, mode) : recommendEngraveRange(draft, baseline, plan, mode);
+      plan = recommendIntervalRange({ ...draft, adaptiveMode: mode }, baseline, plan);
+      plan.adaptiveMode = mode;
+      plan.baseline = baseline;
+      plan.rationale = buildNextTestRationale(draft, baseline, mode);
+      return plan;
+    }
     function wizardSeries(min, max, count) {
       const start = Number(min), end = Number(max), total = Math.max(1, Math.round(Number(count) || 1));
       if (!Number.isFinite(start) || !Number.isFinite(end)) return { increment: null, values: [] };
@@ -1888,11 +1966,11 @@
     }
     function wizardIntervalSummary(draft = materialTestWizard) {
       const p = draft.plan;
-      return [`Interval Test`, `Speed: ${p.intervalSpeed} mm/min`, `Power: ${p.intervalPower}%`, `Minimum interval: ${p.intervalMin} mm`, `Maximum interval: ${p.intervalMax} mm`, `Steps: ${p.intervalSteps}`, `Size: ${p.intervalSize} mm`, `Mode: ${p.intervalFillMode === 'dithered_image' ? 'Dithered Image' : 'Simple Fill'}`, `Air assist: ${p.intervalAirAssist ? 'On' : 'Off'}`, `Focus: ${p.focusGuidance}`].join('\n');
+      return [`Adaptive mode: ${p.adaptiveMode || draft.adaptiveMode}`, `Optimization goal: ${draft.optimizationGoal || 'Best overall'}`, `Baseline: ${p.baseline?.label || resolveTestBaseline(draft).label}`, `Rationale: ${p.rationale || ''}`, '', `Interval Test`, `Speed: ${p.intervalSpeed} mm/min`, `Power: ${p.intervalPower}%`, `Minimum interval: ${p.intervalMin} mm`, `Maximum interval: ${p.intervalMax} mm`, `Steps: ${p.intervalSteps}`, `Size: ${p.intervalSize} mm`, `Mode: ${p.intervalFillMode === 'dithered_image' ? 'Dithered Image' : 'Simple Fill'}`, `Air assist: ${p.intervalAirAssist ? 'On' : 'Off'}`, `Focus: ${p.focusGuidance}`].join('\n');
     }
     function wizardMaterialSummary(draft = materialTestWizard) {
       const p = draft.plan;
-      return [`Material Test Generator`, `Vertical / Rows`, `Count: ${p.verticalCount}`, `Parameter: ${p.verticalParameter}`, `Minimum: ${p.verticalMin}`, `Maximum: ${p.verticalMax}`, `Height: ${p.verticalHeight} mm`, `Horizontal / Columns`, `Count: ${p.horizontalCount}`, `Parameter: ${p.horizontalParameter}`, `Minimum: ${p.horizontalMin}`, `Maximum: ${p.horizontalMax}`, `Width: ${p.horizontalWidth} mm`, `Material Setting`, `Mode: ${p.materialMode}`, `Line interval: ${p.lineInterval} mm`, `Passes: ${p.passes}`, `Scan angle: ${p.scanAngle}`, `Bidirectional fill: ${p.bidirectionalFill ? 'On' : 'Off'}`, `Overscanning: ${p.overscanning}%`, `Air assist: ${p.airAssist ? 'On' : 'Off'}`, `Constant power mode: ${p.constantPowerMode ? 'On' : 'Off'}`, `Z offset: ${p.zOffset} mm`, `Text Setting`, `Speed: ${p.textSpeed} mm/min`, `Power: ${p.textPower}%`, `Mode: ${p.textMode}`, `Passes: ${p.textPasses}`, `Border: ${p.borderEnabled ? 'On' : 'Off'} - ${p.borderSetting}`, `Title: ${p.title}`, `Estimated output: about ${Number(p.verticalHeight) * Number(p.verticalCount) || '-'} mm x ${Number(p.horizontalWidth) * Number(p.horizontalCount) || '-'} mm`].join('\n');
+      return [`Adaptive mode: ${p.adaptiveMode || draft.adaptiveMode}`, `Optimization goal: ${draft.optimizationGoal || 'Best overall'}`, `Baseline: ${p.baseline?.label || resolveTestBaseline(draft).label}`, `Rationale: ${p.rationale || ''}`, '', `Material Test Generator`, `Vertical / Rows`, `Count: ${p.verticalCount}`, `Parameter: ${p.verticalParameter}`, `Minimum: ${p.verticalMin}`, `Maximum: ${p.verticalMax}`, `Height: ${p.verticalHeight} mm`, `Horizontal / Columns`, `Count: ${p.horizontalCount}`, `Parameter: ${p.horizontalParameter}`, `Minimum: ${p.horizontalMin}`, `Maximum: ${p.horizontalMax}`, `Width: ${p.horizontalWidth} mm`, `Material Setting`, `Mode: ${p.materialMode}`, `Line interval: ${p.lineInterval} mm`, `Passes: ${p.passes}`, `Scan angle: ${p.scanAngle}`, `Bidirectional fill: ${p.bidirectionalFill ? 'On' : 'Off'}`, `Overscanning: ${p.overscanning}%`, `Air assist: ${p.airAssist ? 'On' : 'Off'}`, `Constant power mode: ${p.constantPowerMode ? 'On' : 'Off'}`, `Z offset: ${p.zOffset} mm`, `Text Setting`, `Speed: ${p.textSpeed} mm/min`, `Power: ${p.textPower}%`, `Mode: ${p.textMode}`, `Passes: ${p.textPasses}`, `Border: ${p.borderEnabled ? 'On' : 'Off'} - ${p.borderSetting}`, `Title: ${p.title}`, `Estimated output: about ${Number(p.verticalHeight) * Number(p.verticalCount) || '-'} mm x ${Number(p.horizontalWidth) * Number(p.horizontalCount) || '-'} mm`].join('\n');
     }
     function wizardAssistantSetupFields(draft) {
       const profile = state.profiles.find(item => item.id === draft.materialId);
@@ -1902,6 +1980,14 @@
     }
     function wizardGuidanceFields(draft) {
       return `<label>${labelText('Material family')}<select name="materialFamily">${lightBurnFamilyOptions.map(([value, label]) => `<option value="${value}" ${value === draft.materialFamily ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label><label>${labelText('Surface / finish')}<select name="surfaceFinish">${['raw','painted','coated','sealed','unknown'].map(value => `<option ${value === draft.surfaceFinish ? 'selected' : ''}>${value}</option>`).join('')}</select></label><label>${labelText('Intended operation')}<select name="intendedOperation"><option value="engrave_vector" ${draft.intendedOperation === 'engrave_vector' ? 'selected' : ''}>Engrave vector / fill</option><option value="photo" ${draft.intendedOperation === 'photo' ? 'selected' : ''}>Engrave photograph</option><option value="cut" ${draft.intendedOperation === 'cut' ? 'selected' : ''}>Cut</option><option value="kerf" ${draft.intendedOperation === 'kerf' ? 'selected' : ''}>Kerf</option><option value="unknown" ${draft.intendedOperation === 'unknown' ? 'selected' : ''}>Unknown / exploratory</option></select></label><label>${labelText('Current knowledge')}<select name="currentKnowledge"><option value="never" ${draft.currentKnowledge === 'never' ? 'selected' : ''}>Never tested</option><option value="manufacturer" ${draft.currentKnowledge === 'manufacturer' ? 'selected' : ''}>Have a manufacturer starting setting</option><option value="prior" ${draft.currentKnowledge === 'prior' ? 'selected' : ''}>Have a prior tracker setting</option><option value="narrowing" ${draft.currentKnowledge === 'narrowing' ? 'selected' : ''}>Narrowing an existing winner</option></select></label><label>${labelText('Test size preference')}<select name="testSize"><option value="quick" ${draft.testSize === 'quick' ? 'selected' : ''}>Small / quick</option><option value="balanced" ${draft.testSize === 'balanced' ? 'selected' : ''}>Balanced</option><option value="broad" ${draft.testSize === 'broad' ? 'selected' : ''}>Broad / full-range</option></select></label><label>${labelText('Save as test type')}<select name="testFocus"><option value="material" ${draft.testFocus === 'material' ? 'selected' : ''}>Material Test</option><option value="interval" ${draft.testFocus === 'interval' ? 'selected' : ''}>Interval Test</option></select></label><label class="span2">${labelText('Optional notes')}<textarea name="notes" rows="3">${esc(draft.notes)}</textarea></label>`;
+    }
+    function wizardAdaptiveGuidanceHtml(draft) {
+      const profile = state.profiles.find(item => item.id === draft.materialId);
+      const history = getMaterialTestHistory(profile).filter(testHasUsableWinner);
+      const goals = draft.intendedOperation === 'cut' || draft.intendedOperation === 'kerf' ? cutGoals : engraveGoals;
+      const baseline = resolveTestBaseline(draft);
+      const mode = chooseAdaptiveTestMode(draft, baseline);
+      return `<div class="span2 panel"><b>Baseline</b><div class="small muted">Baseline source: ${esc(baseline.label)}</div><div class="formgrid" style="margin-top:8px"><label>${labelText('Baseline source')}<select name="baselineSource"><option value="auto" ${draft.baselineSource === 'auto' ? 'selected' : ''}>Automatic best available</option><option value="library" ${draft.baselineSource === 'library' ? 'selected' : ''}>Current Library primary setting</option>${history.length ? '<option value="latest" ' + (draft.baselineSource === 'latest' ? 'selected' : '') + '>Most recently saved winner</option><option value="prior" ' + (draft.baselineSource === 'prior' ? 'selected' : '') + '>Selected prior test</option>' : ''}<option value="manual" ${draft.baselineSource === 'manual' ? 'selected' : ''}>Manually entered baseline</option></select></label>${history.length ? `<label>${labelText('Prior test')}<select name="baselineTestId"><option value="">Automatic</option>${history.map(test => `<option value="${esc(test.id)}" ${test.id === draft.baselineTestId ? 'selected' : ''}>${esc(test.date || 'Undated')} - ${esc(materialTestLabel(test.testType))} (${esc(test.winningSpeed || '-')} / ${esc(test.winningPower || '-')}%)</option>`).join('')}</select></label>` : '<div class="small muted">No prior tests with explicit winner values.</div>'}${field('manualBaselineSpeed','Manual speed',draft.manualBaselineSpeed,'number','min="0" step="any"')}${field('manualBaselinePower','Manual power (%)',draft.manualBaselinePower,'number','min="0" max="100" step="any"')}${field('manualBaselineInterval','Manual interval (mm)',draft.manualBaselineInterval,'number','min="0" step="any"')}${field('manualBaselinePasses','Manual passes',draft.manualBaselinePasses,'number','min="1" step="1"')}<label class="row"><input name="manualBaselineAirAssist" type="checkbox" ${draft.manualBaselineAirAssist ? 'checked' : ''} style="width:auto"> Manual baseline used air assist</label></div></div><label>${labelText('Recommendation mode')}<select name="adaptiveMode"><option value="auto" ${draft.adaptiveMode === 'auto' ? 'selected' : ''}>Automatic (${esc(mode)})</option><option value="discovery" ${draft.adaptiveMode === 'discovery' ? 'selected' : ''}>Broad discovery</option><option value="confirm" ${draft.adaptiveMode === 'confirm' ? 'selected' : ''}>Confirm a baseline</option><option value="refine" ${draft.adaptiveMode === 'refine' ? 'selected' : ''}>Refine an existing winner</option><option value="goal" ${draft.adaptiveMode === 'goal' ? 'selected' : ''}>Optimize for a goal</option><option value="boundary" ${draft.adaptiveMode === 'boundary' ? 'selected' : ''}>Find a boundary</option></select></label><label>${labelText('Optimization goal')}<select name="optimizationGoal">${goals.map(goal => `<option ${goal === draft.optimizationGoal ? 'selected' : ''}>${esc(goal)}</option>`).join('')}</select></label><div class="span2 small muted">${esc(buildNextTestRationale(draft, baseline, mode))}</div>`;
     }
     function wizardLightBurnSetupFields(draft) {
       const p = draft.plan;
@@ -1935,6 +2021,11 @@
       const r = draft.results;
       return `${select('status', 'Status', r.status, materialTestStatuses)}${field('winningSpeed', 'Winning speed (mm/min)', r.winningSpeed, 'number', 'min="0" step="any"')}${field('winningPower', 'Winning power (%)', r.winningPower, 'number', 'min="0" max="100" step="any"')}${field('winningInterval', 'Winning interval (mm)', r.winningInterval, 'number', 'min="0" step="any"')}${field('winningPasses', 'Winning passes', r.winningPasses, 'number', 'min="1" step="1"')}<label class="row"><input name="airAssist" type="checkbox" ${r.airAssist ? 'checked' : ''} style="width:auto"> Air assist used</label><label>${labelText('Confidence')}<select name="confidence">${[1,2,3,4,5].map(value => `<option value="${value}" ${Number(r.confidence) === value ? 'selected' : ''}>${value}</option>`).join('')}</select></label><label class="span2">${labelText('Result summary / why this won')}<textarea name="resultSummary" rows="5">${esc(r.resultSummary)}</textarea></label>`;
     }
+    function wizardAdaptiveResultFields(draft) {
+      const r = draft.results;
+      const traits = ['Too light','Too dark','Uneven','Visible scan lines','Rough or pitted','Sooty','Charred','Clean','Crisp detail','Lost fine detail','Cut did not complete','Cut completed inconsistently','Clean cut-through'];
+      return `<label>${labelText('Overall result')}<select name="overallResult">${['Poor','Usable','Good','Excellent'].map(value => `<option ${value === r.overallResult ? 'selected' : ''}>${value}</option>`).join('')}</select></label><label>${labelText('Winner location')}<select name="winnerLocation"><option value="">Not specified</option>${['Speed','Power','Interval','Passes'].map(value => `<option ${value === r.winnerLocation ? 'selected' : ''}>${value}</option>`).join('')}</select></label><div class="span2"><b class="small">Observed traits</b><div class="row" style="margin-top:6px">${traits.map(trait => `<label class="row small"><input name="observedTraits" type="checkbox" value="${esc(trait)}" ${(r.observedTraits || []).includes(trait) ? 'checked' : ''} style="width:auto"> ${esc(trait)}</label>`).join('')}</div></div><label class="span2">${labelText('Winner comment')}<input name="winnerComment" value="${esc(r.winnerComment)}"></label>`;
+    }
     function wizardWinningChanges(draft) {
       const profile = state.profiles.find(item => item.id === draft.materialId);
       const r = draft.results, changes = [];
@@ -1955,8 +2046,8 @@
     function renderMaterialTestWizard() {
       const draft = materialTestWizard;
       if (!draft) return;
-      const titles = ['Setup', 'Guidance', 'LightBurn Setup', 'Results', 'Save'];
-      const body = draft.step === 1 ? wizardAssistantSetupFields(draft) : draft.step === 2 ? wizardGuidanceFields(draft) : draft.step === 3 ? wizardLightBurnSetupFields(draft) : draft.step === 4 ? wizardResultFields(draft) : wizardReviewHtml(draft);
+      const titles = ['Setup', 'Goal & Baseline', 'LightBurn Setup', 'Results', 'Save & Next Test'];
+      const body = draft.step === 1 ? wizardAssistantSetupFields(draft) : draft.step === 2 ? wizardGuidanceFields(draft) + wizardAdaptiveGuidanceHtml(draft) : draft.step === 3 ? wizardLightBurnSetupFields(draft) : draft.step === 4 ? wizardResultFields(draft) + wizardAdaptiveResultFields(draft) : wizardReviewHtml(draft);
       openModal('materialTestWizardModal', `<div class="dialog"><div class="spread"><div><h2>Material Test Wizard</h2><div class="small muted">Step ${draft.step}: ${titles[draft.step - 1]}</div></div><button data-wizard-cancel>×</button></div><div class="small muted" style="margin:8px 0 14px">${titles.map((title, index) => `${index + 1 === draft.step ? '<b>' : ''}Step ${index + 1}: ${title}${index + 1 === draft.step ? '</b>' : ''}`).join(' · ')}</div><form id="materialTestWizardForm" class="formgrid">${body}<div class="span2 actions"><button type="button" data-wizard-cancel>Cancel</button>${draft.step > 1 ? '<button type="button" id="wizardBack">Back</button>' : ''}${draft.step < 5 ? '<button type="submit" class="primary">Next</button>' : '<button type="submit" class="primary">Save test</button>'}</div></form></div>`);
       document.querySelectorAll('#materialTestWizardModal [data-wizard-cancel]').forEach(button => button.onclick = cancelMaterialTestWizard);
       const back = document.getElementById('wizardBack');
@@ -1973,7 +2064,7 @@
       const materialCopy = document.getElementById('copyMaterialSetup');
       if (materialCopy) materialCopy.onclick = () => copyMaterialTestWizardSetup('material');
       const reset = document.getElementById('resetWizardRecommendations');
-      if (reset) reset.onclick = () => { materialTestWizard.plan = recommendedWizardPlan(materialTestWizard); materialTestWizard.planCustomized = false; renderMaterialTestWizard(); };
+      if (reset) reset.onclick = () => { materialTestWizard.plan = recommendAdaptivePlan(materialTestWizard); materialTestWizard.planCustomized = false; renderMaterialTestWizard(); };
       const apply = document.getElementById('wizardApplyWinner');
       if (apply) apply.onchange = () => { captureMaterialTestWizardStep(); renderMaterialTestWizard(); };
     }
@@ -1995,14 +2086,14 @@
           materialTestWizard.planCustomized = false;
         }
       } else if (materialTestWizard.step === 2) {
-        Object.assign(materialTestWizard, { materialFamily: f.materialFamily, surfaceFinish: f.surfaceFinish, intendedOperation: f.intendedOperation, currentKnowledge: f.currentKnowledge, testSize: f.testSize, testFocus: f.testFocus, notes: (f.notes || '').trim() });
+        Object.assign(materialTestWizard, { materialFamily: f.materialFamily, surfaceFinish: f.surfaceFinish, intendedOperation: f.intendedOperation, currentKnowledge: f.currentKnowledge, testSize: f.testSize, testFocus: f.testFocus, notes: (f.notes || '').trim(), baselineSource: f.baselineSource, baselineTestId: f.baselineTestId, manualBaselineSpeed: f.manualBaselineSpeed, manualBaselinePower: f.manualBaselinePower, manualBaselineInterval: f.manualBaselineInterval, manualBaselinePasses: f.manualBaselinePasses, manualBaselineAirAssist: !!form.manualBaselineAirAssist?.checked, adaptiveMode: f.adaptiveMode, optimizationGoal: f.optimizationGoal });
         materialTestWizard.testType = wizardStoredTestType(materialTestWizard);
-        if (!materialTestWizard.planCustomized) materialTestWizard.plan = recommendedWizardPlan(materialTestWizard);
+        if (!materialTestWizard.planCustomized) materialTestWizard.plan = recommendAdaptivePlan(materialTestWizard);
       } else if (materialTestWizard.step === 3) {
         Object.assign(materialTestWizard.plan, f, { intervalAirAssist: !!form.intervalAirAssist?.checked, bidirectionalFill: !!form.bidirectionalFill?.checked, airAssist: !!form.airAssist?.checked, constantPowerMode: !!form.constantPowerMode?.checked, borderEnabled: !!form.borderEnabled?.checked });
         materialTestWizard.planCustomized = true;
       } else if (materialTestWizard.step === 4) {
-        Object.assign(materialTestWizard.results, f, { airAssist: !!form.airAssist.checked, confidence: Math.max(1, Math.min(5, Math.round(num(f.confidence, 3)))), resultSummary: (f.resultSummary || '').trim() });
+        Object.assign(materialTestWizard.results, f, { airAssist: !!form.airAssist.checked, confidence: Math.max(1, Math.min(5, Math.round(num(f.confidence, 3)))), resultSummary: (f.resultSummary || '').trim(), overallResult: f.overallResult || 'Usable', observedTraits: [...new FormData(form).getAll('observedTraits')], winnerLocation: f.winnerLocation || '', winnerComment: (f.winnerComment || '').trim() });
       } else {
         materialTestWizard.applyWinner = !!form.applyWinner.checked;
       }
@@ -2011,8 +2102,8 @@
     function openMaterialTestWizard() {
       const profile = state.profiles[0];
       if (!profile) return alert('Add or save a Library material before starting a material test.');
-      materialTestWizard = { step: 1, materialId: profile.id, machine: wizardMachineLabel(), testType: 'engrave_matrix', date: today(), thickness: profile.thicknessValue ?? '', thicknessUnit: profile.thicknessUnit || state.unit, materialFamily: wizardFamilyFromMaterial(profile.material), surfaceFinish: 'unknown', intendedOperation: 'engrave_vector', currentKnowledge: profile.speed || profile.minPower ? 'prior' : 'never', testSize: 'balanced', testFocus: 'material', notes: '', planCustomized: false, results: { status: 'experimental', winningSpeed: profile.speed ?? '', winningPower: profile.minPower ?? '', winningInterval: profile.lineInterval ?? '', winningPasses: profile.passes ?? '', airAssist: !!profile.airAssist, confidence: 3, resultSummary: '' }, applyWinner: false };
-      materialTestWizard.plan = recommendedWizardPlan(materialTestWizard);
+      materialTestWizard = { step: 1, materialId: profile.id, machine: wizardMachineLabel(), testType: 'engrave_matrix', date: today(), thickness: profile.thicknessValue ?? '', thicknessUnit: profile.thicknessUnit || state.unit, materialFamily: wizardFamilyFromMaterial(profile.material), surfaceFinish: 'unknown', intendedOperation: 'engrave_vector', currentKnowledge: profile.speed || profile.minPower ? 'prior' : 'never', testSize: 'balanced', testFocus: 'material', baselineSource: 'auto', baselineTestId: '', manualBaselineSpeed: '', manualBaselinePower: '', manualBaselineInterval: '', manualBaselinePasses: '', manualBaselineAirAssist: false, adaptiveMode: 'auto', optimizationGoal: 'Best overall', notes: '', planCustomized: false, results: { status: 'experimental', winningSpeed: profile.speed ?? '', winningPower: profile.minPower ?? '', winningInterval: profile.lineInterval ?? '', winningPasses: profile.passes ?? '', airAssist: !!profile.airAssist, confidence: 3, resultSummary: '', overallResult: 'Usable', observedTraits: [], winnerLocation: '', winnerComment: '' }, applyWinner: false };
+      materialTestWizard.plan = recommendAdaptivePlan(materialTestWizard);
       renderMaterialTestWizard();
     }
     function cancelMaterialTestWizard() {
@@ -2033,7 +2124,7 @@
       const profile = draft && state.profiles.find(item => item.id === draft.materialId);
       if (!profile) return alert('The selected material is no longer available.');
       const r = draft.results;
-      const notes = [draft.notes, `Interval setup:\n${wizardIntervalSummary(draft)}`, `Material test setup:\n${wizardMaterialSummary(draft)}`, r.resultSummary ? `Result: ${r.resultSummary}` : ''].filter(Boolean).join('\n\n');
+      const notes = [draft.notes, `Adaptive recommendation\nMode: ${draft.plan.adaptiveMode || draft.adaptiveMode}\nGoal: ${draft.optimizationGoal}\nBaseline: ${draft.plan.baseline?.label || resolveTestBaseline(draft).label}\nRationale: ${draft.plan.rationale || ''}`, `Interval setup:\n${wizardIntervalSummary(draft)}`, `Material test setup:\n${wizardMaterialSummary(draft)}`, `Result\nOverall: ${r.overallResult || 'Usable'}\nObserved traits: ${(r.observedTraits || []).join(', ') || 'None recorded'}\nWinner location: ${r.winnerLocation || 'Not specified'}${r.winnerComment ? `\nWinner comment: ${r.winnerComment}` : ''}`, r.resultSummary ? `Result summary: ${r.resultSummary}` : ''].filter(Boolean).join('\n\n');
       const test = { id: uid(), date: draft.date || today(), machine: draft.machine, testType: wizardStoredTestType(draft), status: materialTestStatuses.includes(r.status) ? r.status : 'experimental', notes, winningSpeed: r.winningSpeed === '' ? '' : num(r.winningSpeed), winningPower: r.winningPower === '' ? '' : num(r.winningPower), winningInterval: r.winningInterval === '' ? '' : num(r.winningInterval), winningPasses: r.winningPasses === '' ? '' : Math.max(1, Math.round(num(r.winningPasses, 1))), airAssist: !!r.airAssist, confidence: Math.max(1, Math.min(5, Math.round(num(r.confidence, 3)))), attachments: [] };
       const previousTests = profile.tests;
       const previousSettings = {};
@@ -2052,8 +2143,32 @@
         return;
       }
       materialTestWizard = null;
-      closeModal('materialTestWizardModal');
       render();
+      openNextRecommendedTest(profile, test, draft);
+    }
+    function openNextRecommendedTest(profile, test, draft) {
+      const winner = [test.winningSpeed !== '' ? `${test.winningSpeed} mm/min` : '', test.winningPower !== '' ? `${test.winningPower}%` : '', test.winningInterval !== '' ? `${test.winningInterval} mm` : ''].filter(Boolean).join(' / ');
+      const overall = draft.results.overallResult || 'Usable';
+      const noFurther = overall === 'Excellent' && !draft.optimizationGoal?.startsWith('Find ');
+      const uncertain = (draft.results.observedTraits || []).length ? `Observed: ${(draft.results.observedTraits || []).join(', ')}.` : 'No structured traits were recorded.';
+      const recommendation = noFurther ? 'No further test is necessary unless you want to optimize for a specific goal.' : winner ? 'The most informative next step is a narrower comparison around the selected winner.' : 'No clear winner was recorded; confirm a plausible baseline or run another broad comparison.';
+      openModal('materialTestWizardModal', `<div class="dialog"><div class="spread"><div><h2>Next Recommended Test</h2><div class="small muted">Saved to ${esc(profile.material)}</div></div><button data-close>×</button></div><div class="panel"><b>Just tested</b><div class="small">${esc(materialTestLabel(test.testType))}${winner ? ` - winner: ${esc(winner)}` : ' - no winner recorded'}</div><div class="small muted" style="margin-top:6px">${esc(uncertain)}</div></div><div class="panel" style="margin-top:10px"><b>Recommendation</b><div class="small" style="margin-top:6px">${esc(recommendation)}</div></div><div class="actions" style="margin-top:12px"><button data-next-test="refine">Refine this winner</button><button data-next-test="Faster production">Optimize for speed</button><button data-next-test="Darker engraving">Optimize for darker engraving</button><button data-next-test="Find minimum usable power">Find minimum usable power</button><button data-next-test="Find maximum usable speed">Find maximum usable speed</button><button data-next-test="interval">Test interval around this winner</button><button data-close>No further testing needed</button></div></div>`);
+      bindModal('materialTestWizardModal');
+      document.querySelectorAll('#materialTestWizardModal [data-next-test]').forEach(button => button.onclick = () => startNextRecommendedTest(profile, test, button.dataset.nextTest));
+    }
+    function startNextRecommendedTest(profile, test, action) {
+      openMaterialTestWizard();
+      materialTestWizard.materialId = profile.id;
+      materialTestWizard.baselineSource = 'prior';
+      materialTestWizard.baselineTestId = test.id;
+      materialTestWizard.currentKnowledge = 'narrowing';
+      materialTestWizard.adaptiveMode = action === 'refine' || action === 'interval' ? 'refine' : /Find /.test(action) ? 'boundary' : 'goal';
+      materialTestWizard.testFocus = action === 'interval' ? 'interval' : 'material';
+      materialTestWizard.optimizationGoal = action === 'refine' || action === 'interval' ? 'Best overall' : action;
+      materialTestWizard.testType = wizardStoredTestType(materialTestWizard);
+      materialTestWizard.plan = recommendAdaptivePlan(materialTestWizard);
+      materialTestWizard.step = 3;
+      renderMaterialTestWizard();
     }
     function entryCard(e) {
       return `<article class="card">
