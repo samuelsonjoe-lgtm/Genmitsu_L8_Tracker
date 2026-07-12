@@ -303,6 +303,8 @@
     const rawMaterialCategories = ['sheet', 'slate', 'utensil', 'acrylic', 'hardware', 'packaging', 'other'];
     const inventoryUnits = ['each', 'sheet', 'pack', 'sq in', 'linear ft', 'other'];
     const batchStatuses = ['planned', 'made', 'for-sale', 'sold-out', 'archived'];
+    const materialTestTypes = ['engrave_matrix', 'interval', 'cut', 'kerf', 'photo', 'other'];
+    const materialTestStatuses = ['recommended', 'experimental', 'failed', 'archived'];
     const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     const today = () => new Date().toISOString().slice(0, 10);
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -334,7 +336,7 @@
             schemaVersion: data.schemaVersion || 1,
             unit: data.unit || 'in',
             entries: data.entries || [],
-            profiles: data.profiles || [],
+            profiles: normalizeLibraryProfiles(data.profiles),
             grids: data.grids || [],
             projects: data.projects || [],
             inventory: normalizeInventory(data.inventory),
@@ -619,7 +621,7 @@
       }));
     }
     function powerLabel(o) { return o.maxPower != null && o.maxPower !== o.minPower ? `${o.minPower}-${o.maxPower}%` : `${o.minPower}%`; }
-    function stars(r) { return `<span class="small">${'●'.repeat(Number(r) || 0)}${'○'.repeat(5 - (Number(r) || 0))}</span>`; }
+    function stars(r) { return `<span class="small">${'â—'.repeat(Number(r) || 0)}${'â—‹'.repeat(5 - (Number(r) || 0))}</span>`; }
     function rowToRef(row, watts) {
       return { material: row[0], jobType: row[1], lineInterval: row[2], minPower: row[3], maxPower: row[3], speed: row[4], passes: row[5], note: row[6], watts };
     }
@@ -1736,10 +1738,9 @@
     function materialSafetyFieldHelp(material) {
       return `<div class="span2 small muted">Avoid PVC/vinyl/chlorinated plastics. Verify unknown materials before lasering.</div><div id="materialSafetyWarning" class="span2">${materialSafetyWarningHtml(material)}</div>`;
     }
-    const materialTestTypes = ['engrave_matrix', 'interval', 'cut', 'kerf', 'photo', 'other'];
-    const materialTestStatuses = ['recommended', 'experimental', 'failed', 'archived'];
     function normalizeMaterialTests(tests) {
       return Array.isArray(tests) ? tests.filter(test => test && typeof test === 'object').map(test => ({
+        ...test,
         id: test.id || uid(), date: test.date || '', machine: test.machine || '',
         testType: materialTestTypes.includes(test.testType) ? test.testType : 'other',
         status: materialTestStatuses.includes(test.status) ? test.status : 'experimental',
@@ -1749,6 +1750,37 @@
         attachments: Array.isArray(test.attachments) ? test.attachments : []
       })) : [];
     }
+    function normalizeLibraryProfiles(profiles) {
+      return Array.isArray(profiles) ? profiles.filter(profile => profile && typeof profile === 'object').map(profile => ({ ...profile, tests: normalizeMaterialTests(profile.tests) })) : [];
+    }
+    function runMaterialTestNormalizationFixtures() {
+      const futureFields = { overallResult: 'Excellent', observedTraits: ['Crisp detail'], futureMetadata: { source: 'newer-version' } };
+      const validTest = { id: 'keep-id', date: '2026-07-12', machine: 'L8 20W', testType: 'engrave_matrix', status: 'recommended', notes: 'Known good', winningSpeed: 18000, winningPower: 55, winningInterval: 0.10, winningPasses: 1, airAssist: false, confidence: 5, attachments: [{ id: 'attachment-1' }] };
+      const fixture = (name, check) => ({ name, ...check() });
+      const results = [
+        fixture('Missing profile tests', () => { const actual = normalizeLibraryProfiles([{ id: 'p1' }])[0].tests; return { expected: 'tests: []', actual: `tests: ${actual.length}`, pass: Array.isArray(actual) && actual.length === 0 }; }),
+        fixture('Non-array profile tests', () => { const actual = normalizeLibraryProfiles([{ id: 'p2', tests: { unexpected: true } }])[0].tests; return { expected: 'tests: []', actual: `tests: ${actual.length}`, pass: Array.isArray(actual) && actual.length === 0 }; }),
+        fixture('Malformed test entries removed', () => { const actual = normalizeLibraryProfiles([{ id: 'p3', tests: [null, 'bad', 3, validTest] }])[0].tests; return { expected: '1 valid test', actual: `${actual.length} valid test`, pass: actual.length === 1 && actual[0].id === 'keep-id' }; }),
+        fixture('Existing test ID preserved', () => { const actual = normalizeMaterialTests([validTest])[0]; return { expected: 'keep-id', actual: actual.id, pass: actual.id === 'keep-id' }; }),
+        fixture('Missing test ID generated without source mutation', () => { const source = { testType: 'cut' }; const actual = normalizeMaterialTests([source])[0]; return { expected: 'generated ID; source unchanged', actual: `${actual.id ? 'generated' : 'missing'}; ${'id' in source ? 'mutated' : 'unchanged'}`, pass: !!actual.id && !('id' in source) }; }),
+        fixture('Missing known fields default safely', () => { const actual = normalizeMaterialTests([{}])[0]; return { expected: 'safe defaults', actual: `${actual.date}|${actual.machine}|${actual.testType}|${actual.status}|${actual.notes}|${actual.airAssist}|${actual.confidence}|${actual.attachments.length}`, pass: actual.date === '' && actual.machine === '' && actual.testType === 'other' && actual.status === 'experimental' && actual.notes === '' && actual.winningSpeed === '' && actual.airAssist === false && actual.confidence === 0 && Array.isArray(actual.attachments) && actual.attachments.length === 0 }; }),
+        fixture('Invalid test type uses fallback', () => { const actual = normalizeMaterialTests([{ testType: 'invalid' }])[0]; return { expected: 'other', actual: actual.testType, pass: actual.testType === 'other' }; }),
+        fixture('Invalid status uses fallback', () => { const actual = normalizeMaterialTests([{ status: 'invalid' }])[0]; return { expected: 'experimental', actual: actual.status, pass: actual.status === 'experimental' }; }),
+        fixture('Invalid attachments become empty array', () => { const actual = normalizeMaterialTests([{ attachments: { bad: true } }])[0]; return { expected: 'attachments: []', actual: `attachments: ${actual.attachments.length}`, pass: Array.isArray(actual.attachments) && actual.attachments.length === 0 }; }),
+        fixture('Valid attachments preserved', () => { const attachments = [{ id: 'a1' }]; const actual = normalizeMaterialTests([{ attachments }])[0]; return { expected: 'same attachment array', actual: `${actual.attachments.length} attachment`, pass: actual.attachments === attachments }; }),
+        fixture('Unknown future fields preserved', () => { const actual = normalizeMaterialTests([{ ...futureFields }])[0]; return { expected: 'future fields present', actual: `${actual.overallResult}|${actual.observedTraits?.length}|${actual.futureMetadata?.source}`, pass: actual.overallResult === 'Excellent' && actual.observedTraits?.[0] === 'Crisp detail' && actual.futureMetadata?.source === 'newer-version' }; }),
+        fixture('Repeated normalization is stable', () => { const once = normalizeLibraryProfiles([{ id: 'p12', tests: [{ ...validTest, ...futureFields }] }]); const twice = normalizeLibraryProfiles(once); const actual = twice[0].tests[0]; return { expected: 'same ID, values, future fields, count', actual: `${actual.id}|${actual.winningSpeed}|${actual.overallResult}|${twice[0].tests.length}`, pass: actual.id === 'keep-id' && actual.winningSpeed === 18000 && actual.overallResult === 'Excellent' && actual.futureMetadata?.source === 'newer-version' && twice[0].tests.length === 1 }; })
+      ];
+      const passed = results.filter(result => result.pass).length;
+      const failed = results.length - passed;
+      console.group('Material test normalization fixtures');
+      console.table(results);
+      console.log(`${passed} passed`);
+      console.log(`${failed} failed`);
+      console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runMaterialTestNormalizationFixtures = runMaterialTestNormalizationFixtures;
     function materialTestLabel(type) {
       return String(type || 'other').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
     }
@@ -1756,11 +1788,11 @@
       const normalized = normalizeMaterialTests(tests);
       if (!normalized.length) return '<div class="small muted">No material tests yet.</div>';
       const latest = [...normalized].sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
-      return `<div class="small muted">${normalized.length} test${normalized.length === 1 ? '' : 's'}</div><div style="margin-top:8px"><b>Latest:</b><br>${esc(materialTestLabel(latest.testType))}<br>${esc(latest.date || '-')}<br><span class="small">${'★'.repeat(latest.confidence || 0)}${'☆'.repeat(5 - (latest.confidence || 0))}</span></div>`;
+      return `<div class="small muted">${normalized.length} test${normalized.length === 1 ? '' : 's'}</div><div style="margin-top:8px"><b>Latest:</b><br>${esc(materialTestLabel(latest.testType))}<br>${esc(latest.date || '-')}<br><span class="small">${'â˜…'.repeat(latest.confidence || 0)}${'â˜†'.repeat(5 - (latest.confidence || 0))}</span></div>`;
     }
     function materialTestsEditorHtml() {
       const tests = normalizeMaterialTests(profileDraftTests);
-      return `<details id="materialTestsSection" class="span2" style="margin-top:8px"><summary><b>Material Tests</b> <span class="small muted">(${tests.length})</span></summary><div style="margin-top:10px">${tests.length ? tests.map(test => `<div class="panel" style="margin-bottom:8px"><div class="spread"><div><b>${esc(materialTestLabel(test.testType))}</b><div class="small muted">${esc(test.date || '-')} - ${esc(test.status)}</div></div><span class="small">${'★'.repeat(test.confidence || 0)}${'☆'.repeat(5 - (test.confidence || 0))}</span></div><div class="actions"><button type="button" data-edit-material-test="${esc(test.id)}">Edit Test</button><button type="button" class="danger" data-delete-material-test="${esc(test.id)}">Delete Test</button></div></div>`).join('') : '<div class="small muted" style="margin-bottom:10px">No material tests yet.</div>'}<button type="button" id="addMaterialTest">Add Test</button></div></details>`;
+      return `<details id="materialTestsSection" class="span2" style="margin-top:8px"><summary><b>Material Tests</b> <span class="small muted">(${tests.length})</span></summary><div style="margin-top:10px">${tests.length ? tests.map(test => `<div class="panel" style="margin-bottom:8px"><div class="spread"><div><b>${esc(materialTestLabel(test.testType))}</b><div class="small muted">${esc(test.date || '-')} - ${esc(test.status)}</div></div><span class="small">${'â˜…'.repeat(test.confidence || 0)}${'â˜†'.repeat(5 - (test.confidence || 0))}</span></div><div class="actions"><button type="button" data-edit-material-test="${esc(test.id)}">Edit Test</button><button type="button" class="danger" data-delete-material-test="${esc(test.id)}">Delete Test</button></div></div>`).join('') : '<div class="small muted" style="margin-bottom:10px">No material tests yet.</div>'}<button type="button" id="addMaterialTest">Add Test</button></div></details>`;
     }
     function refreshMaterialTestsEditor() {
       const section = document.getElementById('materialTestsSection');
@@ -1785,7 +1817,7 @@
     }
     function openMaterialTest(test) {
       const data = { id: '', date: today(), machine: '', testType: 'engrave_matrix', status: 'experimental', notes: '', winningSpeed: '', winningPower: '', winningInterval: '', winningPasses: '', airAssist: false, confidence: 3, ...normalizeMaterialTests(test ? [test] : [])[0] };
-      openModal('testModal', `<div class="dialog"><div class="spread"><h2>${test ? 'Edit Test' : 'Add Test'}</h2><button data-close>×</button></div><form id="materialTestForm" class="formgrid">${materialTestFields(data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save Test</button></div></form></div>`);
+      openModal('testModal', `<div class="dialog"><div class="spread"><h2>${test ? 'Edit Test' : 'Add Test'}</h2><button data-close>Ã—</button></div><form id="materialTestForm" class="formgrid">${materialTestFields(data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save Test</button></div></form></div>`);
       bindModal('testModal');
       document.getElementById('materialTestForm').onsubmit = event => {
         event.preventDefault();
@@ -2040,7 +2072,7 @@
     function buildNextTestRationale(draft, baseline, mode) {
       if (mode === 'discovery') return `No reliable winner is available, so this is a conservative broad discovery test within the selected material family limits.`;
       if (mode === 'boundary') return `This keeps one value near the baseline while exploring the requested usable boundary.`;
-      if (mode === 'goal') return `This test biases the range toward “${draft.optimizationGoal}” while keeping a practical comparison around the baseline.`;
+      if (mode === 'goal') return `This test biases the range toward â€œ${draft.optimizationGoal}â€ while keeping a practical comparison around the baseline.`;
       if (mode === 'refine') return `Because ${baseline.label.toLowerCase()} is available, this test stays close to it with smaller practical increments.`;
       return `This confirms whether nearby settings improve on ${baseline.label.toLowerCase()} before treating it as a stable winner.`;
     }
@@ -2079,7 +2111,7 @@
       const profile = state.profiles.find(item => item.id === draft.materialId);
       const materialName = profile ? profile.material : '';
       const hazardous = /pvc|vinyl|unknown\s+plastic/.test(String(materialName).toLowerCase());
-      return `<label class="span2">${labelText('Material to test')}<select name="materialId">${state.profiles.map(item => `<option value="${esc(item.id)}" ${item.id === draft.materialId ? 'selected' : ''}>${esc(item.material)}${item.thicknessValue !== '' && item.thicknessValue != null ? ` — ${esc(fmt(item.thicknessValue, item.thicknessUnit))}` : ''}${item.software ? ` — ${esc(item.software)}` : ''}</option>`).join('')}</select></label><label>${labelText('Machine')}<select name="machine"><option value="Genmitsu L8 20W" ${draft.machine === 'Genmitsu L8 20W' ? 'selected' : ''}>Genmitsu L8 20W</option><option value="Genmitsu L8 40W" ${draft.machine === 'Genmitsu L8 40W' ? 'selected' : ''}>Genmitsu L8 40W</option><option value="Unknown diode laser" ${draft.machine === 'Unknown diode laser' ? 'selected' : ''}>Manual / unknown diode</option></select></label><label>${labelText('Thickness')}<span class="unitrow"><input name="thickness" type="number" step="any" min="0" value="${esc(draft.thickness)}"><select name="thicknessUnit"><option ${draft.thicknessUnit === 'in' ? 'selected' : ''}>in</option><option ${draft.thicknessUnit === 'mm' ? 'selected' : ''}>mm</option></select></span></label>${field('date', 'Date', draft.date, 'date')}<div class="span2 small muted">The selected Library record supplies existing speed, power, interval, passes, air assist, focus context, and prior tests where available. Recommendations are starting points, not guaranteed production settings.</div>${profile ? materialSafetyWarningHtml(profile.material) : ''}${hazardous ? '<div class="span2 panel softbad"><b>Do not laser this material.</b><div class="small">PVC, vinyl, and unknown plastics require verified safety information and are not supported by this assistant.</div></div>' : ''}`;
+      return `<label class="span2">${labelText('Material to test')}<select name="materialId">${state.profiles.map(item => `<option value="${esc(item.id)}" ${item.id === draft.materialId ? 'selected' : ''}>${esc(item.material)}${item.thicknessValue !== '' && item.thicknessValue != null ? ` â€” ${esc(fmt(item.thicknessValue, item.thicknessUnit))}` : ''}${item.software ? ` â€” ${esc(item.software)}` : ''}</option>`).join('')}</select></label><label>${labelText('Machine')}<select name="machine"><option value="Genmitsu L8 20W" ${draft.machine === 'Genmitsu L8 20W' ? 'selected' : ''}>Genmitsu L8 20W</option><option value="Genmitsu L8 40W" ${draft.machine === 'Genmitsu L8 40W' ? 'selected' : ''}>Genmitsu L8 40W</option><option value="Unknown diode laser" ${draft.machine === 'Unknown diode laser' ? 'selected' : ''}>Manual / unknown diode</option></select></label><label>${labelText('Thickness')}<span class="unitrow"><input name="thickness" type="number" step="any" min="0" value="${esc(draft.thickness)}"><select name="thicknessUnit"><option ${draft.thicknessUnit === 'in' ? 'selected' : ''}>in</option><option ${draft.thicknessUnit === 'mm' ? 'selected' : ''}>mm</option></select></span></label>${field('date', 'Date', draft.date, 'date')}<div class="span2 small muted">The selected Library record supplies existing speed, power, interval, passes, air assist, focus context, and prior tests where available. Recommendations are starting points, not guaranteed production settings.</div>${profile ? materialSafetyWarningHtml(profile.material) : ''}${hazardous ? '<div class="span2 panel softbad"><b>Do not laser this material.</b><div class="small">PVC, vinyl, and unknown plastics require verified safety information and are not supported by this assistant.</div></div>' : ''}`;
     }
     function wizardGuidanceFields(draft) {
       return `<label>${labelText('Material family')}<select name="materialFamily">${lightBurnFamilyOptions.map(([value, label]) => `<option value="${value}" ${value === draft.materialFamily ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label><label>${labelText('Surface / finish')}<select name="surfaceFinish">${['raw','painted','coated','sealed','unknown'].map(value => `<option ${value === draft.surfaceFinish ? 'selected' : ''}>${value}</option>`).join('')}</select></label><label>${labelText('Intended operation')}<select name="intendedOperation"><option value="engrave_vector" ${draft.intendedOperation === 'engrave_vector' ? 'selected' : ''}>Engrave vector / fill</option><option value="photo" ${draft.intendedOperation === 'photo' ? 'selected' : ''}>Engrave photograph</option><option value="cut" ${draft.intendedOperation === 'cut' ? 'selected' : ''}>Cut</option><option value="kerf" ${draft.intendedOperation === 'kerf' ? 'selected' : ''}>Kerf</option><option value="unknown" ${draft.intendedOperation === 'unknown' ? 'selected' : ''}>Unknown / exploratory</option></select></label><label>${labelText('Current knowledge')}<select name="currentKnowledge"><option value="never" ${draft.currentKnowledge === 'never' ? 'selected' : ''}>Never tested</option><option value="manufacturer" ${draft.currentKnowledge === 'manufacturer' ? 'selected' : ''}>Have a manufacturer starting setting</option><option value="prior" ${draft.currentKnowledge === 'prior' ? 'selected' : ''}>Have a prior tracker setting</option><option value="narrowing" ${draft.currentKnowledge === 'narrowing' ? 'selected' : ''}>Narrowing an existing winner</option></select></label><label>${labelText('Test size preference')}<select name="testSize"><option value="quick" ${draft.testSize === 'quick' ? 'selected' : ''}>Small / quick</option><option value="balanced" ${draft.testSize === 'balanced' ? 'selected' : ''}>Balanced</option><option value="broad" ${draft.testSize === 'broad' ? 'selected' : ''}>Broad / full-range</option></select></label><label>${labelText('Save as test type')}<select name="testFocus"><option value="material" ${draft.testFocus === 'material' ? 'selected' : ''}>Material Test</option><option value="interval" ${draft.testFocus === 'interval' ? 'selected' : ''}>Interval Test</option></select></label><label class="span2">${labelText('Optional notes')}<textarea name="notes" rows="3">${esc(draft.notes)}</textarea></label>`;
@@ -2148,14 +2180,14 @@
     function wizardReviewHtml(draft) {
       const profile = state.profiles.find(item => item.id === draft.materialId);
       const changes = wizardWinningChanges(draft);
-      return `<div class="panel span2"><b>Ready to save</b><div class="small muted" style="margin-top:6px">A new ${esc(wizardTestTypeLabel(draft.testType))} record will be added to ${esc(profile ? profile.material : 'the selected material')}. Existing tests and settings stay unchanged unless you select the option below.</div></div><div class="span2 panel"><b>Result</b><div class="small" style="white-space:pre-line">${esc(wizardPlanSummary(draft))}\n\nWinning speed: ${esc(draft.results.winningSpeed || '-')} mm/min\nWinning power: ${esc(draft.results.winningPower || '-')}%\nWinning interval: ${esc(draft.results.winningInterval || '-')} mm\nWinning passes: ${esc(draft.results.winningPasses || '-')}\nStatus: ${esc(draft.results.status)}\nConfidence: ${esc(draft.results.confidence)}/5</div></div><label class="span2 row"><input id="wizardApplyWinner" name="applyWinner" type="checkbox" ${draft.applyWinner ? 'checked' : ''} style="width:auto"> Apply winning settings to this material</label>${draft.applyWinner ? `<div class="span2 panel"><b>Existing material fields that will change</b><div class="small">${changes.map(([fieldName, value]) => `${esc(fieldName)} → ${esc(value)}`).join('<br>')}</div></div>` : ''}`;
+      return `<div class="panel span2"><b>Ready to save</b><div class="small muted" style="margin-top:6px">A new ${esc(wizardTestTypeLabel(draft.testType))} record will be added to ${esc(profile ? profile.material : 'the selected material')}. Existing tests and settings stay unchanged unless you select the option below.</div></div><div class="span2 panel"><b>Result</b><div class="small" style="white-space:pre-line">${esc(wizardPlanSummary(draft))}\n\nWinning speed: ${esc(draft.results.winningSpeed || '-')} mm/min\nWinning power: ${esc(draft.results.winningPower || '-')}%\nWinning interval: ${esc(draft.results.winningInterval || '-')} mm\nWinning passes: ${esc(draft.results.winningPasses || '-')}\nStatus: ${esc(draft.results.status)}\nConfidence: ${esc(draft.results.confidence)}/5</div></div><label class="span2 row"><input id="wizardApplyWinner" name="applyWinner" type="checkbox" ${draft.applyWinner ? 'checked' : ''} style="width:auto"> Apply winning settings to this material</label>${draft.applyWinner ? `<div class="span2 panel"><b>Existing material fields that will change</b><div class="small">${changes.map(([fieldName, value]) => `${esc(fieldName)} â†’ ${esc(value)}`).join('<br>')}</div></div>` : ''}`;
     }
     function renderMaterialTestWizard() {
       const draft = materialTestWizard;
       if (!draft) return;
       const titles = ['Setup', 'Goal & Baseline', 'LightBurn Setup', 'Results', 'Save & Next Test'];
       const body = draft.step === 1 ? wizardAssistantSetupFields(draft) : draft.step === 2 ? wizardGuidanceFields(draft) + wizardAdaptiveGuidanceHtml(draft) + wizardResolvedBaselineHtml(draft) : draft.step === 3 ? wizardLightBurnSetupFields(draft) : draft.step === 4 ? wizardResultFields(draft) + wizardAdaptiveResultFields(draft) : wizardReviewHtml(draft);
-      openModal('materialTestWizardModal', `<div class="dialog"><div class="spread"><div><h2>Material Test Wizard</h2><div class="small muted">Step ${draft.step}: ${titles[draft.step - 1]}</div></div><button data-wizard-cancel>×</button></div><div class="small muted" style="margin:8px 0 14px">${titles.map((title, index) => `${index + 1 === draft.step ? '<b>' : ''}Step ${index + 1}: ${title}${index + 1 === draft.step ? '</b>' : ''}`).join(' · ')}</div><form id="materialTestWizardForm" class="formgrid">${body}<div class="span2 actions"><button type="button" data-wizard-cancel>Cancel</button>${draft.step > 1 ? '<button type="button" id="wizardBack">Back</button>' : ''}${draft.step < 5 ? '<button type="submit" class="primary">Next</button>' : '<button type="submit" class="primary">Save test</button>'}</div></form></div>`);
+      openModal('materialTestWizardModal', `<div class="dialog"><div class="spread"><div><h2>Material Test Wizard</h2><div class="small muted">Step ${draft.step}: ${titles[draft.step - 1]}</div></div><button data-wizard-cancel>Ã—</button></div><div class="small muted" style="margin:8px 0 14px">${titles.map((title, index) => `${index + 1 === draft.step ? '<b>' : ''}Step ${index + 1}: ${title}${index + 1 === draft.step ? '</b>' : ''}`).join(' Â· ')}</div><form id="materialTestWizardForm" class="formgrid">${body}<div class="span2 actions"><button type="button" data-wizard-cancel>Cancel</button>${draft.step > 1 ? '<button type="button" id="wizardBack">Back</button>' : ''}${draft.step < 5 ? '<button type="submit" class="primary">Next</button>' : '<button type="submit" class="primary">Save test</button>'}</div></form></div>`);
       document.querySelectorAll('#materialTestWizardModal [data-wizard-cancel]').forEach(button => button.onclick = cancelMaterialTestWizard);
       const back = document.getElementById('wizardBack');
       if (back) back.onclick = () => { captureMaterialTestWizardStep(); materialTestWizard.step -= 1; renderMaterialTestWizard(); };
@@ -2268,7 +2300,7 @@
       const noFurther = overall === 'Excellent' && !draft.optimizationGoal?.startsWith('Find ');
       const uncertain = (draft.results.observedTraits || []).length ? `Observed: ${(draft.results.observedTraits || []).join(', ')}.` : 'No structured traits were recorded.';
       const recommendation = noFurther ? 'No further test is necessary unless you want to optimize for a specific goal.' : winner ? 'The most informative next step is a narrower comparison around the selected winner.' : 'No clear winner was recorded; confirm a plausible baseline or run another broad comparison.';
-      openModal('materialTestWizardModal', `<div class="dialog"><div class="spread"><div><h2>Next Recommended Test</h2><div class="small muted">Saved to ${esc(profile.material)}</div></div><button data-close>×</button></div><div class="panel"><b>Just tested</b><div class="small">${esc(materialTestLabel(test.testType))}${winner ? ` - winner: ${esc(winner)}` : ' - no winner recorded'}</div><div class="small muted" style="margin-top:6px">${esc(uncertain)}</div></div><div class="panel" style="margin-top:10px"><b>Recommendation</b><div class="small" style="margin-top:6px">${esc(recommendation)}</div></div><div class="actions" style="margin-top:12px"><button data-next-test="refine">Refine this winner</button><button data-next-test="Faster production">Optimize for speed</button><button data-next-test="Darker engraving">Optimize for darker engraving</button><button data-next-test="Find minimum usable power">Find minimum usable power</button><button data-next-test="Find maximum usable speed">Find maximum usable speed</button><button data-next-test="interval">Test interval around this winner</button><button data-close>No further testing needed</button></div></div>`);
+      openModal('materialTestWizardModal', `<div class="dialog"><div class="spread"><div><h2>Next Recommended Test</h2><div class="small muted">Saved to ${esc(profile.material)}</div></div><button data-close>Ã—</button></div><div class="panel"><b>Just tested</b><div class="small">${esc(materialTestLabel(test.testType))}${winner ? ` - winner: ${esc(winner)}` : ' - no winner recorded'}</div><div class="small muted" style="margin-top:6px">${esc(uncertain)}</div></div><div class="panel" style="margin-top:10px"><b>Recommendation</b><div class="small" style="margin-top:6px">${esc(recommendation)}</div></div><div class="actions" style="margin-top:12px"><button data-next-test="refine">Refine this winner</button><button data-next-test="Faster production">Optimize for speed</button><button data-next-test="Darker engraving">Optimize for darker engraving</button><button data-next-test="Find minimum usable power">Find minimum usable power</button><button data-next-test="Find maximum usable speed">Find maximum usable speed</button><button data-next-test="interval">Test interval around this winner</button><button data-close>No further testing needed</button></div></div>`);
       bindModal('materialTestWizardModal');
       document.querySelectorAll('#materialTestWizardModal [data-next-test]').forEach(button => button.onclick = () => startNextRecommendedTest(profile, test, button.dataset.nextTest));
     }
@@ -2394,7 +2426,7 @@
       const project = state.projects.find(p => p.id === projectId);
       const photo = project && normalizeProjectPhotos(project.photos)[photoIndex];
       if (!photo) return;
-      openModal('cellModal', `<div class="dialog"><div class="spread"><h2>${esc(project.name || 'Project photo')}</h2><button data-close>×</button></div><img class="photo-preview-large" src="${esc(photo.dataUrl)}" alt="${esc(photo.name || project.name || 'Project photo')}"><div class="small muted" style="margin-top:8px">${esc(photo.name || '')}</div></div>`);
+      openModal('cellModal', `<div class="dialog"><div class="spread"><h2>${esc(project.name || 'Project photo')}</h2><button data-close>Ã—</button></div><img class="photo-preview-large" src="${esc(photo.dataUrl)}" alt="${esc(photo.name || project.name || 'Project photo')}"><div class="small muted" style="margin-top:8px">${esc(photo.name || '')}</div></div>`);
       bindModal('cellModal');
     }
     function projectCard(p) {
@@ -2832,7 +2864,7 @@
     function openEntry(entry) {
       editingEntryId = entry && entry.id ? entry.id : null;
       const data = { ...formDefaults('entry'), ...(entry || {}) };
-      openModal('entryModal', `<div class="dialog"><div class="spread"><h2>${editingEntryId ? 'Edit entry' : 'New log entry'}</h2><button data-close>×</button></div><form id="entryForm" class="formgrid">${modalFields('entry', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save entry</button></div></form></div>`);
+      openModal('entryModal', `<div class="dialog"><div class="spread"><h2>${editingEntryId ? 'Edit entry' : 'New log entry'}</h2><button data-close>Ã—</button></div><form id="entryForm" class="formgrid">${modalFields('entry', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save entry</button></div></form></div>`);
       bindModal('entryModal');
       bindMaterialSuggestions(document.getElementById('entryForm'));
       document.querySelectorAll('#entryModal .star').forEach(s => s.onclick = () => { document.querySelector('#entryModal [name=rating]').value = s.dataset.rating; document.querySelectorAll('#entryModal .star').forEach(x => x.classList.toggle('on', Number(x.dataset.rating) <= Number(s.dataset.rating))); });
@@ -2850,7 +2882,7 @@
       editingProfileId = profile && profile.id ? profile.id : null;
       const data = { ...formDefaults('profile'), ...(profile || {}) };
       profileDraftTests = normalizeMaterialTests(data.tests);
-      openModal('profileModal', `<div class="dialog"><div class="spread"><h2>${editingProfileId ? 'Edit material' : 'Add material'}</h2><button data-close>×</button></div><form id="profileForm" class="formgrid">${modalFields('profile', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save material</button></div></form></div>`);
+      openModal('profileModal', `<div class="dialog"><div class="spread"><h2>${editingProfileId ? 'Edit material' : 'Add material'}</h2><button data-close>Ã—</button></div><form id="profileForm" class="formgrid">${modalFields('profile', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save material</button></div></form></div>`);
       bindModal('profileModal');
       bindMaterialTestsEditor();
       bindMaterialSuggestions(document.getElementById('profileForm'));
@@ -2897,7 +2929,7 @@
         : '';
       const photosOpen = projectPhotosDraft.length ? ' open' : '';
       const accountingOpen = (options.pricingDraft || hasProjectAccounting(data)) ? ' open' : '';
-      openModal('projectModal', `<div class="dialog"><div class="spread"><h2>${editingProjectId ? 'Edit project' : 'New project'}</h2><button data-close>×</button></div><form id="projectForm" class="formgrid">
+      openModal('projectModal', `<div class="dialog"><div class="spread"><h2>${editingProjectId ? 'Edit project' : 'New project'}</h2><button data-close>Ã—</button></div><form id="projectForm" class="formgrid">
         ${draftBanner}
         ${bridgeNote}
         <label class="span2">${labelText('Project name', 'Name of the finished piece or batch.')}<input name="name" value="${esc(data.name)}"></label>
@@ -3138,7 +3170,7 @@
     function openRawMaterial(item) {
       const editingId = item && item.id ? item.id : null;
       const data = { name: '', aliases: '', category: 'sheet', quantityOnHand: '', unit: 'each', unitCost: '', supplier: '', purchaseDate: today(), lowStockThreshold: '', notes: '', tags: [], ...(item || {}) };
-      openModal('inventoryModal', `<div class="dialog"><div class="spread"><h2>${editingId ? 'Edit raw material' : 'New raw material'}</h2><button data-close>×</button></div><form id="rawMaterialForm" class="formgrid">
+      openModal('inventoryModal', `<div class="dialog"><div class="spread"><h2>${editingId ? 'Edit raw material' : 'New raw material'}</h2><button data-close>Ã—</button></div><form id="rawMaterialForm" class="formgrid">
         <label class="span2">${labelText('Name', 'Material, blank, hardware, or packaging name.')}<input name="name" value="${esc(data.name)}"></label>
         <label class="span2">${labelText('Aliases, comma-separated', 'Alternate listing names or shorthand used only for matching and search.')}<input name="aliases" value="${esc(tagString(aliasesOf(data)))}" placeholder="Amazon listing title, old shorthand"></label>
         ${select('category','Category',data.category || 'sheet',rawMaterialCategories,'Simple category for filtering raw inventory.')}
@@ -3166,7 +3198,7 @@
     function openFinishedBatch(batch) {
       const editingId = batch && batch.id ? batch.id : null;
       const data = { itemName: '', projectId: '', quantityMade: '', quantitySellable: '', quantityReject: '', quantitySold: '', unitSalePrice: '', status: 'made', notes: '', tags: [], ...(batch || {}) };
-      openModal('inventoryModal', `<div class="dialog"><div class="spread"><h2>${editingId ? 'Edit finished batch' : 'New finished batch'}</h2><button data-close>×</button></div><form id="finishedBatchForm" class="formgrid">
+      openModal('inventoryModal', `<div class="dialog"><div class="spread"><h2>${editingId ? 'Edit finished batch' : 'New finished batch'}</h2><button data-close>Ã—</button></div><form id="finishedBatchForm" class="formgrid">
         <label class="span2">${labelText('Item name', 'Finished item or small batch name.')}<input name="itemName" value="${esc(data.itemName)}"></label>
         <label class="span2">${labelText('Linked Project', 'Optional Project recipe/accounting record this batch came from.')}<select name="projectId">${projectOptions(data.projectId || '')}</select></label>
         ${field('quantityMade','Quantity made',data.quantityMade,'number','min="0" step="1"','Total pieces made in this batch.')}
@@ -3203,7 +3235,7 @@
     }
     function openGridForm() {
       const data = formDefaults('grid');
-      openModal('gridModal', `<div class="dialog"><div class="spread"><h2>New test grid</h2><button data-close>×</button></div><form id="gridForm" class="formgrid">
+      openModal('gridModal', `<div class="dialog"><div class="spread"><h2>New test grid</h2><button data-close>Ã—</button></div><form id="gridForm" class="formgrid">
         ${field('name','Grid name',data.name,'text','','Name for this material test matrix.')}${select('jobType','Job type',data.jobType,['engrave','cut'],'Cut goes through material; engrave marks the surface.')}
         ${materialFieldHtml('')}
         ${materialSafetyFieldHelp('')}
@@ -3245,7 +3277,7 @@
       activeCellKey = key;
       const g = state.grids.find(x => x.id === activeGridId);
       const existing = (g.cells || {})[key] || { rating: 0, notes: '', best: false };
-      openModal('cellModal', `<div class="dialog" style="max-width:420px"><div class="spread"><h2>${esc(key.replace('_', '% - '))} mm/min</h2><button data-close>×</button></div><form id="cellForm" class="grid">
+      openModal('cellModal', `<div class="dialog" style="max-width:420px"><div class="spread"><h2>${esc(key.replace('_', '% - '))} mm/min</h2><button data-close>Ã—</button></div><form id="cellForm" class="grid">
         <label>${labelText('Rating', 'Score this power/speed result from unusable to excellent.')}<select name="rating">${[0,1,2,3,4,5].map(n => `<option ${n === existing.rating ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label class="row"><input type="checkbox" name="best" ${existing.best ? 'checked' : ''} style="width:auto"> Mark as best setting ${help('Marks this cell as the winner for the material test.')}</label>
         <label>${labelText('Notes', 'What happened in this cell: cut through, scorch, weak mark, good result, etc.')}<textarea name="notes" rows="3">${esc(existing.notes)}</textarea></label>
@@ -3568,7 +3600,7 @@
     }
     function replaceData(data) {
       state.entries = data.entries || [];
-      state.profiles = data.profiles || [];
+      state.profiles = normalizeLibraryProfiles(data.profiles);
       state.grids = data.grids || [];
       state.projects = data.projects || [];
       state.inventory = normalizeInventory(data.inventory);
@@ -3587,7 +3619,7 @@
         batches: mergeListStats(inventoryList('finishedBatches'), incomingInventory.finishedBatches)
       };
       state.entries = mergeList(state.entries, data.entries);
-      state.profiles = mergeList(state.profiles, data.profiles);
+      state.profiles = normalizeLibraryProfiles(mergeList(state.profiles, data.profiles));
       state.grids = mergeList(state.grids, data.grids);
       state.projects = mergeList(state.projects, data.projects);
       state.inventory = {
@@ -3764,7 +3796,9 @@
       reader.readAsText(file); e.target.value = '';
     };
     document.addEventListener('keydown', handleShortcuts);
-    if (new URLSearchParams(window.location.search).get('selftest') === 'baseline') runBaselineResolutionFixtures();
+    const selftest = new URLSearchParams(window.location.search).get('selftest');
+    if (selftest === 'baseline' || selftest === 'all') runBaselineResolutionFixtures();
+    if (selftest === 'normalization' || selftest === 'all') runMaterialTestNormalizationFixtures();
     render();
   })();
   </script>
