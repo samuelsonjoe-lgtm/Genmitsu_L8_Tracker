@@ -1899,8 +1899,21 @@
       return test && ['winningSpeed', 'winningPower', 'winningInterval', 'winningPasses'].some(key => hasUsableNumber(test[key]));
     }
     function hasUsableNumber(value) { return value !== '' && value != null && Number.isFinite(Number(value)) && Number(value) > 0; }
+    function testIsCompatibleWithOperation(test, intendedOperation) {
+      if (!test || typeof test !== 'object') return false;
+      const type = String(test.testType || '').trim();
+      if (!type) return intendedOperation === 'unknown';
+      if (intendedOperation === 'unknown') return true;
+      if (intendedOperation === 'engrave_vector' || intendedOperation === 'photo') return type === 'engrave_matrix' || type === 'interval';
+      if (intendedOperation === 'cut' || intendedOperation === 'kerf') return type === 'cut' || type === 'kerf';
+      return false;
+    }
+    function compatibleMaterialTestHistory(history, intendedOperation) {
+      return (Array.isArray(history) ? history : []).filter(test => testIsCompatibleWithOperation(test, intendedOperation));
+    }
     function resolveTestBaselineFromContext(draft, profile, history = []) {
       history = Array.isArray(history) ? history.filter(test => test && typeof test === 'object') : [];
+      history = compatibleMaterialTestHistory(history, draft.intendedOperation);
       const selected = history.find(test => test.id === draft.baselineTestId);
       const latest = [...history].filter(testHasUsableWinner).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0];
       const starter = materialStarterProfile(profile?.material);
@@ -1942,6 +1955,12 @@
       const selected = { id: 'selected', date: '2026-07-01', winningSpeed: 12000, winningPower: 35, winningInterval: 0.12, winningPasses: 1, airAssist: false };
       const latest = { id: 'latest', date: '2026-07-12', winningSpeed: 16000, winningPower: 45, winningInterval: 0.10, winningPasses: 1, airAssist: false };
       const staleInvalid = { id: 'stale-invalid', date: '2026-06-01', winningSpeed: '', winningPower: '', winningInterval: '', winningPasses: '' };
+      const engraveOld = { id: 'engrave-old', date: '2026-07-01', testType: 'engrave_matrix', winningSpeed: 14000, winningPower: 40, winningInterval: 0.10, winningPasses: 1 };
+      const engraveNew = { id: 'engrave-new', date: '2026-07-10', testType: 'engrave_matrix', winningSpeed: 18000, winningPower: 50, winningInterval: 0.10, winningPasses: 1 };
+      const cutOld = { id: 'cut-old', date: '2026-07-02', testType: 'cut', winningSpeed: 500, winningPower: 80, winningPasses: 2 };
+      const cutNew = { id: 'cut-new', date: '2026-07-15', testType: 'cut', winningSpeed: 600, winningPower: 85, winningPasses: 2 };
+      const intervalPhoto = { id: 'interval-photo', date: '2026-07-16', testType: 'interval', winningSpeed: 12000, winningPower: 35, winningInterval: 0.12, winningPasses: 1 };
+      const legacyUntyped = { id: 'legacy-untyped', date: '2026-07-20', winningSpeed: 20000, winningPower: 60, winningInterval: 0.10, winningPasses: 1 };
       const draft = overrides => ({ materialId: profile.id, materialFamily: 'wood', machine: 'Genmitsu L8 20W', intendedOperation: 'engrave_vector', currentKnowledge: 'prior', baselineSource: 'auto', baselineTestId: '', manualBaselineSpeed: '', manualBaselinePower: '', manualBaselineInterval: '', manualBaselinePasses: '', manualBaselineAirAssist: false, ...overrides });
       const fixtures = [
         ['Explicit Library with stale prior ID', draft({ baselineSource: 'library', baselineTestId: selected.id }), profile, [selected, latest], 'library'],
@@ -1954,11 +1973,22 @@
         ['Automatic with currentKnowledge never', draft({ currentKnowledge: 'never' }), genericProfile, [selected, latest], 'generic'],
         ['Explicit Library unavailable, stale selected ID, latest available', draft({ baselineSource: 'library', baselineTestId: selected.id }), emptyProfile, [selected, latest], 'latest'],
         ['Explicit Latest unavailable, stale selected ID, Library available', draft({ baselineSource: 'latest', baselineTestId: staleInvalid.id }), profile, [staleInvalid], 'library'],
-        ['Explicit Manual with blank values and stale prior ID', draft({ baselineSource: 'manual', baselineTestId: selected.id }), profile, [selected, latest], 'manual']
+        ['Explicit Manual with blank values and stale prior ID', draft({ baselineSource: 'manual', baselineTestId: selected.id }), profile, [selected, latest], 'manual'],
+        ['Automatic engraving ignores newer cut winner', draft({ intendedOperation: 'engrave_vector' }), profile, [engraveOld, cutNew], 'latest', 'engrave-old'],
+        ['Explicit Latest engraving with only cut history', draft({ intendedOperation: 'engrave_vector', baselineSource: 'latest' }), profile, [cutNew], 'library'],
+        ['Explicit Prior engraving with incompatible cut ID', draft({ intendedOperation: 'engrave_vector', baselineSource: 'prior', baselineTestId: cutNew.id }), profile, [cutNew, engraveNew], 'latest', 'engrave-new'],
+        ['Automatic cut ignores newer engraving winner', draft({ intendedOperation: 'cut' }), profile, [cutOld, engraveNew], 'latest', 'cut-old'],
+        ['Photo operation accepts interval winner', draft({ intendedOperation: 'photo', baselineSource: 'latest' }), profile, [intervalPhoto], 'latest', 'interval-photo'],
+        ['Kerf operation accepts cut winner', draft({ intendedOperation: 'kerf', baselineSource: 'latest' }), profile, [cutNew], 'latest', 'cut-new'],
+        ['Unknown operation may use latest usable test of any type', draft({ intendedOperation: 'unknown', baselineSource: 'latest' }), profile, [engraveNew, cutNew], 'latest', 'cut-new'],
+        ['Engraving ignores newer untyped legacy winner', draft({ intendedOperation: 'engrave_vector' }), profile, [engraveOld, legacyUntyped], 'latest', 'engrave-old'],
+        ['Unknown operation accepts untyped legacy winner', draft({ intendedOperation: 'unknown', baselineSource: 'latest' }), profile, [legacyUntyped], 'latest', 'legacy-untyped']
       ];
-      const results = fixtures.map(([name, fixtureDraft, fixtureProfile, history, expected]) => {
-        const actual = resolveTestBaselineFromContext(fixtureDraft, fixtureProfile, history).source;
-        return { fixture: name, expected, actual, pass: actual === expected };
+      const results = fixtures.map(([name, fixtureDraft, fixtureProfile, history, expected, expectedTestId = '']) => {
+        const baseline = resolveTestBaselineFromContext(fixtureDraft, fixtureProfile, history);
+        const actual = baseline.source;
+        const actualTestId = baseline.test?.id || '';
+        return { fixture: name, expected, actual, expectedTestId, actualTestId, pass: actual === expected && (!expectedTestId || actualTestId === expectedTestId) };
       });
       const passed = results.filter(result => result.pass).length;
       const failed = results.length - passed;
@@ -2056,11 +2086,11 @@
     }
     function wizardAdaptiveGuidanceHtml(draft) {
       const profile = state.profiles.find(item => item.id === draft.materialId);
-      const history = getMaterialTestHistory(profile).filter(testHasUsableWinner);
+      const history = compatibleMaterialTestHistory(getMaterialTestHistory(profile).filter(testHasUsableWinner), draft.intendedOperation);
       const goals = draft.intendedOperation === 'cut' || draft.intendedOperation === 'kerf' ? cutGoals : engraveGoals;
       const baseline = resolveTestBaseline(draft);
       const mode = chooseAdaptiveTestMode(draft, baseline);
-      return `<div class="span2 panel"><b>Baseline</b><div class="small muted">Baseline source: ${esc(baseline.label)}</div><div class="formgrid" style="margin-top:8px"><label>${labelText('Baseline source')}<select name="baselineSource"><option value="auto" ${draft.baselineSource === 'auto' ? 'selected' : ''}>Automatic best available</option><option value="library" ${draft.baselineSource === 'library' ? 'selected' : ''}>Current Library primary setting</option>${history.length ? '<option value="latest" ' + (draft.baselineSource === 'latest' ? 'selected' : '') + '>Most recently saved winner</option><option value="prior" ' + (draft.baselineSource === 'prior' ? 'selected' : '') + '>Selected prior test</option>' : ''}<option value="manual" ${draft.baselineSource === 'manual' ? 'selected' : ''}>Manually entered baseline</option></select></label>${history.length ? `<label>${labelText('Prior test')}<select name="baselineTestId"><option value="">Automatic</option>${history.map(test => `<option value="${esc(test.id)}" ${test.id === draft.baselineTestId ? 'selected' : ''}>${esc(test.date || 'Undated')} - ${esc(materialTestLabel(test.testType))} (${esc(test.winningSpeed || '-')} / ${esc(test.winningPower || '-')}%)</option>`).join('')}</select></label>` : '<div class="small muted">No prior tests with explicit winner values.</div>'}${field('manualBaselineSpeed','Manual speed',draft.manualBaselineSpeed,'number','min="0" step="any"')}${field('manualBaselinePower','Manual power (%)',draft.manualBaselinePower,'number','min="0" max="100" step="any"')}${field('manualBaselineInterval','Manual interval (mm)',draft.manualBaselineInterval,'number','min="0" step="any"')}${field('manualBaselinePasses','Manual passes',draft.manualBaselinePasses,'number','min="1" step="1"')}<label class="row"><input name="manualBaselineAirAssist" type="checkbox" ${draft.manualBaselineAirAssist ? 'checked' : ''} style="width:auto"> Manual baseline used air assist</label></div></div><label>${labelText('Recommendation mode')}<select name="adaptiveMode"><option value="auto" ${draft.adaptiveMode === 'auto' ? 'selected' : ''}>Automatic (${esc(mode)})</option><option value="discovery" ${draft.adaptiveMode === 'discovery' ? 'selected' : ''}>Broad discovery</option><option value="confirm" ${draft.adaptiveMode === 'confirm' ? 'selected' : ''}>Confirm a baseline</option><option value="refine" ${draft.adaptiveMode === 'refine' ? 'selected' : ''}>Refine an existing winner</option><option value="goal" ${draft.adaptiveMode === 'goal' ? 'selected' : ''}>Optimize for a goal</option><option value="boundary" ${draft.adaptiveMode === 'boundary' ? 'selected' : ''}>Find a boundary</option></select></label><label>${labelText('Optimization goal')}<select name="optimizationGoal">${goals.map(goal => `<option ${goal === draft.optimizationGoal ? 'selected' : ''}>${esc(goal)}</option>`).join('')}</select></label><div class="span2 small muted">${esc(buildNextTestRationale(draft, baseline, mode))}</div>`;
+      return `<div class="span2 panel"><b>Baseline</b><div class="small muted">Baseline source: ${esc(baseline.label)}</div><div class="formgrid" style="margin-top:8px"><label>${labelText('Baseline source')}<select name="baselineSource"><option value="auto" ${draft.baselineSource === 'auto' ? 'selected' : ''}>Automatic best available</option><option value="library" ${draft.baselineSource === 'library' ? 'selected' : ''}>Current Library primary setting</option>${history.length ? '<option value="latest" ' + (draft.baselineSource === 'latest' ? 'selected' : '') + '>Most recently saved winner</option><option value="prior" ' + (draft.baselineSource === 'prior' ? 'selected' : '') + '>Selected prior test</option>' : ''}<option value="manual" ${draft.baselineSource === 'manual' ? 'selected' : ''}>Manually entered baseline</option></select></label>${history.length ? `<label>${labelText('Prior test')}<select name="baselineTestId"><option value="">Automatic</option>${history.map(test => `<option value="${esc(test.id)}" ${test.id === draft.baselineTestId ? 'selected' : ''}>${esc(test.date || 'Undated')} - ${esc(materialTestLabel(test.testType))} (${esc(test.winningSpeed || '-')} / ${esc(test.winningPower || '-')}%)</option>`).join('')}</select></label>` : '<div class="small muted">No compatible prior tests with explicit winner values.</div>'}${field('manualBaselineSpeed','Manual speed',draft.manualBaselineSpeed,'number','min="0" step="any"')}${field('manualBaselinePower','Manual power (%)',draft.manualBaselinePower,'number','min="0" max="100" step="any"')}${field('manualBaselineInterval','Manual interval (mm)',draft.manualBaselineInterval,'number','min="0" step="any"')}${field('manualBaselinePasses','Manual passes',draft.manualBaselinePasses,'number','min="1" step="1"')}<label class="row"><input name="manualBaselineAirAssist" type="checkbox" ${draft.manualBaselineAirAssist ? 'checked' : ''} style="width:auto"> Manual baseline used air assist</label></div></div><label>${labelText('Recommendation mode')}<select name="adaptiveMode"><option value="auto" ${draft.adaptiveMode === 'auto' ? 'selected' : ''}>Automatic (${esc(mode)})</option><option value="discovery" ${draft.adaptiveMode === 'discovery' ? 'selected' : ''}>Broad discovery</option><option value="confirm" ${draft.adaptiveMode === 'confirm' ? 'selected' : ''}>Confirm a baseline</option><option value="refine" ${draft.adaptiveMode === 'refine' ? 'selected' : ''}>Refine an existing winner</option><option value="goal" ${draft.adaptiveMode === 'goal' ? 'selected' : ''}>Optimize for a goal</option><option value="boundary" ${draft.adaptiveMode === 'boundary' ? 'selected' : ''}>Find a boundary</option></select></label><label>${labelText('Optimization goal')}<select name="optimizationGoal">${goals.map(goal => `<option ${goal === draft.optimizationGoal ? 'selected' : ''}>${esc(goal)}</option>`).join('')}</select></label><div class="span2 small muted">${esc(buildNextTestRationale(draft, baseline, mode))}</div>`;
     }
     function wizardResolvedBaselineHtml(draft) {
       const baseline = resolveTestBaseline(draft);
@@ -2167,6 +2197,8 @@
       } else if (materialTestWizard.step === 2) {
         Object.assign(materialTestWizard, { materialFamily: f.materialFamily, surfaceFinish: f.surfaceFinish, intendedOperation: f.intendedOperation, currentKnowledge: f.currentKnowledge, testSize: f.testSize, testFocus: f.testFocus, notes: (f.notes || '').trim(), baselineSource: f.baselineSource, baselineTestId: f.baselineTestId, manualBaselineSpeed: f.manualBaselineSpeed, manualBaselinePower: f.manualBaselinePower, manualBaselineInterval: f.manualBaselineInterval, manualBaselinePasses: f.manualBaselinePasses, manualBaselineAirAssist: !!form.manualBaselineAirAssist?.checked, adaptiveMode: f.adaptiveMode, optimizationGoal: f.optimizationGoal });
         if (['library', 'latest', 'manual'].includes(materialTestWizard.baselineSource)) materialTestWizard.baselineTestId = '';
+        const selectedTest = getMaterialTestHistory(state.profiles.find(profile => profile.id === materialTestWizard.materialId)).find(test => test.id === materialTestWizard.baselineTestId);
+        if (materialTestWizard.baselineTestId && (!testHasUsableWinner(selectedTest) || !testIsCompatibleWithOperation(selectedTest, materialTestWizard.intendedOperation))) materialTestWizard.baselineTestId = '';
         materialTestWizard.testType = wizardStoredTestType(materialTestWizard);
         if (!materialTestWizard.planCustomized) materialTestWizard.plan = recommendAdaptivePlan(materialTestWizard);
       } else if (materialTestWizard.step === 3) {
