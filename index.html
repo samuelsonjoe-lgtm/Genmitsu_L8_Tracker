@@ -202,6 +202,7 @@
       </div>
     </header>
 
+    <section id="storageRecoveryPanel" hidden></section>
     <nav class="tabs" id="tabs"></nav>
     <section id="app"></section>
   </main>
@@ -313,6 +314,7 @@
       return Number.isFinite(n) ? n : fallback;
     };
     const fmt = (v, u) => v === '' || v == null ? '-' : `${v}${u || ''}`;
+    let storageRecoveryIssue = null;
     const state = loadState();
     let activeGridId = null;
     let activeCellKey = null;
@@ -326,50 +328,55 @@
     let pendingUndo = null;
     let storageWarningShown = false;
 
-    function loadState() {
+    function decodeStoredState(raw) {
+      if (raw === null || raw === undefined || raw === '') return { status: 'empty', data: null };
+      const original = String(raw);
+      let data;
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const data = JSON.parse(raw);
-          return {
-            activeTab: 'log',
-            schemaVersion: data.schemaVersion || 1,
-            unit: data.unit || 'in',
-            entries: data.entries || [],
-            profiles: normalizeLibraryProfiles(data.profiles),
-            grids: data.grids || [],
-            projects: data.projects || [],
-            inventory: normalizeInventory(data.inventory),
-            search: '',
-            materialFilter: 'all',
-            librarySearch: '',
-            libraryFilter: 'all',
-            libraryTagFilter: 'all',
-            libraryMatchMaterial: data.libraryMatchMaterial || '',
-            libraryMatchThickness: data.libraryMatchThickness || '',
-            libraryMatchUnit: data.libraryMatchUnit || data.unit || 'in',
-            entrySort: data.entrySort || 'date-desc',
-            librarySort: data.librarySort || 'material-asc',
-            projectSort: data.projectSort || 'date-desc',
-            projectSearch: '',
-            projectTagFilter: 'all',
-            projectStatusFilter: 'all',
-            inventorySearch: '',
-            inventoryCategoryFilter: 'all',
-            inventoryBatchStatusFilter: 'all',
-            inventoryRawSort: data.inventoryRawSort || 'low-stock',
-            inventoryBatchSort: data.inventoryBatchSort || 'name-asc',
-            focusMaterialMm: '',
-            focusJobType: 'engrave',
-            machineProfile: data.machineProfile || '20W',
-            pricing: { ...pricingDefaults(), ...(data.pricing || {}) },
-            pricingPrefs: { ...pricingPreferenceDefaults(), ...(data.pricingPrefs || {}) }
-          };
-        }
-      } catch (_) {}
+        data = JSON.parse(original);
+      } catch (_) {
+        return { status: 'corrupt', raw: original, message: 'Saved browser data is not valid JSON.' };
+      }
+      if (!data || Array.isArray(data) || typeof data !== 'object') {
+        return { status: 'corrupt', raw: original, message: 'Saved browser data must be a JSON object.' };
+      }
+      return { status: 'ok', data };
+    }
+    function freshState() {
       return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
     }
-    function persist() {
+    function loadState() {
+      const decoded = decodeStoredState(localStorage.getItem(STORAGE_KEY));
+      if (decoded.status === 'empty') return freshState();
+      if (decoded.status === 'corrupt') {
+        storageRecoveryIssue = { raw: decoded.raw, message: decoded.message, detectedAt: new Date().toISOString() };
+        return freshState();
+      }
+      const data = decoded.data;
+      return {
+        ...freshState(),
+        schemaVersion: data.schemaVersion || 1,
+        unit: data.unit || 'in',
+        entries: data.entries || [],
+        profiles: normalizeLibraryProfiles(data.profiles),
+        grids: data.grids || [],
+        projects: data.projects || [],
+        inventory: normalizeInventory(data.inventory),
+        libraryMatchMaterial: data.libraryMatchMaterial || '',
+        libraryMatchThickness: data.libraryMatchThickness || '',
+        libraryMatchUnit: data.libraryMatchUnit || data.unit || 'in',
+        entrySort: data.entrySort || 'date-desc',
+        librarySort: data.librarySort || 'material-asc',
+        projectSort: data.projectSort || 'date-desc',
+        inventoryRawSort: data.inventoryRawSort || 'low-stock',
+        inventoryBatchSort: data.inventoryBatchSort || 'name-asc',
+        machineProfile: data.machineProfile || '20W',
+        pricing: { ...pricingDefaults(), ...(data.pricing || {}) },
+        pricingPrefs: { ...pricingPreferenceDefaults(), ...(data.pricingPrefs || {}) }
+      };
+    }
+    function persist(options = {}) {
+      if (storageRecoveryIssue && !options.allowRecoveryOverwrite) return false;
       const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, inventoryRawSort, inventoryBatchSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, inventoryRawSort, inventoryBatchSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
@@ -379,6 +386,28 @@
         return false;
       }
     }
+    function runStorageRecoveryFixtures() {
+      const fixture = (name, check) => ({ name, ...check() });
+      const results = [
+        fixture('Null input is empty', () => { const actual = decodeStoredState(null); return { expected: 'empty', actual: actual.status, pass: actual.status === 'empty' && actual.data === null }; }),
+        fixture('Empty string is empty', () => { const actual = decodeStoredState(''); return { expected: 'empty', actual: actual.status, pass: actual.status === 'empty' && actual.data === null }; }),
+        fixture('Valid object JSON is accepted', () => { const actual = decodeStoredState('{"entries":[]}'); return { expected: 'ok object', actual: `${actual.status} ${Array.isArray(actual.data?.entries) ? 'object' : 'invalid'}`, pass: actual.status === 'ok' && Array.isArray(actual.data.entries) }; }),
+        fixture('Valid object data is not mutated', () => { const raw = '{"nested":{"value":1}}'; const actual = decodeStoredState(raw); return { expected: 'source and nested value unchanged', actual: `${raw === '{"nested":{"value":1}}' ? 'source unchanged' : 'source changed'} / ${actual.data?.nested?.value}`, pass: raw === '{"nested":{"value":1}}' && actual.data?.nested?.value === 1 }; }),
+        fixture('Malformed JSON is corrupt', () => { const actual = decodeStoredState('{bad'); return { expected: 'corrupt', actual: actual.status, pass: actual.status === 'corrupt' }; }),
+        fixture('Corrupt result preserves exact raw text', () => { const raw = '{ bad\n'; const actual = decodeStoredState(raw); return { expected: JSON.stringify(raw), actual: JSON.stringify(actual.raw), pass: actual.status === 'corrupt' && actual.raw === raw }; }),
+        fixture('Parsed array is rejected', () => { const actual = decodeStoredState('[]'); return { expected: 'corrupt', actual: actual.status, pass: actual.status === 'corrupt' }; }),
+        fixture('Parsed primitive and null are rejected', () => { const primitive = decodeStoredState('42'); const nullValue = decodeStoredState('null'); return { expected: 'both corrupt', actual: `${primitive.status} / ${nullValue.status}`, pass: primitive.status === 'corrupt' && nullValue.status === 'corrupt' }; })
+      ];
+      const passed = results.filter(result => result.pass).length;
+      const failed = results.length - passed;
+      console.group('Storage recovery fixtures');
+      console.table(results);
+      console.log(`${passed} passed`);
+      console.log(`${failed} failed`);
+      console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runStorageRecoveryFixtures = runStorageRecoveryFixtures;
     function backupObject() {
       return {
         schemaVersion: SCHEMA_VERSION,
@@ -725,6 +754,7 @@
       renderTabs();
       document.getElementById('unitIn').className = state.unit === 'in' ? 'primary' : '';
       document.getElementById('unitMm').className = state.unit === 'mm' ? 'primary' : '';
+      renderStorageRecoveryPanel();
       const root = document.getElementById('app');
       if (state.activeTab === 'log') root.innerHTML = renderLog();
       if (state.activeTab === 'library') root.innerHTML = renderLibrary();
@@ -734,6 +764,32 @@
       if (state.activeTab === 'inventory') root.innerHTML = renderInventory();
       if (state.activeTab === 'pricing') root.innerHTML = renderPricing();
       bindPage();
+    }
+    function storageRecoveryFilename() {
+      const now = new Date();
+      const part = value => String(value).padStart(2, '0');
+      return `genmitsu-l8-tracker-damaged-storage-${now.getFullYear()}-${part(now.getMonth() + 1)}-${part(now.getDate())}-${part(now.getHours())}${part(now.getMinutes())}.txt`;
+    }
+    function renderStorageRecoveryPanel() {
+      const panel = document.getElementById('storageRecoveryPanel');
+      if (!storageRecoveryIssue) {
+        panel.hidden = true;
+        panel.innerHTML = '';
+        return;
+      }
+      panel.hidden = false;
+      panel.className = 'panel storage-recovery';
+      panel.innerHTML = `<div class="spread"><div><b>Saved data recovery needed</b><div class="small muted" style="margin-top:4px">Saved browser data could not be read. The tracker opened with temporary empty data. Saving is blocked so the damaged data is not overwritten. Download the damaged data, import a valid JSON backup, or explicitly start fresh.</div></div></div><div class="actions" style="margin-top:10px"><button id="downloadDamagedStorage" type="button">Download damaged data</button><button id="recoveryImportBackup" type="button">Import backup</button><button id="startFreshStorage" class="danger" type="button">Start fresh</button></div>`;
+      document.getElementById('downloadDamagedStorage').onclick = () => downloadTextFile(storageRecoveryFilename(), storageRecoveryIssue.raw, 'text/plain;charset=utf-8');
+      document.getElementById('recoveryImportBackup').onclick = () => document.getElementById('importFile').click();
+      document.getElementById('startFreshStorage').onclick = () => {
+        if (!confirm('This will replace the unreadable browser data with a new empty tracker. Download the damaged data first if you may need it later.')) return;
+        Object.assign(state, freshState());
+        if (persist({ allowRecoveryOverwrite: true })) {
+          storageRecoveryIssue = null;
+          render();
+        }
+      };
     }
     function renderTabs() {
       const lowStock = normalizeInventory(state.inventory).rawMaterials.filter(rawIsLow).length;
@@ -3837,7 +3893,9 @@
       const reader = new FileReader();
       reader.onload = () => {
         try {
-          const data = JSON.parse(reader.result);
+          const decoded = decodeStoredState(reader.result);
+          if (decoded.status !== 'ok') throw new Error('Invalid backup JSON.');
+          const data = decoded.data;
           const merge = confirm('Import mode: OK = merge with current data, Cancel = replace everything.');
           let mergeStats = null;
           if (merge) {
@@ -3846,7 +3904,13 @@
             if (!confirm('Replace all current entries, library, grids, projects, and inventory?')) return;
             replaceData(data);
           }
-          persist(); render();
+          const recovering = !!storageRecoveryIssue;
+          if (!persist({ allowRecoveryOverwrite: recovering })) {
+            render();
+            return;
+          }
+          if (recovering) storageRecoveryIssue = null;
+          render();
           if (mergeStats) showInfoToast(mergeSummaryText(mergeStats));
         } catch (_) { alert('Could not read that file. Make sure it is a valid backup JSON.'); }
       };
@@ -3857,6 +3921,7 @@
     if (selftest === 'baseline' || selftest === 'all') runBaselineResolutionFixtures();
     if (selftest === 'normalization' || selftest === 'all') runMaterialTestNormalizationFixtures();
     if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
+    if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
     render();
   })();
   </script>
