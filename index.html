@@ -1800,6 +1800,39 @@
     const wizardTestTypes = [
       ['engrave_matrix', 'Engrave Speed/Power Matrix'], ['interval', 'Interval Test'], ['cut', 'Cut Test'], ['kerf', 'Kerf Test'], ['other', 'Other / Manual']
     ];
+    const lightBurnMaterialFamilies = {
+      wood: { label: 'Wood / plywood', speed: 12000, power: 60, intervalMin: 0.08, intervalMax: 0.16, matrixSpeedMin: 6000, matrixSpeedMax: 22000, matrixPowerMin: 20, matrixPowerMax: 100, lineInterval: 0.10, airAssist: false },
+      slate: { label: 'Slate / stone', speed: 20000, power: 60, intervalMin: 0.08, intervalMax: 0.16, matrixSpeedMin: 10000, matrixSpeedMax: 30000, matrixPowerMin: 20, matrixPowerMax: 100, lineInterval: 0.10, airAssist: false, cutBlocked: true },
+      coated_metal: { label: 'Coated metal', speed: 18000, power: 55, intervalMin: 0.08, intervalMax: 0.16, matrixSpeedMin: 8000, matrixSpeedMax: 26000, matrixPowerMin: 20, matrixPowerMax: 100, lineInterval: 0.10, airAssist: false, cutBlocked: true },
+      anodized_aluminum: { label: 'Anodized aluminum', speed: 18000, power: 45, intervalMin: 0.08, intervalMax: 0.16, matrixSpeedMin: 8000, matrixSpeedMax: 26000, matrixPowerMin: 15, matrixPowerMax: 85, lineInterval: 0.10, airAssist: false },
+      tile: { label: 'Painted tile / ceramic', speed: 16000, power: 55, intervalMin: 0.08, intervalMax: 0.16, matrixSpeedMin: 8000, matrixSpeedMax: 26000, matrixPowerMin: 20, matrixPowerMax: 100, lineInterval: 0.10, airAssist: false, cutBlocked: true },
+      cork: { label: 'Cork', speed: 12000, power: 35, intervalMin: 0.10, intervalMax: 0.18, matrixSpeedMin: 6000, matrixSpeedMax: 18000, matrixPowerMin: 15, matrixPowerMax: 70, lineInterval: 0.12, airAssist: false },
+      leather: { label: 'Leather', speed: 10000, power: 30, intervalMin: 0.10, intervalMax: 0.18, matrixSpeedMin: 5000, matrixSpeedMax: 16000, matrixPowerMin: 10, matrixPowerMax: 65, lineInterval: 0.12, airAssist: false },
+      acrylic: { label: 'Acrylic', speed: 10000, power: 35, intervalMin: 0.10, intervalMax: 0.18, matrixSpeedMin: 5000, matrixSpeedMax: 18000, matrixPowerMin: 10, matrixPowerMax: 70, lineInterval: 0.12, airAssist: false },
+      paper: { label: 'Cardboard / paper', speed: 16000, power: 20, intervalMin: 0.12, intervalMax: 0.20, matrixSpeedMin: 8000, matrixSpeedMax: 26000, matrixPowerMin: 5, matrixPowerMax: 45, lineInterval: 0.14, airAssist: false },
+      other: { label: 'Other', speed: 12000, power: 40, intervalMin: 0.10, intervalMax: 0.18, matrixSpeedMin: 6000, matrixSpeedMax: 20000, matrixPowerMin: 15, matrixPowerMax: 80, lineInterval: 0.12, airAssist: false }
+    };
+    const lightBurnFamilyOptions = Object.entries(lightBurnMaterialFamilies).map(([value, item]) => [value, item.label]);
+    function wizardFamilyFromMaterial(material) {
+      const text = String(material || '').toLowerCase();
+      if (/slate|stone/.test(text)) return 'slate';
+      if (/anodized/.test(text)) return 'anodized_aluminum';
+      if (/coated.*metal|metal.*coat/.test(text)) return 'coated_metal';
+      if (/tile|ceramic/.test(text)) return 'tile';
+      if (/cork/.test(text)) return 'cork';
+      if (/leather/.test(text)) return 'leather';
+      if (/acrylic/.test(text)) return 'acrylic';
+      if (/cardboard|paper/.test(text)) return 'paper';
+      if (/wood|plywood|basswood|birch|maple|mdf/.test(text)) return 'wood';
+      return 'other';
+    }
+    function wizardStoredTestType(draft) {
+      if (draft.testFocus === 'interval') return 'interval';
+      if (draft.intendedOperation === 'cut') return 'cut';
+      if (draft.intendedOperation === 'kerf') return 'kerf';
+      if (draft.intendedOperation === 'unknown') return 'other';
+      return 'engrave_matrix';
+    }
     function wizardMachineLabel() { return state.machineProfile === '40W' ? 'Genmitsu L8 40W' : 'Genmitsu L8 20W'; }
     function wizardNumber(value, fallback = '') { return value === '' || value == null || !Number.isFinite(Number(value)) ? fallback : Number(value); }
     function wizardTestTypeLabel(type) { return (wizardTestTypes.find(item => item[0] === type) || wizardTestTypes[4])[1]; }
@@ -1819,6 +1852,28 @@
         kerfSpeed: speed, kerfPower: power, kerfPasses: passes, kerfSlots: 5, kerfSampleSize: '', plannedSettings: ''
       };
     }
+    function recommendedWizardPlan(draft) {
+      const profile = state.profiles.find(item => item.id === draft.materialId);
+      const family = lightBurnMaterialFamilies[draft.materialFamily] || lightBurnMaterialFamilies.other;
+      const size = draft.testSize === 'quick' ? { steps: 5, slots: 5, size: 10 } : draft.testSize === 'broad' ? { steps: 11, slots: 11, size: 20 } : { steps: 9, slots: 9, size: 15 };
+      const machinePowerScale = draft.machine === 'Genmitsu L8 40W' ? 0.75 : 1;
+      const priorKnown = draft.currentKnowledge === 'prior' || draft.currentKnowledge === 'narrowing';
+      const priorSpeed = wizardNumber(profile && profile.speed, family.speed);
+      const priorPower = wizardNumber(profile && profile.minPower, family.power) * machinePowerScale;
+      const priorInterval = wizardNumber(profile && profile.lineInterval, family.lineInterval);
+      const speedCenter = priorKnown ? priorSpeed : family.speed;
+      const powerCenter = priorKnown ? priorPower : family.power * machinePowerScale;
+      const range = draft.currentKnowledge === 'narrowing' ? 0.15 : priorKnown ? 0.25 : 0.5;
+      const operation = draft.intendedOperation;
+      const airAssist = operation === 'cut' ? true : family.airAssist;
+      return {
+        intervalSpeed: Math.round(speedCenter), intervalPower: Math.max(1, Math.min(100, Math.round(powerCenter))), intervalMin: family.intervalMin, intervalMax: family.intervalMax, intervalSteps: size.steps, intervalSize: size.size, intervalFillMode: operation === 'photo' ? 'dithered_image' : 'simple_fill', intervalAirAssist: airAssist, focusGuidance: operation === 'cut' ? 'Focus on the material surface, then verify focus before every pass.' : 'Focus on the material surface; keep the material flat and repeatable.',
+        verticalCount: size.steps, verticalParameter: 'Speed', verticalMin: priorKnown ? Math.max(0, Math.round(speedCenter * (1 - range))) : family.matrixSpeedMin, verticalMax: priorKnown ? Math.max(0, Math.round(speedCenter * (1 + range))) : family.matrixSpeedMax, verticalHeight: size.size,
+        horizontalCount: size.steps, horizontalParameter: operation === 'kerf' ? 'Passes' : 'Power', horizontalMin: operation === 'kerf' ? 1 : priorKnown ? Math.max(1, Math.round(powerCenter * (1 - range))) : family.matrixPowerMin, horizontalMax: operation === 'kerf' ? Math.max(2, Math.round(size.steps / 2)) : priorKnown ? Math.min(100, Math.round(powerCenter * (1 + range))) : family.matrixPowerMax, horizontalWidth: size.size,
+        materialMode: 'Fill', lineInterval: priorKnown ? priorInterval : family.lineInterval, passes: operation === 'cut' ? Math.max(1, Math.round(wizardNumber(profile && profile.passes, 1))) : 1, scanAngle: 0, bidirectionalFill: true, overscanning: 2.5, airAssist, constantPowerMode: true, zOffset: 0,
+        textSpeed: Math.round(speedCenter), textPower: Math.max(1, Math.min(100, Math.round(powerCenter))), textMode: 'Fill', textPasses: 1, borderEnabled: true, borderSetting: 'Frame with low-power visible-light preview before running', title: `${family.label} ${operation === 'cut' ? 'cut' : operation === 'kerf' ? 'kerf' : 'engrave'} test`, cutBlocked: !!family.cutBlocked && operation === 'cut'
+      };
+    }
     function wizardSeries(min, max, count) {
       const start = Number(min), end = Number(max), total = Math.max(1, Math.round(Number(count) || 1));
       if (!Number.isFinite(start) || !Number.isFinite(end)) return { increment: null, values: [] };
@@ -1829,25 +1884,30 @@
     function wizardPlanSummary(draft = materialTestWizard) {
       if (!draft) return '';
       const profile = state.profiles.find(item => item.id === draft.materialId);
+      return [`Material: ${profile ? profile.material : 'Not selected'}`, `Machine: ${draft.machine}`, `Operation: ${draft.intendedOperation}`, `Date: ${draft.date || '-'}`, '', wizardIntervalSummary(draft), '', wizardMaterialSummary(draft)].join('\n');
+    }
+    function wizardIntervalSummary(draft = materialTestWizard) {
       const p = draft.plan;
-      const lines = [`Material: ${profile ? profile.material : 'Not selected'}`, `Machine: ${draft.machine}`, `Test: ${wizardTestTypeLabel(draft.testType)}`, `Date: ${draft.date || '-'}`];
-      if (draft.testType === 'engrave_matrix') {
-        const speeds = wizardSeries(p.speedMin, p.speedMax, p.speedRows);
-        const powers = wizardSeries(p.powerMin, p.powerMax, p.powerColumns);
-        lines.push(`Speed: ${wizardFormatSeries(speeds, ' mm/min')} (increment ${speeds.increment == null ? '-' : speeds.increment} mm/min)`, `Power: ${wizardFormatSeries(powers, '%')} (increment ${powers.increment == null ? '-' : powers.increment}%)`, `Line interval: ${p.lineInterval || '-'} mm`, `Passes: ${p.passes || '-'}`, `Air assist: ${p.airAssist ? 'On' : 'Off'}`);
-      } else if (draft.testType === 'interval') {
-        const intervals = wizardSeries(p.intervalMin, p.intervalMax, p.intervalSteps);
-        lines.push(`Speed: ${p.intervalSpeed || '-'} mm/min`, `Power: ${p.intervalPower || '-'}%`, `Intervals: ${wizardFormatSeries(intervals, ' mm')} (increment ${intervals.increment == null ? '-' : intervals.increment} mm)`, `Passes: ${p.passes || '-'}`, `Air assist: ${p.airAssist ? 'On' : 'Off'}`);
-      } else if (draft.testType === 'cut') {
-        const speeds = wizardSeries(p.cutSpeedMin, p.cutSpeedMax, p.cutSpeedSteps);
-        const powers = wizardSeries(p.cutPowerMin, p.cutPowerMax, p.cutPowerSteps);
-        lines.push(`Speed: ${wizardFormatSeries(speeds, ' mm/min')} (increment ${speeds.increment == null ? '-' : speeds.increment} mm/min)`, `Power: ${wizardFormatSeries(powers, '%')} (increment ${powers.increment == null ? '-' : powers.increment}%)`, `Passes: ${p.passes || '-'}`, `Air assist: ${p.airAssist ? 'On' : 'Off'}`, `Thickness confirmation: ${p.thickness === '' ? '-' : `${p.thickness}${p.thicknessUnit || ''}`}`);
-      } else if (draft.testType === 'kerf') {
-        lines.push(`Speed: ${p.kerfSpeed || '-'} mm/min`, `Power: ${p.kerfPower || '-'}%`, `Passes: ${p.kerfPasses || '-'}`, `Test slots: ${p.kerfSlots || '-'}`, `Nominal sample size: ${p.kerfSampleSize || '-'}`, `Air assist: ${p.airAssist ? 'On' : 'Off'}`);
-      } else {
-        lines.push(`Planned settings: ${p.plannedSettings || '-'}`, `Notes: ${draft.notes || '-'}`);
-      }
-      return lines.join('\n');
+      return [`Interval Test`, `Speed: ${p.intervalSpeed} mm/min`, `Power: ${p.intervalPower}%`, `Minimum interval: ${p.intervalMin} mm`, `Maximum interval: ${p.intervalMax} mm`, `Steps: ${p.intervalSteps}`, `Size: ${p.intervalSize} mm`, `Mode: ${p.intervalFillMode === 'dithered_image' ? 'Dithered Image' : 'Simple Fill'}`, `Air assist: ${p.intervalAirAssist ? 'On' : 'Off'}`, `Focus: ${p.focusGuidance}`].join('\n');
+    }
+    function wizardMaterialSummary(draft = materialTestWizard) {
+      const p = draft.plan;
+      return [`Material Test Generator`, `Vertical / Rows`, `Count: ${p.verticalCount}`, `Parameter: ${p.verticalParameter}`, `Minimum: ${p.verticalMin}`, `Maximum: ${p.verticalMax}`, `Height: ${p.verticalHeight} mm`, `Horizontal / Columns`, `Count: ${p.horizontalCount}`, `Parameter: ${p.horizontalParameter}`, `Minimum: ${p.horizontalMin}`, `Maximum: ${p.horizontalMax}`, `Width: ${p.horizontalWidth} mm`, `Material Setting`, `Mode: ${p.materialMode}`, `Line interval: ${p.lineInterval} mm`, `Passes: ${p.passes}`, `Scan angle: ${p.scanAngle}`, `Bidirectional fill: ${p.bidirectionalFill ? 'On' : 'Off'}`, `Overscanning: ${p.overscanning}%`, `Air assist: ${p.airAssist ? 'On' : 'Off'}`, `Constant power mode: ${p.constantPowerMode ? 'On' : 'Off'}`, `Z offset: ${p.zOffset} mm`, `Text Setting`, `Speed: ${p.textSpeed} mm/min`, `Power: ${p.textPower}%`, `Mode: ${p.textMode}`, `Passes: ${p.textPasses}`, `Border: ${p.borderEnabled ? 'On' : 'Off'} - ${p.borderSetting}`, `Title: ${p.title}`, `Estimated output: about ${Number(p.verticalHeight) * Number(p.verticalCount) || '-'} mm x ${Number(p.horizontalWidth) * Number(p.horizontalCount) || '-'} mm`].join('\n');
+    }
+    function wizardAssistantSetupFields(draft) {
+      const profile = state.profiles.find(item => item.id === draft.materialId);
+      const materialName = profile ? profile.material : '';
+      const hazardous = /pvc|vinyl|unknown\s+plastic/.test(String(materialName).toLowerCase());
+      return `<label class="span2">${labelText('Material / Library record')}<select name="materialId">${state.profiles.map(item => `<option value="${esc(item.id)}" ${item.id === draft.materialId ? 'selected' : ''}>${esc(item.material)}</option>`).join('')}</select></label><label>${labelText('Machine')}<select name="machine"><option value="Genmitsu L8 20W" ${draft.machine === 'Genmitsu L8 20W' ? 'selected' : ''}>Genmitsu L8 20W</option><option value="Genmitsu L8 40W" ${draft.machine === 'Genmitsu L8 40W' ? 'selected' : ''}>Genmitsu L8 40W</option><option value="Unknown diode laser" ${draft.machine === 'Unknown diode laser' ? 'selected' : ''}>Manual / unknown diode</option></select></label><label>${labelText('Thickness')}<span class="unitrow"><input name="thickness" type="number" step="any" min="0" value="${esc(draft.thickness)}"><select name="thicknessUnit"><option ${draft.thicknessUnit === 'in' ? 'selected' : ''}>in</option><option ${draft.thicknessUnit === 'mm' ? 'selected' : ''}>mm</option></select></span></label>${field('date', 'Date', draft.date, 'date')}<div class="span2 small muted">Use your tracker machine profile as the starting point, then enter the selected values in LightBurn. Recommendations are starting points, not guaranteed production settings.</div>${profile ? materialSafetyWarningHtml(profile.material) : ''}${hazardous ? '<div class="span2 panel softbad"><b>Do not laser this material.</b><div class="small">PVC, vinyl, and unknown plastics require verified safety information and are not supported by this assistant.</div></div>' : ''}`;
+    }
+    function wizardGuidanceFields(draft) {
+      return `<label>${labelText('Material family')}<select name="materialFamily">${lightBurnFamilyOptions.map(([value, label]) => `<option value="${value}" ${value === draft.materialFamily ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label><label>${labelText('Surface / finish')}<select name="surfaceFinish">${['raw','painted','coated','sealed','unknown'].map(value => `<option ${value === draft.surfaceFinish ? 'selected' : ''}>${value}</option>`).join('')}</select></label><label>${labelText('Intended operation')}<select name="intendedOperation"><option value="engrave_vector" ${draft.intendedOperation === 'engrave_vector' ? 'selected' : ''}>Engrave vector / fill</option><option value="photo" ${draft.intendedOperation === 'photo' ? 'selected' : ''}>Engrave photograph</option><option value="cut" ${draft.intendedOperation === 'cut' ? 'selected' : ''}>Cut</option><option value="kerf" ${draft.intendedOperation === 'kerf' ? 'selected' : ''}>Kerf</option><option value="unknown" ${draft.intendedOperation === 'unknown' ? 'selected' : ''}>Unknown / exploratory</option></select></label><label>${labelText('Current knowledge')}<select name="currentKnowledge"><option value="never" ${draft.currentKnowledge === 'never' ? 'selected' : ''}>Never tested</option><option value="manufacturer" ${draft.currentKnowledge === 'manufacturer' ? 'selected' : ''}>Have a manufacturer starting setting</option><option value="prior" ${draft.currentKnowledge === 'prior' ? 'selected' : ''}>Have a prior tracker setting</option><option value="narrowing" ${draft.currentKnowledge === 'narrowing' ? 'selected' : ''}>Narrowing an existing winner</option></select></label><label>${labelText('Test size preference')}<select name="testSize"><option value="quick" ${draft.testSize === 'quick' ? 'selected' : ''}>Small / quick</option><option value="balanced" ${draft.testSize === 'balanced' ? 'selected' : ''}>Balanced</option><option value="broad" ${draft.testSize === 'broad' ? 'selected' : ''}>Broad / full-range</option></select></label><label>${labelText('Save as test type')}<select name="testFocus"><option value="material" ${draft.testFocus === 'material' ? 'selected' : ''}>Material Test</option><option value="interval" ${draft.testFocus === 'interval' ? 'selected' : ''}>Interval Test</option></select></label><label class="span2">${labelText('Optional notes')}<textarea name="notes" rows="3">${esc(draft.notes)}</textarea></label>`;
+    }
+    function wizardLightBurnSetupFields(draft) {
+      const p = draft.plan;
+      const cutWarning = p.cutBlocked ? '<div class="span2 panel softbad"><b>Cutting not recommended.</b><div class="small">Do not use a diode laser to cut slate, stone, coated metal, or ceramic. Select an engraving or exploratory operation instead.</div></div>' : '';
+      if (p.cutBlocked) return `${cutWarning}<div class="span2 actions"><button type="button" id="resetWizardRecommendations">Reset to Recommended Values</button></div>`;
+      return `${cutWarning}<div class="span2 panel"><b>LightBurn Interval Test</b><div class="small muted">Enter these values in LightBurn's Interval Test window.</div><div class="formgrid" style="margin-top:10px">${field('intervalSpeed','Speed (mm/min)',p.intervalSpeed,'number','min="0" step="any"')}${field('intervalPower','Power (%)',p.intervalPower,'number','min="0" max="100" step="any"')}${field('intervalMin','Minimum interval (mm)',p.intervalMin,'number','min="0" step="any"')}${field('intervalMax','Maximum interval (mm)',p.intervalMax,'number','min="0" step="any"')}${field('intervalSteps','Steps',p.intervalSteps,'number','min="1" step="1"')}${field('intervalSize','Size (mm)',p.intervalSize,'number','min="1" step="any"')}<label>${labelText('Fill mode')}<select name="intervalFillMode"><option value="simple_fill" ${p.intervalFillMode === 'simple_fill' ? 'selected' : ''}>Simple Fill</option><option value="dithered_image" ${p.intervalFillMode === 'dithered_image' ? 'selected' : ''}>Dithered Image</option></select></label><label class="row"><input name="intervalAirAssist" type="checkbox" ${p.intervalAirAssist ? 'checked' : ''} style="width:auto"> Air assist on</label><label class="span2">${labelText('Focus guidance')}<input name="focusGuidance" value="${esc(p.focusGuidance)}"></label></div><textarea id="wizardIntervalSummary" rows="6" readonly style="margin-top:10px">${esc(wizardIntervalSummary(draft))}</textarea><div class="actions"><button type="button" id="copyIntervalSetup">Copy Interval Setup</button></div></div><div class="span2 panel"><b>LightBurn Material Test Generator</b><div class="small muted">Enter these values in LightBurn's Material Test Generator.</div><div class="formgrid" style="margin-top:10px"><div class="span2"><b class="small">Vertical / Rows</b></div>${field('verticalCount','Count',p.verticalCount,'number','min="1" step="1"')}${select('verticalParameter','Parameter',p.verticalParameter,['Speed','Power','Passes'])}${field('verticalMin','Minimum',p.verticalMin,'number','min="0" step="any"')}${field('verticalMax','Maximum',p.verticalMax,'number','min="0" step="any"')}${field('verticalHeight','Height (mm)',p.verticalHeight,'number','min="1" step="any"')}<div class="span2"><b class="small">Horizontal / Columns</b></div>${field('horizontalCount','Count',p.horizontalCount,'number','min="1" step="1"')}${select('horizontalParameter','Parameter',p.horizontalParameter,['Power','Speed','Passes'])}${field('horizontalMin','Minimum',p.horizontalMin,'number','min="0" step="any"')}${field('horizontalMax','Maximum',p.horizontalMax,'number','min="0" step="any"')}${field('horizontalWidth','Width (mm)',p.horizontalWidth,'number','min="1" step="any"')}<div class="span2"><b class="small">Material Setting</b></div>${select('materialMode','Mode',p.materialMode,['Fill','Line'])}${field('lineInterval','Line interval (mm)',p.lineInterval,'number','min="0" step="any"')}${field('passes','Passes',p.passes,'number','min="1" step="1"')}${field('scanAngle','Scan angle',p.scanAngle,'number','step="any"')}${field('overscanning','Overscanning (%)',p.overscanning,'number','min="0" step="any"')}${field('zOffset','Z offset (mm)',p.zOffset,'number','step="any"')}<label class="row"><input name="bidirectionalFill" type="checkbox" ${p.bidirectionalFill ? 'checked' : ''} style="width:auto"> Bidirectional fill</label><label class="row"><input name="airAssist" type="checkbox" ${p.airAssist ? 'checked' : ''} style="width:auto"> Air assist on</label><label class="row"><input name="constantPowerMode" type="checkbox" ${p.constantPowerMode ? 'checked' : ''} style="width:auto"> Constant power mode</label><div class="span2"><b class="small">Text Setting</b></div>${field('textSpeed','Speed (mm/min)',p.textSpeed,'number','min="0" step="any"')}${field('textPower','Power (%)',p.textPower,'number','min="0" max="100" step="any"')}${select('textMode','Mode',p.textMode,['Fill','Line'])}${field('textPasses','Passes',p.textPasses,'number','min="1" step="1"')}<label class="row"><input name="borderEnabled" type="checkbox" ${p.borderEnabled ? 'checked' : ''} style="width:auto"> Border recommendation</label><label>${labelText('Border setting')}<input name="borderSetting" value="${esc(p.borderSetting)}"></label><label class="span2">${labelText('Suggested title')}<input name="title" value="${esc(p.title)}"></label></div><div class="small muted" style="margin-top:8px">Estimated physical output: about ${esc((Number(p.verticalHeight) * Number(p.verticalCount) || '-'))} mm x ${esc((Number(p.horizontalWidth) * Number(p.horizontalCount) || '-'))} mm.</div><textarea id="wizardMaterialSummary" rows="18" readonly style="margin-top:10px">${esc(wizardMaterialSummary(draft))}</textarea><div class="actions"><button type="button" id="copyMaterialSetup">Copy Material Test Setup</button><button type="button" id="resetWizardRecommendations">Reset to Recommended Values</button></div></div>`;
     }
     function wizardSetupFields(draft) {
       return `<label class="span2">${labelText('Material')}<select name="materialId">${state.profiles.map(profile => `<option value="${esc(profile.id)}" ${profile.id === draft.materialId ? 'selected' : ''}>${esc(profile.material)}${profile.thicknessValue !== '' && profile.thicknessValue != null ? ` - ${esc(fmt(profile.thicknessValue, profile.thicknessUnit))}` : ''}</option>`).join('')}</select></label><label>${labelText('Machine profile')}<select name="machine"><option value="Genmitsu L8 20W" ${draft.machine === 'Genmitsu L8 20W' ? 'selected' : ''}>Genmitsu L8 20W</option><option value="Genmitsu L8 40W" ${draft.machine === 'Genmitsu L8 40W' ? 'selected' : ''}>Genmitsu L8 40W</option></select></label><label>${labelText('Test type')}<select name="testType">${wizardTestTypes.map(([value, label]) => `<option value="${value}" ${value === draft.testType ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>${field('date', 'Date', draft.date, 'date')}<label class="span2">${labelText('Optional notes')}<textarea name="notes" rows="4">${esc(draft.notes)}</textarea></label>`;
@@ -1895,9 +1955,9 @@
     function renderMaterialTestWizard() {
       const draft = materialTestWizard;
       if (!draft) return;
-      const titles = ['Setup', 'Test Plan', 'Results', 'Save'];
-      const body = draft.step === 1 ? wizardSetupFields(draft) : draft.step === 2 ? wizardPlanFields(draft) : draft.step === 3 ? wizardResultFields(draft) : wizardReviewHtml(draft);
-      openModal('materialTestWizardModal', `<div class="dialog"><div class="spread"><div><h2>Material Test Wizard</h2><div class="small muted">Step ${draft.step}: ${titles[draft.step - 1]}</div></div><button data-wizard-cancel>×</button></div><div class="small muted" style="margin:8px 0 14px">${titles.map((title, index) => `${index + 1 === draft.step ? '<b>' : ''}Step ${index + 1}: ${title}${index + 1 === draft.step ? '</b>' : ''}`).join(' · ')}</div><form id="materialTestWizardForm" class="formgrid">${body}<div class="span2 actions"><button type="button" data-wizard-cancel>Cancel</button>${draft.step > 1 ? '<button type="button" id="wizardBack">Back</button>' : ''}${draft.step < 4 ? '<button type="submit" class="primary">Next</button>' : '<button type="submit" class="primary">Save test</button>'}</div></form></div>`);
+      const titles = ['Setup', 'Guidance', 'LightBurn Setup', 'Results', 'Save'];
+      const body = draft.step === 1 ? wizardAssistantSetupFields(draft) : draft.step === 2 ? wizardGuidanceFields(draft) : draft.step === 3 ? wizardLightBurnSetupFields(draft) : draft.step === 4 ? wizardResultFields(draft) : wizardReviewHtml(draft);
+      openModal('materialTestWizardModal', `<div class="dialog"><div class="spread"><div><h2>Material Test Wizard</h2><div class="small muted">Step ${draft.step}: ${titles[draft.step - 1]}</div></div><button data-wizard-cancel>×</button></div><div class="small muted" style="margin:8px 0 14px">${titles.map((title, index) => `${index + 1 === draft.step ? '<b>' : ''}Step ${index + 1}: ${title}${index + 1 === draft.step ? '</b>' : ''}`).join(' · ')}</div><form id="materialTestWizardForm" class="formgrid">${body}<div class="span2 actions"><button type="button" data-wizard-cancel>Cancel</button>${draft.step > 1 ? '<button type="button" id="wizardBack">Back</button>' : ''}${draft.step < 5 ? '<button type="submit" class="primary">Next</button>' : '<button type="submit" class="primary">Save test</button>'}</div></form></div>`);
       document.querySelectorAll('#materialTestWizardModal [data-wizard-cancel]').forEach(button => button.onclick = cancelMaterialTestWizard);
       const back = document.getElementById('wizardBack');
       if (back) back.onclick = () => { captureMaterialTestWizardStep(); materialTestWizard.step -= 1; renderMaterialTestWizard(); };
@@ -1905,11 +1965,15 @@
       form.onsubmit = event => {
         event.preventDefault();
         if (!captureMaterialTestWizardStep()) return;
-        if (materialTestWizard.step < 4) { materialTestWizard.step += 1; renderMaterialTestWizard(); }
+        if (materialTestWizard.step < 5) { materialTestWizard.step += 1; renderMaterialTestWizard(); }
         else saveMaterialTestWizard();
       };
-      const copy = document.getElementById('copyWizardSetup');
-      if (copy) copy.onclick = copyMaterialTestWizardSetup;
+      const intervalCopy = document.getElementById('copyIntervalSetup');
+      if (intervalCopy) intervalCopy.onclick = () => copyMaterialTestWizardSetup('interval');
+      const materialCopy = document.getElementById('copyMaterialSetup');
+      if (materialCopy) materialCopy.onclick = () => copyMaterialTestWizardSetup('material');
+      const reset = document.getElementById('resetWizardRecommendations');
+      if (reset) reset.onclick = () => { materialTestWizard.plan = recommendedWizardPlan(materialTestWizard); materialTestWizard.planCustomized = false; renderMaterialTestWizard(); };
       const apply = document.getElementById('wizardApplyWinner');
       if (apply) apply.onchange = () => { captureMaterialTestWizardStep(); renderMaterialTestWizard(); };
     }
@@ -1921,14 +1985,23 @@
         const changedMaterial = materialTestWizard.materialId !== f.materialId;
         materialTestWizard.materialId = f.materialId;
         materialTestWizard.machine = f.machine;
-        materialTestWizard.testType = wizardTestTypes.some(item => item[0] === f.testType) ? f.testType : 'other';
         materialTestWizard.date = f.date || today();
-        materialTestWizard.notes = (f.notes || '').trim();
+        materialTestWizard.thickness = f.thickness === '' ? '' : num(f.thickness);
+        materialTestWizard.thicknessUnit = f.thicknessUnit || state.unit;
         if (!materialTestWizard.materialId) return alert('Select a material first.'), false;
-        if (changedMaterial) materialTestWizard.plan = wizardPlanDefaults(state.profiles.find(profile => profile.id === f.materialId));
+        if (changedMaterial) {
+          const profile = state.profiles.find(item => item.id === f.materialId);
+          materialTestWizard.materialFamily = wizardFamilyFromMaterial(profile && profile.material);
+          materialTestWizard.planCustomized = false;
+        }
       } else if (materialTestWizard.step === 2) {
-        Object.assign(materialTestWizard.plan, f, { airAssist: !!form.airAssist.checked });
+        Object.assign(materialTestWizard, { materialFamily: f.materialFamily, surfaceFinish: f.surfaceFinish, intendedOperation: f.intendedOperation, currentKnowledge: f.currentKnowledge, testSize: f.testSize, testFocus: f.testFocus, notes: (f.notes || '').trim() });
+        materialTestWizard.testType = wizardStoredTestType(materialTestWizard);
+        if (!materialTestWizard.planCustomized) materialTestWizard.plan = recommendedWizardPlan(materialTestWizard);
       } else if (materialTestWizard.step === 3) {
+        Object.assign(materialTestWizard.plan, f, { intervalAirAssist: !!form.intervalAirAssist?.checked, bidirectionalFill: !!form.bidirectionalFill?.checked, airAssist: !!form.airAssist?.checked, constantPowerMode: !!form.constantPowerMode?.checked, borderEnabled: !!form.borderEnabled?.checked });
+        materialTestWizard.planCustomized = true;
+      } else if (materialTestWizard.step === 4) {
         Object.assign(materialTestWizard.results, f, { airAssist: !!form.airAssist.checked, confidence: Math.max(1, Math.min(5, Math.round(num(f.confidence, 3)))), resultSummary: (f.resultSummary || '').trim() });
       } else {
         materialTestWizard.applyWinner = !!form.applyWinner.checked;
@@ -1938,20 +2011,21 @@
     function openMaterialTestWizard() {
       const profile = state.profiles[0];
       if (!profile) return alert('Add or save a Library material before starting a material test.');
-      materialTestWizard = { step: 1, materialId: profile.id, machine: wizardMachineLabel(), testType: 'engrave_matrix', date: today(), notes: '', plan: wizardPlanDefaults(profile), results: { status: 'experimental', winningSpeed: profile.speed ?? '', winningPower: profile.minPower ?? '', winningInterval: profile.lineInterval ?? '', winningPasses: profile.passes ?? '', airAssist: !!profile.airAssist, confidence: 3, resultSummary: '' }, applyWinner: false };
+      materialTestWizard = { step: 1, materialId: profile.id, machine: wizardMachineLabel(), testType: 'engrave_matrix', date: today(), thickness: profile.thicknessValue ?? '', thicknessUnit: profile.thicknessUnit || state.unit, materialFamily: wizardFamilyFromMaterial(profile.material), surfaceFinish: 'unknown', intendedOperation: 'engrave_vector', currentKnowledge: profile.speed || profile.minPower ? 'prior' : 'never', testSize: 'balanced', testFocus: 'material', notes: '', planCustomized: false, results: { status: 'experimental', winningSpeed: profile.speed ?? '', winningPower: profile.minPower ?? '', winningInterval: profile.lineInterval ?? '', winningPasses: profile.passes ?? '', airAssist: !!profile.airAssist, confidence: 3, resultSummary: '' }, applyWinner: false };
+      materialTestWizard.plan = recommendedWizardPlan(materialTestWizard);
       renderMaterialTestWizard();
     }
     function cancelMaterialTestWizard() {
       materialTestWizard = null;
       closeModal('materialTestWizardModal');
     }
-    function copyMaterialTestWizardSetup() {
+    function copyMaterialTestWizardSetup(kind) {
       captureMaterialTestWizardStep();
-      const text = wizardPlanSummary();
-      const box = document.getElementById('wizardSetupSummary');
+      const text = kind === 'interval' ? wizardIntervalSummary() : wizardMaterialSummary();
+      const box = document.getElementById(kind === 'interval' ? 'wizardIntervalSummary' : 'wizardMaterialSummary');
       if (box) box.value = text;
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(() => flashButton(document.getElementById('copyWizardSetup'), 'Copied')).catch(() => { if (box) { box.focus(); box.select(); } });
+        navigator.clipboard.writeText(text).then(() => flashButton(document.getElementById(kind === 'interval' ? 'copyIntervalSetup' : 'copyMaterialSetup'), 'Copied')).catch(() => { if (box) { box.focus(); box.select(); } });
       } else if (box) { box.focus(); box.select(); }
     }
     function saveMaterialTestWizard() {
@@ -1959,8 +2033,8 @@
       const profile = draft && state.profiles.find(item => item.id === draft.materialId);
       if (!profile) return alert('The selected material is no longer available.');
       const r = draft.results;
-      const notes = [draft.notes, `Plan:\n${wizardPlanSummary(draft)}`, r.resultSummary ? `Result: ${r.resultSummary}` : ''].filter(Boolean).join('\n\n');
-      const test = { id: uid(), date: draft.date || today(), machine: draft.machine, testType: draft.testType, status: materialTestStatuses.includes(r.status) ? r.status : 'experimental', notes, winningSpeed: r.winningSpeed === '' ? '' : num(r.winningSpeed), winningPower: r.winningPower === '' ? '' : num(r.winningPower), winningInterval: r.winningInterval === '' ? '' : num(r.winningInterval), winningPasses: r.winningPasses === '' ? '' : Math.max(1, Math.round(num(r.winningPasses, 1))), airAssist: !!r.airAssist, confidence: Math.max(1, Math.min(5, Math.round(num(r.confidence, 3)))), attachments: [] };
+      const notes = [draft.notes, `Interval setup:\n${wizardIntervalSummary(draft)}`, `Material test setup:\n${wizardMaterialSummary(draft)}`, r.resultSummary ? `Result: ${r.resultSummary}` : ''].filter(Boolean).join('\n\n');
+      const test = { id: uid(), date: draft.date || today(), machine: draft.machine, testType: wizardStoredTestType(draft), status: materialTestStatuses.includes(r.status) ? r.status : 'experimental', notes, winningSpeed: r.winningSpeed === '' ? '' : num(r.winningSpeed), winningPower: r.winningPower === '' ? '' : num(r.winningPower), winningInterval: r.winningInterval === '' ? '' : num(r.winningInterval), winningPasses: r.winningPasses === '' ? '' : Math.max(1, Math.round(num(r.winningPasses, 1))), airAssist: !!r.airAssist, confidence: Math.max(1, Math.min(5, Math.round(num(r.confidence, 3)))), attachments: [] };
       const previousTests = profile.tests;
       const previousSettings = {};
       profile.tests = [...(Array.isArray(profile.tests) ? profile.tests : []), test];
