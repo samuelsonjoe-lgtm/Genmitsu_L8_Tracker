@@ -213,6 +213,7 @@
   <div class="modal" id="gridModal"></div>
   <div class="modal" id="cellModal"></div>
   <div class="modal" id="testModal"></div>
+  <div class="modal" id="materialTestWizardModal"></div>
   <div class="toast" id="undoToast"></div>
 
   <script>
@@ -316,6 +317,7 @@
     let editingEntryId = null;
     let editingProfileId = null;
     let profileDraftTests = [];
+    let materialTestWizard = null;
     let editingProjectId = null;
     let projectPhotosDraft = [];
     let projectMaterialLinesDraft = [];
@@ -773,7 +775,7 @@
         ${filtered.length ? `<div class="grid cards">${filtered.map(entryCard).join('')}</div>` : empty('No entries yet', 'Log your first cut or engrave to start building a repeatable settings history.')}
       `;
     }
-    function renderLibrary() {
+    function libraryViewData() {
       const materials = libraryMaterialNames();
       const tags = libraryTags();
       const q = state.librarySearch.toLowerCase();
@@ -785,10 +787,32 @@
         const hay = [p.material, p.notes, p.software, p.jobType, p.thicknessValue, p.thicknessUnit, ...tags].join(' ').toLowerCase();
         return materialOk && tagOk && (!q || hay.includes(q));
       }), state.librarySort);
+      return { materials, tags, matches, filtered };
+    }
+    function libraryResultsHtml(filtered) {
+      return state.profiles.length ? (filtered.length ? `<div class="grid cards">${filtered.map(profileCard).join('')}</div>` : empty('No library matches', 'Adjust the search or material filter.')) : empty('Library is empty', 'Save tuned settings here as your go-to reference.');
+    }
+    function bindLibraryResultActions(root) {
+      root.querySelectorAll('[data-edit-profile]').forEach(button => button.onclick = () => openProfile(state.profiles.find(profile => profile.id === button.dataset.editProfile)));
+      root.querySelectorAll('[data-duplicate-profile]').forEach(button => button.onclick = () => duplicateProfile(button.dataset.duplicateProfile));
+      root.querySelectorAll('[data-delete-profile]').forEach(button => button.onclick = () => del('profiles', button.dataset.deleteProfile, 'Remove this material from your library?', 'Library profile'));
+      root.querySelectorAll('[data-project-profile]').forEach(button => button.onclick = () => projectFromProfile(button.dataset.projectProfile));
+    }
+    function refreshLibrarySearchResults() {
+      const count = document.getElementById('libraryShownCount');
+      const results = document.getElementById('libraryResults');
+      if (!count || !results) return render();
+      const { filtered } = libraryViewData();
+      count.textContent = `${filtered.length}/${state.profiles.length} shown`;
+      results.innerHTML = libraryResultsHtml(filtered);
+      bindLibraryResultActions(results);
+    }
+    function renderLibrary() {
+      const { materials, tags, matches, filtered } = libraryViewData();
       return `
         <div class="toolbar" style="margin-bottom:14px">
           <div class="muted">Curated best-known settings per material. Promote from a log entry, grid cell, or reference row.</div>
-          <div class="row"><button id="printLibrary">Print Library</button><button class="primary" id="newProfile">Add Material</button></div>
+          <div class="row"><button id="printLibrary">Print Library</button><button id="openMaterialTestWizard">Material Test Wizard</button><button class="primary" id="newProfile">Add Material</button></div>
         </div>
         <div class="toolbar" style="margin-bottom:14px">
           <div class="row" style="flex:1">
@@ -807,7 +831,7 @@
               <option value="speed-asc" ${state.librarySort === 'speed-asc' ? 'selected' : ''}>Speed low-high</option>
             </select>
           </div>
-          <div class="row"><span class="pill">${filtered.length}/${state.profiles.length} shown</span>${state.libraryTagFilter !== 'all' ? '<button id="clearLibraryTag" type="button">Clear tag</button>' : ''}</div>
+          <div class="row"><span class="pill" id="libraryShownCount">${filtered.length}/${state.profiles.length} shown</span>${state.libraryTagFilter !== 'all' ? '<button id="clearLibraryTag" type="button">Clear tag</button>' : ''}</div>
         </div>
         <div class="panel" style="margin-bottom:14px">
           <div class="toolbar">
@@ -822,7 +846,7 @@
           </div>
           ${matches.length ? `<div class="grid cards" style="margin-top:12px">${matches.map(matchCard).join('')}</div>` : `<div class="small muted" style="margin-top:10px">Enter a material and optional thickness to surface nearby Library profiles.</div>`}
         </div>
-        ${state.profiles.length ? (filtered.length ? `<div class="grid cards">${filtered.map(profileCard).join('')}</div>` : empty('No library matches', 'Adjust the search or material filter.')) : empty('Library is empty', 'Save tuned settings here as your go-to reference.')}
+        <div id="libraryResults">${libraryResultsHtml(filtered)}</div>
       `;
     }
     function renderGrids() {
@@ -1773,6 +1797,190 @@
         refreshMaterialTestsEditor();
       };
     }
+    const wizardTestTypes = [
+      ['engrave_matrix', 'Engrave Speed/Power Matrix'], ['interval', 'Interval Test'], ['cut', 'Cut Test'], ['kerf', 'Kerf Test'], ['other', 'Other / Manual']
+    ];
+    function wizardMachineLabel() { return state.machineProfile === '40W' ? 'Genmitsu L8 40W' : 'Genmitsu L8 20W'; }
+    function wizardNumber(value, fallback = '') { return value === '' || value == null || !Number.isFinite(Number(value)) ? fallback : Number(value); }
+    function wizardTestTypeLabel(type) { return (wizardTestTypes.find(item => item[0] === type) || wizardTestTypes[4])[1]; }
+    function wizardPlanDefaults(profile) {
+      const speed = wizardNumber(profile && profile.speed, 12000);
+      const power = wizardNumber(profile && profile.minPower, 60);
+      const interval = wizardNumber(profile && profile.lineInterval, 0.10);
+      const passes = Math.max(1, Math.round(wizardNumber(profile && profile.passes, 1)));
+      return {
+        speedMin: Math.max(0, Math.round(speed * 0.8)), speedMax: Math.max(0, Math.round(speed * 1.2)), speedRows: 5,
+        powerMin: Math.max(0, Math.round(power * 0.5)), powerMax: 100, powerColumns: 5,
+        lineInterval: interval, passes, airAssist: !!(profile && profile.airAssist),
+        intervalSpeed: speed, intervalPower: power, intervalMin: 0.08, intervalMax: 0.16, intervalSteps: 9,
+        cutSpeedMin: Math.max(0, Math.round(speed * 0.8)), cutSpeedMax: Math.max(0, Math.round(speed * 1.2)), cutSpeedSteps: 5,
+        cutPowerMin: Math.max(0, Math.round(power * 0.5)), cutPowerMax: 100, cutPowerSteps: 5,
+        thickness: profile && profile.thicknessValue !== '' ? profile.thicknessValue : '', thicknessUnit: profile && profile.thicknessUnit ? profile.thicknessUnit : state.unit,
+        kerfSpeed: speed, kerfPower: power, kerfPasses: passes, kerfSlots: 5, kerfSampleSize: '', plannedSettings: ''
+      };
+    }
+    function wizardSeries(min, max, count) {
+      const start = Number(min), end = Number(max), total = Math.max(1, Math.round(Number(count) || 1));
+      if (!Number.isFinite(start) || !Number.isFinite(end)) return { increment: null, values: [] };
+      const increment = total > 1 ? (end - start) / (total - 1) : 0;
+      return { increment, values: Array.from({ length: total }, (_, i) => Math.round((start + increment * i) * 1000) / 1000) };
+    }
+    function wizardFormatSeries(series, suffix = '') { return series.values.length ? series.values.map(value => `${value}${suffix}`).join(', ') : 'Enter valid values'; }
+    function wizardPlanSummary(draft = materialTestWizard) {
+      if (!draft) return '';
+      const profile = state.profiles.find(item => item.id === draft.materialId);
+      const p = draft.plan;
+      const lines = [`Material: ${profile ? profile.material : 'Not selected'}`, `Machine: ${draft.machine}`, `Test: ${wizardTestTypeLabel(draft.testType)}`, `Date: ${draft.date || '-'}`];
+      if (draft.testType === 'engrave_matrix') {
+        const speeds = wizardSeries(p.speedMin, p.speedMax, p.speedRows);
+        const powers = wizardSeries(p.powerMin, p.powerMax, p.powerColumns);
+        lines.push(`Speed: ${wizardFormatSeries(speeds, ' mm/min')} (increment ${speeds.increment == null ? '-' : speeds.increment} mm/min)`, `Power: ${wizardFormatSeries(powers, '%')} (increment ${powers.increment == null ? '-' : powers.increment}%)`, `Line interval: ${p.lineInterval || '-'} mm`, `Passes: ${p.passes || '-'}`, `Air assist: ${p.airAssist ? 'On' : 'Off'}`);
+      } else if (draft.testType === 'interval') {
+        const intervals = wizardSeries(p.intervalMin, p.intervalMax, p.intervalSteps);
+        lines.push(`Speed: ${p.intervalSpeed || '-'} mm/min`, `Power: ${p.intervalPower || '-'}%`, `Intervals: ${wizardFormatSeries(intervals, ' mm')} (increment ${intervals.increment == null ? '-' : intervals.increment} mm)`, `Passes: ${p.passes || '-'}`, `Air assist: ${p.airAssist ? 'On' : 'Off'}`);
+      } else if (draft.testType === 'cut') {
+        const speeds = wizardSeries(p.cutSpeedMin, p.cutSpeedMax, p.cutSpeedSteps);
+        const powers = wizardSeries(p.cutPowerMin, p.cutPowerMax, p.cutPowerSteps);
+        lines.push(`Speed: ${wizardFormatSeries(speeds, ' mm/min')} (increment ${speeds.increment == null ? '-' : speeds.increment} mm/min)`, `Power: ${wizardFormatSeries(powers, '%')} (increment ${powers.increment == null ? '-' : powers.increment}%)`, `Passes: ${p.passes || '-'}`, `Air assist: ${p.airAssist ? 'On' : 'Off'}`, `Thickness confirmation: ${p.thickness === '' ? '-' : `${p.thickness}${p.thicknessUnit || ''}`}`);
+      } else if (draft.testType === 'kerf') {
+        lines.push(`Speed: ${p.kerfSpeed || '-'} mm/min`, `Power: ${p.kerfPower || '-'}%`, `Passes: ${p.kerfPasses || '-'}`, `Test slots: ${p.kerfSlots || '-'}`, `Nominal sample size: ${p.kerfSampleSize || '-'}`, `Air assist: ${p.airAssist ? 'On' : 'Off'}`);
+      } else {
+        lines.push(`Planned settings: ${p.plannedSettings || '-'}`, `Notes: ${draft.notes || '-'}`);
+      }
+      return lines.join('\n');
+    }
+    function wizardSetupFields(draft) {
+      return `<label class="span2">${labelText('Material')}<select name="materialId">${state.profiles.map(profile => `<option value="${esc(profile.id)}" ${profile.id === draft.materialId ? 'selected' : ''}>${esc(profile.material)}${profile.thicknessValue !== '' && profile.thicknessValue != null ? ` - ${esc(fmt(profile.thicknessValue, profile.thicknessUnit))}` : ''}</option>`).join('')}</select></label><label>${labelText('Machine profile')}<select name="machine"><option value="Genmitsu L8 20W" ${draft.machine === 'Genmitsu L8 20W' ? 'selected' : ''}>Genmitsu L8 20W</option><option value="Genmitsu L8 40W" ${draft.machine === 'Genmitsu L8 40W' ? 'selected' : ''}>Genmitsu L8 40W</option></select></label><label>${labelText('Test type')}<select name="testType">${wizardTestTypes.map(([value, label]) => `<option value="${value}" ${value === draft.testType ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>${field('date', 'Date', draft.date, 'date')}<label class="span2">${labelText('Optional notes')}<textarea name="notes" rows="4">${esc(draft.notes)}</textarea></label>`;
+    }
+    function wizardPlanFields(draft) {
+      const p = draft.plan;
+      let fields = '';
+      if (draft.testType === 'engrave_matrix') {
+        const speeds = wizardSeries(p.speedMin, p.speedMax, p.speedRows), powers = wizardSeries(p.powerMin, p.powerMax, p.powerColumns);
+        fields = `${field('speedMin', 'Speed minimum (mm/min)', p.speedMin, 'number', 'min="0" step="any"')}${field('speedMax', 'Speed maximum (mm/min)', p.speedMax, 'number', 'min="0" step="any"')}${field('speedRows', 'Speed row count', p.speedRows, 'number', 'min="1" step="1"')}${field('powerMin', 'Power minimum (%)', p.powerMin, 'number', 'min="0" max="100" step="any"')}${field('powerMax', 'Power maximum (%)', p.powerMax, 'number', 'min="0" max="100" step="any"')}${field('powerColumns', 'Power column count', p.powerColumns, 'number', 'min="1" step="1"')}${field('lineInterval', 'Line interval (mm)', p.lineInterval, 'number', 'min="0" step="any"')}${field('passes', 'Passes', p.passes, 'number', 'min="1" step="1"')}<label class="row"><input name="airAssist" type="checkbox" ${p.airAssist ? 'checked' : ''} style="width:auto"> Air assist on</label><div class="span2 panel"><b>Calculated plan</b><div class="small muted">Speed increment: ${speeds.increment == null ? '-' : esc(speeds.increment)} mm/min. Power increment: ${powers.increment == null ? '-' : esc(powers.increment)}%.</div></div>`;
+      } else if (draft.testType === 'interval') {
+        const intervals = wizardSeries(p.intervalMin, p.intervalMax, p.intervalSteps);
+        fields = `${field('intervalSpeed', 'Speed (mm/min)', p.intervalSpeed, 'number', 'min="0" step="any"')}${field('intervalPower', 'Power (%)', p.intervalPower, 'number', 'min="0" max="100" step="any"')}${field('intervalMin', 'Minimum interval (mm)', p.intervalMin, 'number', 'min="0" step="any"')}${field('intervalMax', 'Maximum interval (mm)', p.intervalMax, 'number', 'min="0" step="any"')}${field('intervalSteps', 'Number of steps', p.intervalSteps, 'number', 'min="1" step="1"')}${field('passes', 'Passes', p.passes, 'number', 'min="1" step="1"')}<label class="row"><input name="airAssist" type="checkbox" ${p.airAssist ? 'checked' : ''} style="width:auto"> Air assist on</label><div class="span2 panel"><b>Calculated intervals</b><div class="small muted">${esc(wizardFormatSeries(intervals, ' mm'))}</div></div>`;
+      } else if (draft.testType === 'cut') {
+        const speeds = wizardSeries(p.cutSpeedMin, p.cutSpeedMax, p.cutSpeedSteps), powers = wizardSeries(p.cutPowerMin, p.cutPowerMax, p.cutPowerSteps);
+        fields = `${field('cutSpeedMin', 'Speed minimum (mm/min)', p.cutSpeedMin, 'number', 'min="0" step="any"')}${field('cutSpeedMax', 'Speed maximum (mm/min)', p.cutSpeedMax, 'number', 'min="0" step="any"')}${field('cutSpeedSteps', 'Speed steps', p.cutSpeedSteps, 'number', 'min="1" step="1"')}${field('cutPowerMin', 'Power minimum (%)', p.cutPowerMin, 'number', 'min="0" max="100" step="any"')}${field('cutPowerMax', 'Power maximum (%)', p.cutPowerMax, 'number', 'min="0" max="100" step="any"')}${field('cutPowerSteps', 'Power steps', p.cutPowerSteps, 'number', 'min="1" step="1"')}${field('passes', 'Passes', p.passes, 'number', 'min="1" step="1"')}<label>${labelText('Thickness confirmation')}<span class="unitrow"><input name="thickness" type="number" min="0" step="any" value="${esc(p.thickness)}"><select name="thicknessUnit"><option ${p.thicknessUnit === 'in' ? 'selected' : ''}>in</option><option ${p.thicknessUnit === 'mm' ? 'selected' : ''}>mm</option></select></span></label><label class="row"><input name="airAssist" type="checkbox" ${p.airAssist ? 'checked' : ''} style="width:auto"> Air assist on</label><div class="span2 panel"><b>Calculated plan</b><div class="small muted">Speed increment: ${speeds.increment == null ? '-' : esc(speeds.increment)} mm/min. Power increment: ${powers.increment == null ? '-' : esc(powers.increment)}%.</div></div>`;
+      } else if (draft.testType === 'kerf') {
+        fields = `${field('kerfSpeed', 'Speed (mm/min)', p.kerfSpeed, 'number', 'min="0" step="any"')}${field('kerfPower', 'Power (%)', p.kerfPower, 'number', 'min="0" max="100" step="any"')}${field('kerfPasses', 'Passes', p.kerfPasses, 'number', 'min="1" step="1"')}${field('kerfSlots', 'Test slots / samples', p.kerfSlots, 'number', 'min="1" step="1"')}${field('kerfSampleSize', 'Nominal sample size', p.kerfSampleSize)}<label class="row"><input name="airAssist" type="checkbox" ${p.airAssist ? 'checked' : ''} style="width:auto"> Air assist on</label>`;
+      } else {
+        fields = `<label class="span2">${labelText('Planned settings')}<textarea name="plannedSettings" rows="6" placeholder="Describe the manual test plan.">${esc(p.plannedSettings)}</textarea></label>`;
+      }
+      return `${fields}<label class="span2">${labelText('LightBurn / test setup summary')}<textarea id="wizardSetupSummary" rows="8" readonly>${esc(wizardPlanSummary(draft))}</textarea></label><div class="span2 actions"><button type="button" id="copyWizardSetup">Copy setup summary</button></div>`;
+    }
+    function wizardResultFields(draft) {
+      const r = draft.results;
+      return `${select('status', 'Status', r.status, materialTestStatuses)}${field('winningSpeed', 'Winning speed (mm/min)', r.winningSpeed, 'number', 'min="0" step="any"')}${field('winningPower', 'Winning power (%)', r.winningPower, 'number', 'min="0" max="100" step="any"')}${field('winningInterval', 'Winning interval (mm)', r.winningInterval, 'number', 'min="0" step="any"')}${field('winningPasses', 'Winning passes', r.winningPasses, 'number', 'min="1" step="1"')}<label class="row"><input name="airAssist" type="checkbox" ${r.airAssist ? 'checked' : ''} style="width:auto"> Air assist used</label><label>${labelText('Confidence')}<select name="confidence">${[1,2,3,4,5].map(value => `<option value="${value}" ${Number(r.confidence) === value ? 'selected' : ''}>${value}</option>`).join('')}</select></label><label class="span2">${labelText('Result summary / why this won')}<textarea name="resultSummary" rows="5">${esc(r.resultSummary)}</textarea></label>`;
+    }
+    function wizardWinningChanges(draft) {
+      const profile = state.profiles.find(item => item.id === draft.materialId);
+      const r = draft.results, changes = [];
+      if (!profile) return changes;
+      if (r.winningSpeed !== '' && Number(profile.speed) !== num(r.winningSpeed)) changes.push(['speed', `${r.winningSpeed} mm/min`]);
+      if (r.winningPower !== '' && Number(profile.minPower) !== num(r.winningPower)) changes.push(['minPower', `${r.winningPower}%`]);
+      if (r.winningPower !== '' && Number(profile.maxPower) !== num(r.winningPower)) changes.push(['maxPower', `${r.winningPower}%`]);
+      if (r.winningInterval !== '' && Number(profile.lineInterval) !== num(r.winningInterval)) changes.push(['lineInterval', `${r.winningInterval} mm`]);
+      if (r.winningPasses !== '' && Number(profile.passes) !== Math.max(1, Math.round(num(r.winningPasses, 1)))) changes.push(['passes', r.winningPasses]);
+      if (!!profile.airAssist !== !!r.airAssist) changes.push(['airAssist', r.airAssist ? 'On' : 'Off']);
+      return changes;
+    }
+    function wizardReviewHtml(draft) {
+      const profile = state.profiles.find(item => item.id === draft.materialId);
+      const changes = wizardWinningChanges(draft);
+      return `<div class="panel span2"><b>Ready to save</b><div class="small muted" style="margin-top:6px">A new ${esc(wizardTestTypeLabel(draft.testType))} record will be added to ${esc(profile ? profile.material : 'the selected material')}. Existing tests and settings stay unchanged unless you select the option below.</div></div><div class="span2 panel"><b>Result</b><div class="small" style="white-space:pre-line">${esc(wizardPlanSummary(draft))}\n\nWinning speed: ${esc(draft.results.winningSpeed || '-')} mm/min\nWinning power: ${esc(draft.results.winningPower || '-')}%\nWinning interval: ${esc(draft.results.winningInterval || '-')} mm\nWinning passes: ${esc(draft.results.winningPasses || '-')}\nStatus: ${esc(draft.results.status)}\nConfidence: ${esc(draft.results.confidence)}/5</div></div><label class="span2 row"><input id="wizardApplyWinner" name="applyWinner" type="checkbox" ${draft.applyWinner ? 'checked' : ''} style="width:auto"> Apply winning settings to this material</label>${draft.applyWinner ? `<div class="span2 panel"><b>Existing material fields that will change</b><div class="small">${changes.map(([fieldName, value]) => `${esc(fieldName)} → ${esc(value)}`).join('<br>')}</div></div>` : ''}`;
+    }
+    function renderMaterialTestWizard() {
+      const draft = materialTestWizard;
+      if (!draft) return;
+      const titles = ['Setup', 'Test Plan', 'Results', 'Save'];
+      const body = draft.step === 1 ? wizardSetupFields(draft) : draft.step === 2 ? wizardPlanFields(draft) : draft.step === 3 ? wizardResultFields(draft) : wizardReviewHtml(draft);
+      openModal('materialTestWizardModal', `<div class="dialog"><div class="spread"><div><h2>Material Test Wizard</h2><div class="small muted">Step ${draft.step}: ${titles[draft.step - 1]}</div></div><button data-wizard-cancel>×</button></div><div class="small muted" style="margin:8px 0 14px">${titles.map((title, index) => `${index + 1 === draft.step ? '<b>' : ''}Step ${index + 1}: ${title}${index + 1 === draft.step ? '</b>' : ''}`).join(' · ')}</div><form id="materialTestWizardForm" class="formgrid">${body}<div class="span2 actions"><button type="button" data-wizard-cancel>Cancel</button>${draft.step > 1 ? '<button type="button" id="wizardBack">Back</button>' : ''}${draft.step < 4 ? '<button type="submit" class="primary">Next</button>' : '<button type="submit" class="primary">Save test</button>'}</div></form></div>`);
+      document.querySelectorAll('#materialTestWizardModal [data-wizard-cancel]').forEach(button => button.onclick = cancelMaterialTestWizard);
+      const back = document.getElementById('wizardBack');
+      if (back) back.onclick = () => { captureMaterialTestWizardStep(); materialTestWizard.step -= 1; renderMaterialTestWizard(); };
+      const form = document.getElementById('materialTestWizardForm');
+      form.onsubmit = event => {
+        event.preventDefault();
+        if (!captureMaterialTestWizardStep()) return;
+        if (materialTestWizard.step < 4) { materialTestWizard.step += 1; renderMaterialTestWizard(); }
+        else saveMaterialTestWizard();
+      };
+      const copy = document.getElementById('copyWizardSetup');
+      if (copy) copy.onclick = copyMaterialTestWizardSetup;
+      const apply = document.getElementById('wizardApplyWinner');
+      if (apply) apply.onchange = () => { captureMaterialTestWizardStep(); renderMaterialTestWizard(); };
+    }
+    function captureMaterialTestWizardStep() {
+      const form = document.getElementById('materialTestWizardForm');
+      if (!form || !materialTestWizard) return false;
+      const f = readForm(form);
+      if (materialTestWizard.step === 1) {
+        const changedMaterial = materialTestWizard.materialId !== f.materialId;
+        materialTestWizard.materialId = f.materialId;
+        materialTestWizard.machine = f.machine;
+        materialTestWizard.testType = wizardTestTypes.some(item => item[0] === f.testType) ? f.testType : 'other';
+        materialTestWizard.date = f.date || today();
+        materialTestWizard.notes = (f.notes || '').trim();
+        if (!materialTestWizard.materialId) return alert('Select a material first.'), false;
+        if (changedMaterial) materialTestWizard.plan = wizardPlanDefaults(state.profiles.find(profile => profile.id === f.materialId));
+      } else if (materialTestWizard.step === 2) {
+        Object.assign(materialTestWizard.plan, f, { airAssist: !!form.airAssist.checked });
+      } else if (materialTestWizard.step === 3) {
+        Object.assign(materialTestWizard.results, f, { airAssist: !!form.airAssist.checked, confidence: Math.max(1, Math.min(5, Math.round(num(f.confidence, 3)))), resultSummary: (f.resultSummary || '').trim() });
+      } else {
+        materialTestWizard.applyWinner = !!form.applyWinner.checked;
+      }
+      return true;
+    }
+    function openMaterialTestWizard() {
+      const profile = state.profiles[0];
+      if (!profile) return alert('Add or save a Library material before starting a material test.');
+      materialTestWizard = { step: 1, materialId: profile.id, machine: wizardMachineLabel(), testType: 'engrave_matrix', date: today(), notes: '', plan: wizardPlanDefaults(profile), results: { status: 'experimental', winningSpeed: profile.speed ?? '', winningPower: profile.minPower ?? '', winningInterval: profile.lineInterval ?? '', winningPasses: profile.passes ?? '', airAssist: !!profile.airAssist, confidence: 3, resultSummary: '' }, applyWinner: false };
+      renderMaterialTestWizard();
+    }
+    function cancelMaterialTestWizard() {
+      materialTestWizard = null;
+      closeModal('materialTestWizardModal');
+    }
+    function copyMaterialTestWizardSetup() {
+      captureMaterialTestWizardStep();
+      const text = wizardPlanSummary();
+      const box = document.getElementById('wizardSetupSummary');
+      if (box) box.value = text;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => flashButton(document.getElementById('copyWizardSetup'), 'Copied')).catch(() => { if (box) { box.focus(); box.select(); } });
+      } else if (box) { box.focus(); box.select(); }
+    }
+    function saveMaterialTestWizard() {
+      const draft = materialTestWizard;
+      const profile = draft && state.profiles.find(item => item.id === draft.materialId);
+      if (!profile) return alert('The selected material is no longer available.');
+      const r = draft.results;
+      const notes = [draft.notes, `Plan:\n${wizardPlanSummary(draft)}`, r.resultSummary ? `Result: ${r.resultSummary}` : ''].filter(Boolean).join('\n\n');
+      const test = { id: uid(), date: draft.date || today(), machine: draft.machine, testType: draft.testType, status: materialTestStatuses.includes(r.status) ? r.status : 'experimental', notes, winningSpeed: r.winningSpeed === '' ? '' : num(r.winningSpeed), winningPower: r.winningPower === '' ? '' : num(r.winningPower), winningInterval: r.winningInterval === '' ? '' : num(r.winningInterval), winningPasses: r.winningPasses === '' ? '' : Math.max(1, Math.round(num(r.winningPasses, 1))), airAssist: !!r.airAssist, confidence: Math.max(1, Math.min(5, Math.round(num(r.confidence, 3)))), attachments: [] };
+      const previousTests = profile.tests;
+      const previousSettings = {};
+      profile.tests = [...(Array.isArray(profile.tests) ? profile.tests : []), test];
+      if (draft.applyWinner) {
+        if (r.winningSpeed !== '' && Number(profile.speed) !== num(r.winningSpeed)) { previousSettings.speed = profile.speed; profile.speed = num(r.winningSpeed); }
+        if (r.winningPower !== '' && Number(profile.minPower) !== num(r.winningPower)) { previousSettings.minPower = profile.minPower; profile.minPower = num(r.winningPower); }
+        if (r.winningPower !== '' && Number(profile.maxPower) !== num(r.winningPower)) { previousSettings.maxPower = profile.maxPower; profile.maxPower = num(r.winningPower); }
+        if (r.winningInterval !== '' && Number(profile.lineInterval) !== num(r.winningInterval)) { previousSettings.lineInterval = profile.lineInterval; profile.lineInterval = num(r.winningInterval); }
+        if (r.winningPasses !== '' && Number(profile.passes) !== Math.max(1, Math.round(num(r.winningPasses, 1)))) { previousSettings.passes = profile.passes; profile.passes = Math.max(1, Math.round(num(r.winningPasses, 1))); }
+        if (!!profile.airAssist !== !!r.airAssist) { previousSettings.airAssist = profile.airAssist; profile.airAssist = !!r.airAssist; }
+      }
+      if (!persist()) {
+        profile.tests = previousTests;
+        Object.assign(profile, previousSettings);
+        return;
+      }
+      materialTestWizard = null;
+      closeModal('materialTestWizardModal');
+      render();
+    }
     function entryCard(e) {
       return `<article class="card">
         <div class="spread"><div><b>${esc(e.material)}</b><div class="small muted">${fmt(e.thicknessValue, e.thicknessUnit)} - ${esc(e.jobType)} - ${esc(e.date)}</div></div>${stars(e.rating)}</div>
@@ -2060,7 +2268,7 @@
       const entrySort = document.getElementById('entrySort');
       if (entrySort) entrySort.onchange = e => { state.entrySort = e.target.value; persist(); render(); };
       const librarySearch = document.getElementById('librarySearch');
-      if (librarySearch) librarySearch.oninput = e => { state.librarySearch = e.target.value; render(); };
+      if (librarySearch) librarySearch.oninput = e => { state.librarySearch = e.target.value; refreshLibrarySearchResults(); };
       const libraryFilter = document.getElementById('libraryFilter');
       if (libraryFilter) libraryFilter.onchange = e => { state.libraryFilter = e.target.value; render(); };
       const libraryTagFilter = document.getElementById('libraryTagFilter');
@@ -2155,6 +2363,8 @@
       if (newEntry) newEntry.onclick = () => openEntry();
       const newProfile = document.getElementById('newProfile');
       if (newProfile) newProfile.onclick = () => openProfile();
+      const openMaterialTestWizardBtn = document.getElementById('openMaterialTestWizard');
+      if (openMaterialTestWizardBtn) openMaterialTestWizardBtn.onclick = openMaterialTestWizard;
       const printLibrary = document.getElementById('printLibrary');
       if (printLibrary) printLibrary.onclick = () => window.print();
       const newProject = document.getElementById('newProject');
