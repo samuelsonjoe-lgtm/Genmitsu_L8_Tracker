@@ -797,6 +797,7 @@
       root.querySelectorAll('[data-duplicate-profile]').forEach(button => button.onclick = () => duplicateProfile(button.dataset.duplicateProfile));
       root.querySelectorAll('[data-delete-profile]').forEach(button => button.onclick = () => del('profiles', button.dataset.deleteProfile, 'Remove this material from your library?', 'Library profile'));
       root.querySelectorAll('[data-project-profile]').forEach(button => button.onclick = () => projectFromProfile(button.dataset.projectProfile));
+      root.querySelectorAll('[data-wizard-profile]').forEach(button => button.onclick = () => openMaterialTestWizard(button.dataset.wizardProfile));
     }
     function refreshLibrarySearchResults() {
       const count = document.getElementById('libraryShownCount');
@@ -1813,6 +1814,20 @@
       other: { label: 'Other', speed: 12000, power: 40, intervalMin: 0.10, intervalMax: 0.18, matrixSpeedMin: 6000, matrixSpeedMax: 20000, matrixPowerMin: 15, matrixPowerMax: 80, lineInterval: 0.12, airAssist: false }
     };
     const lightBurnFamilyOptions = Object.entries(lightBurnMaterialFamilies).map(([value, item]) => [value, item.label]);
+    const lightBurnMaterialStarters = [
+      { aliases: ['baltic birch', 'birch plywood'], family: 'wood', speed: 18000, power: 55, interval: 0.10, speedMin: 8000, speedMax: 24000, powerMin: 20, powerMax: 100, cellSize: 10, airAssist: false, focus: 'Focus on the material surface; confirm flatness across the sheet.' },
+      { aliases: ['basswood plywood', 'basswood'], family: 'wood', speed: 15000, power: 60, interval: 0.10, speedMin: 8000, speedMax: 22000, powerMin: 20, powerMax: 100, cellSize: 10, airAssist: false },
+      { aliases: ['walnut plywood', 'walnut'], family: 'wood', speed: 16000, power: 55, interval: 0.10, speedMin: 8000, speedMax: 24000, powerMin: 20, powerMax: 100, cellSize: 10, airAssist: false },
+      { aliases: ['maple plywood', 'maple'], family: 'wood', speed: 16000, power: 55, interval: 0.10, speedMin: 8000, speedMax: 24000, powerMin: 20, powerMax: 100, cellSize: 10, airAssist: false },
+      { aliases: ['mdf'], family: 'wood', speed: 12000, power: 45, interval: 0.12, speedMin: 7000, speedMax: 20000, powerMin: 15, powerMax: 80, cellSize: 9, airAssist: false },
+      { aliases: ['cork'], family: 'cork', speed: 12000, power: 35, interval: 0.12, speedMin: 7000, speedMax: 18000, powerMin: 15, powerMax: 70, cellSize: 8, airAssist: false },
+      { aliases: ['natural slate', 'slate'], family: 'slate', speed: 20000, power: 60, interval: 0.10, speedMin: 10000, speedMax: 30000, powerMin: 20, powerMax: 100, cellSize: 10, airAssist: false }
+    ];
+    function normalizedMaterialName(value) { return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(); }
+    function materialStarterProfile(material) {
+      const name = normalizedMaterialName(material);
+      return lightBurnMaterialStarters.find(profile => profile.aliases.some(alias => name.includes(normalizedMaterialName(alias)))) || null;
+    }
     function wizardFamilyFromMaterial(material) {
       const text = String(material || '').toLowerCase();
       if (/slate|stone/.test(text)) return 'slate';
@@ -1855,22 +1870,23 @@
     function recommendedWizardPlan(draft) {
       const profile = state.profiles.find(item => item.id === draft.materialId);
       const family = lightBurnMaterialFamilies[draft.materialFamily] || lightBurnMaterialFamilies.other;
+      const starter = materialStarterProfile(profile?.material);
       const size = draft.testSize === 'quick' ? { steps: 5, slots: 5, size: 7 } : draft.testSize === 'broad' ? { steps: 9, slots: 9, size: 12 } : { steps: 7, slots: 7, size: 10 };
       const machinePowerScale = draft.machine === 'Genmitsu L8 40W' ? 0.75 : 1;
       const priorKnown = draft.currentKnowledge === 'prior' || draft.currentKnowledge === 'narrowing';
-      const priorSpeed = wizardNumber(profile && profile.speed, family.speed);
-      const priorPower = wizardNumber(profile && profile.minPower, family.power) * machinePowerScale;
-      const priorInterval = wizardNumber(profile && profile.lineInterval, family.lineInterval);
-      const speedCenter = priorKnown ? priorSpeed : family.speed;
-      const powerCenter = priorKnown ? priorPower : family.power * machinePowerScale;
+      const priorSpeed = hasUsableNumber(profile?.speed) ? Number(profile.speed) : starter?.speed || family.speed;
+      const priorPower = (hasUsableNumber(profile?.maxPower) ? Number(profile.maxPower) : hasUsableNumber(profile?.minPower) ? Number(profile.minPower) : starter?.power || family.power) * machinePowerScale;
+      const priorInterval = hasUsableNumber(profile?.lineInterval) ? Number(profile.lineInterval) : starter?.interval || family.lineInterval;
+      const speedCenter = priorKnown ? priorSpeed : starter?.speed || family.speed;
+      const powerCenter = priorKnown ? priorPower : (starter?.power || family.power) * machinePowerScale;
       const range = draft.currentKnowledge === 'narrowing' ? 0.15 : priorKnown ? 0.25 : 0.5;
       const operation = draft.intendedOperation;
       const airAssist = operation === 'cut' ? true : family.airAssist;
       return {
-        intervalSpeed: Math.round(speedCenter), intervalPower: Math.max(1, Math.min(100, Math.round(powerCenter))), intervalMin: family.intervalMin, intervalMax: family.intervalMax, intervalSteps: size.steps, intervalSize: size.size, intervalFillMode: operation === 'photo' ? 'dithered_image' : 'simple_fill', intervalAirAssist: airAssist, focusGuidance: operation === 'cut' ? 'Focus on the material surface, then verify focus before every pass.' : 'Focus on the material surface; keep the material flat and repeatable.',
-        verticalCount: size.steps, verticalParameter: 'Speed', verticalMin: priorKnown ? Math.max(0, Math.round(speedCenter * (1 - range))) : family.matrixSpeedMin, verticalMax: priorKnown ? Math.max(0, Math.round(speedCenter * (1 + range))) : family.matrixSpeedMax, verticalHeight: size.size,
-        horizontalCount: size.steps, horizontalParameter: operation === 'kerf' ? 'Passes' : 'Power', horizontalMin: operation === 'kerf' ? 1 : priorKnown ? Math.max(1, Math.round(powerCenter * (1 - range))) : family.matrixPowerMin, horizontalMax: operation === 'kerf' ? Math.max(2, Math.round(size.steps / 2)) : priorKnown ? Math.min(100, Math.round(powerCenter * (1 + range))) : family.matrixPowerMax, horizontalWidth: size.size,
-        materialMode: 'Fill', lineInterval: priorKnown ? priorInterval : family.lineInterval, passes: operation === 'cut' ? Math.max(1, Math.round(wizardNumber(profile && profile.passes, 1))) : 1, scanAngle: 0, bidirectionalFill: true, overscanning: 2.5, airAssist, constantPowerMode: true, zOffset: 0,
+        intervalSpeed: Math.round(speedCenter), intervalPower: Math.max(1, Math.min(100, Math.round(powerCenter))), intervalMin: starter?.interval ? Math.max(.02, starter.interval - .02) : family.intervalMin, intervalMax: starter?.interval ? starter.interval + .04 : family.intervalMax, intervalSteps: size.steps, intervalSize: starter?.cellSize || size.size, intervalFillMode: operation === 'photo' ? 'dithered_image' : 'simple_fill', intervalAirAssist: airAssist, focusGuidance: operation === 'cut' ? 'Focus on the material surface, then verify focus before every pass.' : starter?.focus || 'Focus on the material surface; keep the material flat and repeatable.',
+        verticalCount: size.steps, verticalParameter: 'Speed', verticalMin: priorKnown ? Math.max(0, Math.round(speedCenter * (1 - range))) : starter?.speedMin || family.matrixSpeedMin, verticalMax: priorKnown ? Math.max(0, Math.round(speedCenter * (1 + range))) : starter?.speedMax || family.matrixSpeedMax, verticalHeight: starter?.cellSize || size.size,
+        horizontalCount: size.steps, horizontalParameter: operation === 'kerf' ? 'Passes' : 'Power', horizontalMin: operation === 'kerf' ? 1 : priorKnown ? Math.max(1, Math.round(powerCenter * (1 - range))) : starter?.powerMin || family.matrixPowerMin, horizontalMax: operation === 'kerf' ? Math.max(2, Math.round(size.steps / 2)) : priorKnown ? Math.min(100, Math.round(powerCenter * (1 + range))) : starter?.powerMax || family.matrixPowerMax, horizontalWidth: starter?.cellSize || size.size,
+        materialMode: 'Fill', lineInterval: priorKnown ? priorInterval : starter?.interval || family.lineInterval, passes: operation === 'cut' ? Math.max(1, Math.round(wizardNumber(profile && profile.passes, 1))) : 1, scanAngle: 0, bidirectionalFill: true, overscanning: 2.5, airAssist, constantPowerMode: true, zOffset: 0,
         textSpeed: Math.round(speedCenter), textPower: Math.max(1, Math.min(100, Math.round(powerCenter))), textMode: 'Fill', textPasses: 1, borderEnabled: true, borderSetting: 'Frame with low-power visible-light preview before running', title: `${family.label} ${operation === 'cut' ? 'cut' : operation === 'kerf' ? 'kerf' : 'engrave'} test`, cutBlocked: !!family.cutBlocked && operation === 'cut'
       };
     }
@@ -1880,25 +1896,82 @@
       return Array.isArray(profile?.tests) ? profile.tests.filter(test => test && typeof test === 'object') : [];
     }
     function testHasUsableWinner(test) {
-      return test && ['winningSpeed', 'winningPower', 'winningInterval', 'winningPasses'].some(key => test[key] !== '' && test[key] != null && Number.isFinite(Number(test[key])));
+      return test && ['winningSpeed', 'winningPower', 'winningInterval', 'winningPasses'].some(key => hasUsableNumber(test[key]));
     }
-    function hasUsableNumber(value) { return value !== '' && value != null && Number.isFinite(Number(value)); }
-    function resolveTestBaseline(draft) {
-      const profile = state.profiles.find(item => item.id === draft.materialId);
-      const history = getMaterialTestHistory(profile);
+    function hasUsableNumber(value) { return value !== '' && value != null && Number.isFinite(Number(value)) && Number(value) > 0; }
+    function resolveTestBaselineFromContext(draft, profile, history = []) {
+      history = Array.isArray(history) ? history.filter(test => test && typeof test === 'object') : [];
       const selected = history.find(test => test.id === draft.baselineTestId);
       const latest = [...history].filter(testHasUsableWinner).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0];
-      const fromTest = (test, source) => test ? { source, label: `${source === 'prior' ? 'Prior test' : 'Most recently saved winner'}${test.date ? ` from ${test.date}` : ''}`, speed: wizardNumber(test.winningSpeed, ''), power: wizardNumber(test.winningPower, ''), interval: wizardNumber(test.winningInterval, ''), passes: wizardNumber(test.winningPasses, ''), airAssist: !!test.airAssist, test } : null;
-      if (draft.baselineSource === 'manual') return { source: 'manual', label: 'Manually entered baseline', speed: wizardNumber(draft.manualBaselineSpeed, ''), power: wizardNumber(draft.manualBaselinePower, ''), interval: wizardNumber(draft.manualBaselineInterval, ''), passes: wizardNumber(draft.manualBaselinePasses, ''), airAssist: !!draft.manualBaselineAirAssist };
-      if (draft.baselineSource === 'auto' && draft.currentKnowledge === 'never') return { source: 'generic', label: `Generic ${lightBurnMaterialFamilies[draft.materialFamily]?.label || 'material'} starting range`, speed: '', power: '', interval: '', passes: '' };
-      if (draft.baselineSource === 'prior' && selected) return fromTest(selected, 'prior');
-      if (draft.baselineSource === 'latest' && latest) return fromTest(latest, 'latest');
-      if (draft.baselineSource === 'library' && profile && (hasUsableNumber(profile.speed) || hasUsableNumber(profile.minPower))) return { source: 'library', label: 'Library primary setting', speed: wizardNumber(profile.speed, ''), power: wizardNumber(profile.minPower, ''), interval: wizardNumber(profile.lineInterval, ''), passes: wizardNumber(profile.passes, ''), airAssist: !!profile.airAssist };
-      if (selected) return fromTest(selected, 'prior');
+      const starter = materialStarterProfile(profile?.material);
+      const family = lightBurnMaterialFamilies[draft.materialFamily] || lightBurnMaterialFamilies.other;
+      const fallback = { speed: starter?.speed || family.speed, power: starter?.power || family.power, interval: starter?.interval || family.lineInterval, passes: 1, airAssist: starter?.airAssist ?? family.airAssist };
+      const resolve = (sourceType, sourceLabel, values, test = null) => {
+        const minPower = hasUsableNumber(values.minPower) ? Number(values.minPower) : hasUsableNumber(values.power) ? Number(values.power) : '';
+        const maxPower = hasUsableNumber(values.maxPower) ? Number(values.maxPower) : hasUsableNumber(values.power) ? Number(values.power) : '';
+        const representativePower = hasUsableNumber(maxPower) ? maxPower : hasUsableNumber(minPower) ? minPower : fallback.power;
+        const fallbacks = [];
+        const speed = hasUsableNumber(values.speed) ? Number(values.speed) : (fallbacks.push(`speed fallback: ${fallback.speed} mm/min`), fallback.speed);
+        const interval = hasUsableNumber(values.interval) ? Number(values.interval) : (fallbacks.push(`interval fallback: ${fallback.interval} mm`), fallback.interval);
+        if (!hasUsableNumber(minPower) && !hasUsableNumber(maxPower)) fallbacks.push(`power fallback: ${fallback.power}%`);
+        return { sourceType, source: sourceType, sourceLabel, label: sourceLabel, materialId: profile?.id || '', materialName: profile?.material || '', thickness: profile?.thicknessValue ?? draft.thickness ?? '', machine: draft.machine, speed, minPower: hasUsableNumber(minPower) ? minPower : fallback.power, maxPower: hasUsableNumber(maxPower) ? maxPower : fallback.power, power: representativePower, representativePower, lineInterval: interval, interval, passes: hasUsableNumber(values.passes) ? Math.max(1, Math.round(Number(values.passes))) : fallback.passes, airAssist: values.airAssist == null ? fallback.airAssist : !!values.airAssist, operation: draft.intendedOperation, reliability: sourceType === 'generic' || sourceType === 'starter' ? 'starter' : 'saved', fallbacks, test };
+      };
+      const fromTest = (test, sourceType) => test ? resolve(sourceType, `${sourceType === 'prior' ? 'Prior test' : 'Most recently saved winner'}${test.date ? ` from ${test.date}` : ''}`, { speed: test.winningSpeed, power: test.winningPower, interval: test.winningInterval, passes: test.winningPasses, airAssist: test.airAssist }, test) : null;
+      const library = () => profile && (hasUsableNumber(profile.speed) || hasUsableNumber(profile.minPower) || hasUsableNumber(profile.maxPower)) ? resolve('library', 'Library primary setting', { speed: profile.speed, minPower: profile.minPower, maxPower: profile.maxPower, interval: profile.lineInterval, passes: profile.passes, airAssist: profile.airAssist }) : null;
+      const generic = () => starter ? resolve('starter', `Starter profile: ${starter.aliases[0]}`, {}) : resolve('generic', `Generic ${family.label} recommendation`, {});
+      const selectedWinner = testHasUsableWinner(selected) ? selected : null;
+      // Explicit sources are authoritative; only automatic mode may use a selected prior test opportunistically.
+      if (draft.baselineSource === 'manual') {
+        if (hasUsableNumber(draft.manualBaselineSpeed) || hasUsableNumber(draft.manualBaselinePower)) return resolve('manual', 'Manually entered baseline', { speed: draft.manualBaselineSpeed, power: draft.manualBaselinePower, interval: draft.manualBaselineInterval, passes: draft.manualBaselinePasses, airAssist: draft.manualBaselineAirAssist });
+        return latest ? fromTest(latest, 'latest') : library() || generic();
+      }
+      if (draft.baselineSource === 'prior') return selectedWinner ? fromTest(selectedWinner, 'prior') : latest ? fromTest(latest, 'latest') : library() || generic();
+      if (draft.baselineSource === 'latest') return latest ? fromTest(latest, 'latest') : library() || generic();
+      if (draft.baselineSource === 'library') return library() || (latest ? fromTest(latest, 'latest') : generic());
+      if (draft.currentKnowledge === 'never') return generic();
+      if (selectedWinner) return fromTest(selectedWinner, 'prior');
       if (latest) return fromTest(latest, 'latest');
-      if (profile && (hasUsableNumber(profile.speed) || hasUsableNumber(profile.minPower))) return { source: 'library', label: 'Library primary setting', speed: wizardNumber(profile.speed, ''), power: wizardNumber(profile.minPower, ''), interval: wizardNumber(profile.lineInterval, ''), passes: wizardNumber(profile.passes, ''), airAssist: !!profile.airAssist };
-      return { source: 'generic', label: `Generic ${lightBurnMaterialFamilies[draft.materialFamily]?.label || 'material'} starting range`, speed: '', power: '', interval: '', passes: '' };
+      if (library()) return library();
+      return generic();
     }
+    function resolveTestBaseline(draft) {
+      const profile = state.profiles.find(item => item.id === draft.materialId);
+      return resolveTestBaselineFromContext(draft, profile, getMaterialTestHistory(profile));
+    }
+    function runBaselineResolutionFixtures() {
+      const profile = { id: 'fixture-material', material: 'Baltic Birch Plywood', thicknessValue: 3, thicknessUnit: 'mm', speed: 18000, minPower: 50, maxPower: 55, lineInterval: 0.10, passes: 1, airAssist: false, tests: [] };
+      const emptyProfile = { ...profile, speed: '', minPower: '', maxPower: '', lineInterval: '' };
+      const genericProfile = { ...profile, material: 'Workshop plywood' };
+      const selected = { id: 'selected', date: '2026-07-01', winningSpeed: 12000, winningPower: 35, winningInterval: 0.12, winningPasses: 1, airAssist: false };
+      const latest = { id: 'latest', date: '2026-07-12', winningSpeed: 16000, winningPower: 45, winningInterval: 0.10, winningPasses: 1, airAssist: false };
+      const staleInvalid = { id: 'stale-invalid', date: '2026-06-01', winningSpeed: '', winningPower: '', winningInterval: '', winningPasses: '' };
+      const draft = overrides => ({ materialId: profile.id, materialFamily: 'wood', machine: 'Genmitsu L8 20W', intendedOperation: 'engrave_vector', currentKnowledge: 'prior', baselineSource: 'auto', baselineTestId: '', manualBaselineSpeed: '', manualBaselinePower: '', manualBaselineInterval: '', manualBaselinePasses: '', manualBaselineAirAssist: false, ...overrides });
+      const fixtures = [
+        ['Explicit Library with stale prior ID', draft({ baselineSource: 'library', baselineTestId: selected.id }), profile, [selected, latest], 'library'],
+        ['Explicit Latest with stale prior ID', draft({ baselineSource: 'latest', baselineTestId: selected.id }), profile, [selected, latest], 'latest'],
+        ['Explicit Manual with stale prior ID', draft({ baselineSource: 'manual', baselineTestId: selected.id, manualBaselineSpeed: 17000, manualBaselinePower: 50 }), profile, [selected, latest], 'manual'],
+        ['Explicit Prior with valid selected test', draft({ baselineSource: 'prior', baselineTestId: selected.id }), profile, [selected, latest], 'prior'],
+        ['Automatic with selected prior', draft({ baselineTestId: selected.id }), profile, [selected, latest], 'prior'],
+        ['Automatic without selected prior but with latest winner', draft(), profile, [latest], 'latest'],
+        ['Automatic without tests but with usable Library setting', draft(), profile, [], 'library'],
+        ['Automatic with currentKnowledge never', draft({ currentKnowledge: 'never' }), genericProfile, [selected, latest], 'generic'],
+        ['Explicit Library unavailable, stale selected ID, latest available', draft({ baselineSource: 'library', baselineTestId: selected.id }), emptyProfile, [selected, latest], 'latest'],
+        ['Explicit Latest unavailable, stale selected ID, Library available', draft({ baselineSource: 'latest', baselineTestId: staleInvalid.id }), profile, [staleInvalid], 'library']
+      ];
+      const results = fixtures.map(([name, fixtureDraft, fixtureProfile, history, expected]) => {
+        const actual = resolveTestBaselineFromContext(fixtureDraft, fixtureProfile, history).source;
+        return { fixture: name, expected, actual, pass: actual === expected };
+      });
+      const passed = results.filter(result => result.pass).length;
+      const failed = results.length - passed;
+      console.group('Baseline resolution fixtures');
+      console.table(results);
+      console.log(`${passed} passed`);
+      console.log(`${failed} failed`);
+      console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runBaselineResolutionFixtures = runBaselineResolutionFixtures;
     function chooseAdaptiveTestMode(draft, baseline) {
       if (draft.adaptiveMode && draft.adaptiveMode !== 'auto') return draft.adaptiveMode;
       if (/Find minimum|Find maximum/.test(draft.optimizationGoal || '')) return 'boundary';
@@ -1912,26 +1985,28 @@
       return [Math.max(minimum, round(center * lowFactor)), Math.min(maximum, round(center * highFactor))];
     }
     function recommendEngraveRange(draft, baseline, plan, mode) {
-      if (!Number.isFinite(Number(baseline.speed)) || !Number.isFinite(Number(baseline.power))) return plan;
+      if (!hasUsableNumber(baseline.speed) || !hasUsableNumber(baseline.representativePower || baseline.power)) return plan;
       const family = lightBurnMaterialFamilies[draft.materialFamily] || lightBurnMaterialFamilies.other;
+      const powerValue = Number(baseline.representativePower || baseline.power);
       let speed = adaptiveRange(Number(baseline.speed), mode === 'refine' ? .8 : .75, mode === 'refine' ? 1.2 : 1.25, family.matrixSpeedMin, family.matrixSpeedMax, 100);
-      let power = adaptiveRange(Number(baseline.power), mode === 'refine' ? .75 : .7, mode === 'refine' ? 1.25 : 1.3, family.matrixPowerMin, family.matrixPowerMax, 5);
+      let power = adaptiveRange(powerValue, mode === 'refine' ? .75 : .7, mode === 'refine' ? 1.25 : 1.3, family.matrixPowerMin, family.matrixPowerMax, 5);
       const goal = draft.optimizationGoal || 'Best overall';
-      if (goal === 'Faster production' || goal === 'Find maximum usable speed') { speed = adaptiveRange(Number(baseline.speed), goal === 'Faster production' ? 1 : .95, 1.55, family.matrixSpeedMin, family.matrixSpeedMax, 100); power = adaptiveRange(Number(baseline.power), .9, 1.35, family.matrixPowerMin, family.matrixPowerMax, 5); }
-      if (goal === 'Darker engraving') { speed = adaptiveRange(Number(baseline.speed), .7, 1.05, family.matrixSpeedMin, family.matrixSpeedMax, 100); power = adaptiveRange(Number(baseline.power), 1, 1.3, family.matrixPowerMin, family.matrixPowerMax, 5); }
-      if (goal === 'Lighter / subtle engraving' || goal === 'Lower power' || goal === 'Find minimum usable power') { speed = adaptiveRange(Number(baseline.speed), .9, 1.1, family.matrixSpeedMin, family.matrixSpeedMax, 100); power = adaptiveRange(Number(baseline.power), goal === 'Find minimum usable power' ? .4 : .55, 1.05, family.matrixPowerMin, family.matrixPowerMax, 5); }
-      return { ...plan, verticalMin: speed[0], verticalMax: speed[1], horizontalMin: power[0], horizontalMax: power[1], verticalCount: mode === 'refine' ? 5 : 7, horizontalCount: mode === 'refine' ? 5 : 7, verticalHeight: mode === 'refine' ? 8 : plan.verticalHeight, horizontalWidth: mode === 'refine' ? 8 : plan.horizontalWidth, intervalSpeed: Number(baseline.speed), intervalPower: Number(baseline.power), lineInterval: baseline.interval === '' ? plan.lineInterval : baseline.interval, passes: baseline.passes === '' ? plan.passes : baseline.passes };
+      if (goal === 'Faster production' || goal === 'Find maximum usable speed') { speed = adaptiveRange(Number(baseline.speed), goal === 'Faster production' ? 1 : .95, 1.55, family.matrixSpeedMin, family.matrixSpeedMax, 100); power = adaptiveRange(powerValue, .9, 1.35, family.matrixPowerMin, family.matrixPowerMax, 5); }
+      if (goal === 'Darker engraving') { speed = adaptiveRange(Number(baseline.speed), .7, 1.05, family.matrixSpeedMin, family.matrixSpeedMax, 100); power = adaptiveRange(powerValue, 1, 1.3, family.matrixPowerMin, family.matrixPowerMax, 5); }
+      if (goal === 'Lighter / subtle engraving' || goal === 'Lower power' || goal === 'Find minimum usable power') { speed = adaptiveRange(Number(baseline.speed), .9, 1.1, family.matrixSpeedMin, family.matrixSpeedMax, 100); power = adaptiveRange(powerValue, goal === 'Find minimum usable power' ? .4 : .55, 1.05, family.matrixPowerMin, family.matrixPowerMax, 5); }
+      return { ...plan, verticalMin: speed[0], verticalMax: speed[1], horizontalMin: power[0], horizontalMax: power[1], verticalCount: mode === 'refine' ? 5 : 7, horizontalCount: mode === 'refine' ? 5 : 7, verticalHeight: mode === 'refine' ? 8 : plan.verticalHeight, horizontalWidth: mode === 'refine' ? 8 : plan.horizontalWidth, intervalSpeed: Number(baseline.speed), intervalPower: powerValue, lineInterval: baseline.interval, passes: baseline.passes };
     }
     function recommendCutRange(draft, baseline, plan, mode) {
-      if (plan.cutBlocked || !Number.isFinite(Number(baseline.speed)) || !Number.isFinite(Number(baseline.power))) return plan;
+      if (plan.cutBlocked || !hasUsableNumber(baseline.speed) || !hasUsableNumber(baseline.representativePower || baseline.power)) return plan;
       const family = lightBurnMaterialFamilies[draft.materialFamily] || lightBurnMaterialFamilies.other;
+      const powerValue = Number(baseline.representativePower || baseline.power);
       const speed = adaptiveRange(Number(baseline.speed), mode === 'refine' ? .8 : .7, draft.optimizationGoal === 'Faster cutting' ? 1.35 : mode === 'refine' ? 1.2 : 1.25, family.matrixSpeedMin, family.matrixSpeedMax, 100);
-      const power = adaptiveRange(Number(baseline.power), draft.optimizationGoal === 'Find minimum cut-through power' ? .5 : .8, 1.2, family.matrixPowerMin, family.matrixPowerMax, 5);
-      return { ...plan, verticalMin: speed[0], verticalMax: speed[1], horizontalMin: power[0], horizontalMax: power[1], verticalCount: mode === 'refine' ? 5 : 7, horizontalCount: mode === 'refine' ? 5 : 7, horizontalParameter: draft.optimizationGoal === 'Fewer passes' ? 'Passes' : 'Power', intervalSpeed: Number(baseline.speed), intervalPower: Number(baseline.power) };
+      const power = adaptiveRange(powerValue, draft.optimizationGoal === 'Find minimum cut-through power' ? .5 : .8, 1.2, family.matrixPowerMin, family.matrixPowerMax, 5);
+      return { ...plan, verticalMin: speed[0], verticalMax: speed[1], horizontalMin: power[0], horizontalMax: power[1], verticalCount: mode === 'refine' ? 5 : 7, horizontalCount: mode === 'refine' ? 5 : 7, horizontalParameter: draft.optimizationGoal === 'Fewer passes' ? 'Passes' : 'Power', intervalSpeed: Number(baseline.speed), intervalPower: powerValue };
     }
     function recommendIntervalRange(draft, baseline, plan) {
-      if (!Number.isFinite(Number(baseline.interval))) return plan;
-      const range = draft.adaptiveMode === 'refine' ? .02 : .04;
+      if (!hasUsableNumber(baseline.interval)) return plan;
+      const range = draft.adaptiveMode === 'refine' ? .02 : draft.adaptiveMode === 'confirm' ? .03 : .04;
       return { ...plan, intervalMin: Math.max(.02, Math.round((Number(baseline.interval) - range) * 100) / 100), intervalMax: Math.round((Number(baseline.interval) + range) * 100) / 100, intervalSteps: draft.adaptiveMode === 'refine' ? 5 : 7 };
     }
     function buildNextTestRationale(draft, baseline, mode) {
@@ -1976,7 +2051,7 @@
       const profile = state.profiles.find(item => item.id === draft.materialId);
       const materialName = profile ? profile.material : '';
       const hazardous = /pvc|vinyl|unknown\s+plastic/.test(String(materialName).toLowerCase());
-      return `<label class="span2">${labelText('Material / Library record')}<select name="materialId">${state.profiles.map(item => `<option value="${esc(item.id)}" ${item.id === draft.materialId ? 'selected' : ''}>${esc(item.material)}</option>`).join('')}</select></label><label>${labelText('Machine')}<select name="machine"><option value="Genmitsu L8 20W" ${draft.machine === 'Genmitsu L8 20W' ? 'selected' : ''}>Genmitsu L8 20W</option><option value="Genmitsu L8 40W" ${draft.machine === 'Genmitsu L8 40W' ? 'selected' : ''}>Genmitsu L8 40W</option><option value="Unknown diode laser" ${draft.machine === 'Unknown diode laser' ? 'selected' : ''}>Manual / unknown diode</option></select></label><label>${labelText('Thickness')}<span class="unitrow"><input name="thickness" type="number" step="any" min="0" value="${esc(draft.thickness)}"><select name="thicknessUnit"><option ${draft.thicknessUnit === 'in' ? 'selected' : ''}>in</option><option ${draft.thicknessUnit === 'mm' ? 'selected' : ''}>mm</option></select></span></label>${field('date', 'Date', draft.date, 'date')}<div class="span2 small muted">Use your tracker machine profile as the starting point, then enter the selected values in LightBurn. Recommendations are starting points, not guaranteed production settings.</div>${profile ? materialSafetyWarningHtml(profile.material) : ''}${hazardous ? '<div class="span2 panel softbad"><b>Do not laser this material.</b><div class="small">PVC, vinyl, and unknown plastics require verified safety information and are not supported by this assistant.</div></div>' : ''}`;
+      return `<label class="span2">${labelText('Material to test')}<select name="materialId">${state.profiles.map(item => `<option value="${esc(item.id)}" ${item.id === draft.materialId ? 'selected' : ''}>${esc(item.material)}${item.thicknessValue !== '' && item.thicknessValue != null ? ` — ${esc(fmt(item.thicknessValue, item.thicknessUnit))}` : ''}${item.software ? ` — ${esc(item.software)}` : ''}</option>`).join('')}</select></label><label>${labelText('Machine')}<select name="machine"><option value="Genmitsu L8 20W" ${draft.machine === 'Genmitsu L8 20W' ? 'selected' : ''}>Genmitsu L8 20W</option><option value="Genmitsu L8 40W" ${draft.machine === 'Genmitsu L8 40W' ? 'selected' : ''}>Genmitsu L8 40W</option><option value="Unknown diode laser" ${draft.machine === 'Unknown diode laser' ? 'selected' : ''}>Manual / unknown diode</option></select></label><label>${labelText('Thickness')}<span class="unitrow"><input name="thickness" type="number" step="any" min="0" value="${esc(draft.thickness)}"><select name="thicknessUnit"><option ${draft.thicknessUnit === 'in' ? 'selected' : ''}>in</option><option ${draft.thicknessUnit === 'mm' ? 'selected' : ''}>mm</option></select></span></label>${field('date', 'Date', draft.date, 'date')}<div class="span2 small muted">The selected Library record supplies existing speed, power, interval, passes, air assist, focus context, and prior tests where available. Recommendations are starting points, not guaranteed production settings.</div>${profile ? materialSafetyWarningHtml(profile.material) : ''}${hazardous ? '<div class="span2 panel softbad"><b>Do not laser this material.</b><div class="small">PVC, vinyl, and unknown plastics require verified safety information and are not supported by this assistant.</div></div>' : ''}`;
     }
     function wizardGuidanceFields(draft) {
       return `<label>${labelText('Material family')}<select name="materialFamily">${lightBurnFamilyOptions.map(([value, label]) => `<option value="${value}" ${value === draft.materialFamily ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label><label>${labelText('Surface / finish')}<select name="surfaceFinish">${['raw','painted','coated','sealed','unknown'].map(value => `<option ${value === draft.surfaceFinish ? 'selected' : ''}>${value}</option>`).join('')}</select></label><label>${labelText('Intended operation')}<select name="intendedOperation"><option value="engrave_vector" ${draft.intendedOperation === 'engrave_vector' ? 'selected' : ''}>Engrave vector / fill</option><option value="photo" ${draft.intendedOperation === 'photo' ? 'selected' : ''}>Engrave photograph</option><option value="cut" ${draft.intendedOperation === 'cut' ? 'selected' : ''}>Cut</option><option value="kerf" ${draft.intendedOperation === 'kerf' ? 'selected' : ''}>Kerf</option><option value="unknown" ${draft.intendedOperation === 'unknown' ? 'selected' : ''}>Unknown / exploratory</option></select></label><label>${labelText('Current knowledge')}<select name="currentKnowledge"><option value="never" ${draft.currentKnowledge === 'never' ? 'selected' : ''}>Never tested</option><option value="manufacturer" ${draft.currentKnowledge === 'manufacturer' ? 'selected' : ''}>Have a manufacturer starting setting</option><option value="prior" ${draft.currentKnowledge === 'prior' ? 'selected' : ''}>Have a prior tracker setting</option><option value="narrowing" ${draft.currentKnowledge === 'narrowing' ? 'selected' : ''}>Narrowing an existing winner</option></select></label><label>${labelText('Test size preference')}<select name="testSize"><option value="quick" ${draft.testSize === 'quick' ? 'selected' : ''}>Small / quick</option><option value="balanced" ${draft.testSize === 'balanced' ? 'selected' : ''}>Balanced</option><option value="broad" ${draft.testSize === 'broad' ? 'selected' : ''}>Broad / full-range</option></select></label><label>${labelText('Save as test type')}<select name="testFocus"><option value="material" ${draft.testFocus === 'material' ? 'selected' : ''}>Material Test</option><option value="interval" ${draft.testFocus === 'interval' ? 'selected' : ''}>Interval Test</option></select></label><label class="span2">${labelText('Optional notes')}<textarea name="notes" rows="3">${esc(draft.notes)}</textarea></label>`;
@@ -1988,6 +2063,10 @@
       const baseline = resolveTestBaseline(draft);
       const mode = chooseAdaptiveTestMode(draft, baseline);
       return `<div class="span2 panel"><b>Baseline</b><div class="small muted">Baseline source: ${esc(baseline.label)}</div><div class="formgrid" style="margin-top:8px"><label>${labelText('Baseline source')}<select name="baselineSource"><option value="auto" ${draft.baselineSource === 'auto' ? 'selected' : ''}>Automatic best available</option><option value="library" ${draft.baselineSource === 'library' ? 'selected' : ''}>Current Library primary setting</option>${history.length ? '<option value="latest" ' + (draft.baselineSource === 'latest' ? 'selected' : '') + '>Most recently saved winner</option><option value="prior" ' + (draft.baselineSource === 'prior' ? 'selected' : '') + '>Selected prior test</option>' : ''}<option value="manual" ${draft.baselineSource === 'manual' ? 'selected' : ''}>Manually entered baseline</option></select></label>${history.length ? `<label>${labelText('Prior test')}<select name="baselineTestId"><option value="">Automatic</option>${history.map(test => `<option value="${esc(test.id)}" ${test.id === draft.baselineTestId ? 'selected' : ''}>${esc(test.date || 'Undated')} - ${esc(materialTestLabel(test.testType))} (${esc(test.winningSpeed || '-')} / ${esc(test.winningPower || '-')}%)</option>`).join('')}</select></label>` : '<div class="small muted">No prior tests with explicit winner values.</div>'}${field('manualBaselineSpeed','Manual speed',draft.manualBaselineSpeed,'number','min="0" step="any"')}${field('manualBaselinePower','Manual power (%)',draft.manualBaselinePower,'number','min="0" max="100" step="any"')}${field('manualBaselineInterval','Manual interval (mm)',draft.manualBaselineInterval,'number','min="0" step="any"')}${field('manualBaselinePasses','Manual passes',draft.manualBaselinePasses,'number','min="1" step="1"')}<label class="row"><input name="manualBaselineAirAssist" type="checkbox" ${draft.manualBaselineAirAssist ? 'checked' : ''} style="width:auto"> Manual baseline used air assist</label></div></div><label>${labelText('Recommendation mode')}<select name="adaptiveMode"><option value="auto" ${draft.adaptiveMode === 'auto' ? 'selected' : ''}>Automatic (${esc(mode)})</option><option value="discovery" ${draft.adaptiveMode === 'discovery' ? 'selected' : ''}>Broad discovery</option><option value="confirm" ${draft.adaptiveMode === 'confirm' ? 'selected' : ''}>Confirm a baseline</option><option value="refine" ${draft.adaptiveMode === 'refine' ? 'selected' : ''}>Refine an existing winner</option><option value="goal" ${draft.adaptiveMode === 'goal' ? 'selected' : ''}>Optimize for a goal</option><option value="boundary" ${draft.adaptiveMode === 'boundary' ? 'selected' : ''}>Find a boundary</option></select></label><label>${labelText('Optimization goal')}<select name="optimizationGoal">${goals.map(goal => `<option ${goal === draft.optimizationGoal ? 'selected' : ''}>${esc(goal)}</option>`).join('')}</select></label><div class="span2 small muted">${esc(buildNextTestRationale(draft, baseline, mode))}</div>`;
+    }
+    function wizardResolvedBaselineHtml(draft) {
+      const baseline = resolveTestBaseline(draft);
+      return `<div class="span2 panel"><b>Resolved baseline</b><div class="small" style="margin-top:6px">Material: ${esc(baseline.materialName || 'Selected material')}<br>Thickness: ${esc(fmt(baseline.thickness, draft.thicknessUnit))}<br>Source: ${esc(baseline.sourceLabel)}<br>Speed: ${esc(baseline.speed)} mm/min<br>Power: ${esc(baseline.representativePower)}%<br>Interval: ${esc(baseline.interval)} mm<br>Passes: ${esc(baseline.passes)}<br>Air assist: ${baseline.airAssist ? 'On' : 'Off'}</div>${baseline.fallbacks.length ? `<div class="small muted" style="margin-top:6px">${esc(baseline.fallbacks.join('; '))}</div>` : ''}</div>`;
     }
     function wizardLightBurnSetupFields(draft) {
       const p = draft.plan;
@@ -2047,7 +2126,7 @@
       const draft = materialTestWizard;
       if (!draft) return;
       const titles = ['Setup', 'Goal & Baseline', 'LightBurn Setup', 'Results', 'Save & Next Test'];
-      const body = draft.step === 1 ? wizardAssistantSetupFields(draft) : draft.step === 2 ? wizardGuidanceFields(draft) + wizardAdaptiveGuidanceHtml(draft) : draft.step === 3 ? wizardLightBurnSetupFields(draft) : draft.step === 4 ? wizardResultFields(draft) + wizardAdaptiveResultFields(draft) : wizardReviewHtml(draft);
+      const body = draft.step === 1 ? wizardAssistantSetupFields(draft) : draft.step === 2 ? wizardGuidanceFields(draft) + wizardAdaptiveGuidanceHtml(draft) + wizardResolvedBaselineHtml(draft) : draft.step === 3 ? wizardLightBurnSetupFields(draft) : draft.step === 4 ? wizardResultFields(draft) + wizardAdaptiveResultFields(draft) : wizardReviewHtml(draft);
       openModal('materialTestWizardModal', `<div class="dialog"><div class="spread"><div><h2>Material Test Wizard</h2><div class="small muted">Step ${draft.step}: ${titles[draft.step - 1]}</div></div><button data-wizard-cancel>×</button></div><div class="small muted" style="margin:8px 0 14px">${titles.map((title, index) => `${index + 1 === draft.step ? '<b>' : ''}Step ${index + 1}: ${title}${index + 1 === draft.step ? '</b>' : ''}`).join(' · ')}</div><form id="materialTestWizardForm" class="formgrid">${body}<div class="span2 actions"><button type="button" data-wizard-cancel>Cancel</button>${draft.step > 1 ? '<button type="button" id="wizardBack">Back</button>' : ''}${draft.step < 5 ? '<button type="submit" class="primary">Next</button>' : '<button type="submit" class="primary">Save test</button>'}</div></form></div>`);
       document.querySelectorAll('#materialTestWizardModal [data-wizard-cancel]').forEach(button => button.onclick = cancelMaterialTestWizard);
       const back = document.getElementById('wizardBack');
@@ -2083,14 +2162,21 @@
         if (changedMaterial) {
           const profile = state.profiles.find(item => item.id === f.materialId);
           materialTestWizard.materialFamily = wizardFamilyFromMaterial(profile && profile.material);
+          materialTestWizard.thickness = profile?.thicknessValue ?? materialTestWizard.thickness;
+          materialTestWizard.thicknessUnit = profile?.thicknessUnit || materialTestWizard.thicknessUnit;
           materialTestWizard.planCustomized = false;
         }
       } else if (materialTestWizard.step === 2) {
         Object.assign(materialTestWizard, { materialFamily: f.materialFamily, surfaceFinish: f.surfaceFinish, intendedOperation: f.intendedOperation, currentKnowledge: f.currentKnowledge, testSize: f.testSize, testFocus: f.testFocus, notes: (f.notes || '').trim(), baselineSource: f.baselineSource, baselineTestId: f.baselineTestId, manualBaselineSpeed: f.manualBaselineSpeed, manualBaselinePower: f.manualBaselinePower, manualBaselineInterval: f.manualBaselineInterval, manualBaselinePasses: f.manualBaselinePasses, manualBaselineAirAssist: !!form.manualBaselineAirAssist?.checked, adaptiveMode: f.adaptiveMode, optimizationGoal: f.optimizationGoal });
+        if (['library', 'latest', 'manual'].includes(materialTestWizard.baselineSource)) materialTestWizard.baselineTestId = '';
         materialTestWizard.testType = wizardStoredTestType(materialTestWizard);
         if (!materialTestWizard.planCustomized) materialTestWizard.plan = recommendAdaptivePlan(materialTestWizard);
       } else if (materialTestWizard.step === 3) {
         Object.assign(materialTestWizard.plan, f, { intervalAirAssist: !!form.intervalAirAssist?.checked, bidirectionalFill: !!form.bidirectionalFill?.checked, airAssist: !!form.airAssist?.checked, constantPowerMode: !!form.constantPowerMode?.checked, borderEnabled: !!form.borderEnabled?.checked });
+        if (!materialTestWizard.plan.cutBlocked && (!hasUsableNumber(materialTestWizard.plan.intervalSpeed) || !hasUsableNumber(materialTestWizard.plan.intervalPower) || !hasUsableNumber(materialTestWizard.plan.textSpeed) || !hasUsableNumber(materialTestWizard.plan.textPower))) {
+          alert('LightBurn test speed and power must be positive values. Use Reset to Recommended Values if a baseline field is missing.');
+          return false;
+        }
         materialTestWizard.planCustomized = true;
       } else if (materialTestWizard.step === 4) {
         Object.assign(materialTestWizard.results, f, { airAssist: !!form.airAssist.checked, confidence: Math.max(1, Math.min(5, Math.round(num(f.confidence, 3)))), resultSummary: (f.resultSummary || '').trim(), overallResult: f.overallResult || 'Usable', observedTraits: [...new FormData(form).getAll('observedTraits')], winnerLocation: f.winnerLocation || '', winnerComment: (f.winnerComment || '').trim() });
@@ -2099,8 +2185,8 @@
       }
       return true;
     }
-    function openMaterialTestWizard() {
-      const profile = state.profiles[0];
+    function openMaterialTestWizard(profileId = '') {
+      const profile = state.profiles.find(item => item.id === profileId) || state.profiles[0];
       if (!profile) return alert('Add or save a Library material before starting a material test.');
       materialTestWizard = { step: 1, materialId: profile.id, machine: wizardMachineLabel(), testType: 'engrave_matrix', date: today(), thickness: profile.thicknessValue ?? '', thicknessUnit: profile.thicknessUnit || state.unit, materialFamily: wizardFamilyFromMaterial(profile.material), surfaceFinish: 'unknown', intendedOperation: 'engrave_vector', currentKnowledge: profile.speed || profile.minPower ? 'prior' : 'never', testSize: 'balanced', testFocus: 'material', baselineSource: 'auto', baselineTestId: '', manualBaselineSpeed: '', manualBaselinePower: '', manualBaselineInterval: '', manualBaselinePasses: '', manualBaselineAirAssist: false, adaptiveMode: 'auto', optimizationGoal: 'Best overall', notes: '', planCustomized: false, results: { status: 'experimental', winningSpeed: profile.speed ?? '', winningPower: profile.minPower ?? '', winningInterval: profile.lineInterval ?? '', winningPasses: profile.passes ?? '', airAssist: !!profile.airAssist, confidence: 3, resultSummary: '', overallResult: 'Usable', observedTraits: [], winnerLocation: '', winnerComment: '' }, applyWinner: false };
       materialTestWizard.plan = recommendAdaptivePlan(materialTestWizard);
@@ -2189,7 +2275,7 @@
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(p.focusValue, p.focusUnit)} - Air: ${p.airAssist ? 'On' : 'Off'}${p.software ? ' - ' + esc(p.software) : ''}</div>
         ${p.notes ? `<p class="small">${esc(p.notes)}</p>` : ''}
         <div class="panel" style="margin-top:10px"><b>Material Tests</b>${materialTestsSummaryHtml(p.tests)}</div>
-        <div class="actions"><button data-edit-profile="${p.id}">Edit</button><button data-duplicate-profile="${p.id}">Duplicate</button><button data-project-profile="${p.id}">Save as project</button><button class="danger" data-delete-profile="${p.id}">Delete</button></div>
+        <div class="actions"><button data-wizard-profile="${p.id}">Material Test Wizard</button><button data-edit-profile="${p.id}">Edit</button><button data-duplicate-profile="${p.id}">Duplicate</button><button data-project-profile="${p.id}">Save as project</button><button class="danger" data-delete-profile="${p.id}">Delete</button></div>
       </article>`;
     }
     function matchCard(match) {
@@ -2575,6 +2661,7 @@
       document.querySelectorAll('[data-duplicate-profile]').forEach(b => b.onclick = () => duplicateProfile(b.dataset.duplicateProfile));
       document.querySelectorAll('[data-delete-profile]').forEach(b => b.onclick = () => del('profiles', b.dataset.deleteProfile, 'Remove this material from your library?', 'Library profile'));
       document.querySelectorAll('[data-project-profile]').forEach(b => b.onclick = () => projectFromProfile(b.dataset.projectProfile));
+      document.querySelectorAll('[data-wizard-profile]').forEach(b => b.onclick = () => openMaterialTestWizard(b.dataset.wizardProfile));
       document.querySelectorAll('[data-edit-project]').forEach(b => b.onclick = () => openProject(state.projects.find(p => p.id === b.dataset.editProject)));
       document.querySelectorAll('[data-delete-project]').forEach(b => b.onclick = () => del('projects', b.dataset.deleteProject, 'Delete this project?', 'Project'));
       document.querySelectorAll('[data-project-to-entry]').forEach(b => b.onclick = () => projectToEntry(b.dataset.projectToEntry));
@@ -3647,6 +3734,7 @@
       reader.readAsText(file); e.target.value = '';
     };
     document.addEventListener('keydown', handleShortcuts);
+    if (new URLSearchParams(window.location.search).get('selftest') === 'baseline') runBaselineResolutionFixtures();
     render();
   })();
   </script>
