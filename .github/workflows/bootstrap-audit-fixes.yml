@@ -1,0 +1,45 @@
+name: Bootstrap audited tracker patch
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/bootstrap-audit-fixes.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Patch and validate feature branch
+        shell: bash
+        run: |
+          git clone --branch audit-fixes-2026-07-14 "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" work
+          cd work
+          ruby - <<'RUBY'
+          require 'yaml'
+          workflow = YAML.load_file('.github/workflows/apply-audit-fixes.yml')
+          steps = workflow.fetch('jobs').fetch('patch').fetch('steps')
+          ['Apply targeted audit fixes', 'Validate syntax and patch markers'].each do |name|
+            script = steps.find { |step| step['name'] == name }.fetch('run')
+            abort("Step failed: #{name}") unless system('bash', '-euo', 'pipefail', '-c', script)
+          end
+          RUBY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html README.md
+          git rm .github/workflows/apply-audit-fixes.yml
+          git commit -m "Fix audited tracker performance and wizard UX"
+          git push origin audit-fixes-2026-07-14
+
+      - name: Remove bootstrap workflow
+        shell: bash
+        run: |
+          git clone --branch main "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" cleanup
+          cd cleanup
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/bootstrap-audit-fixes.yml
+          git commit -m "Remove audit patch bootstrap"
+          git push origin main
