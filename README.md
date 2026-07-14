@@ -17,7 +17,7 @@ The app has eight views:
 
 - **Log** - a quick-entry record of every job you run: material, thickness, job type (cut/engrave), power (with optional min/max ramp), speed, passes, line interval, air assist + pressure, overscan %, kerf offset, dither mode, focus height/material Z-offset, software used, settings file name, a 1-5 result rating, and free-form notes. Searchable, sortable, and filterable by material.
 - **Library** - a curated set of "best known settings" per material/thickness, promoted from log entries once you've dialed something in. This is the searchable/sortable/taggable reference sheet you check before starting a new job. Its Material Test Wizard guides matrix, interval, cut, kerf, and manual tests into each material's test history, with an explicit option to apply winners to primary settings.
-- **Test Grids** - a power x speed test matrix planner for dialing in a brand-new material: set ranges and step sizes, get a grid, then click each cell to record a rating/notes and mark the winning combination. Any cell can be promoted straight to the Library, and recorded results can be exported as CSV.
+- **Test Grids** - a power x speed test matrix planner for dialing in a brand-new material: set ranges and step sizes, get a grid, then click each cell to record a rating/notes and mark the winning combination. Any cell can be promoted straight to a new Library draft. Recording that promoted cell as a structured Material Test is opt-in, unchecked by default, and happens only after the Library draft saves successfully; grid provenance prevents duplicate test records. Recorded results can be exported as CSV.
 - **Designs** - offline SVG generators for freestanding QR/sign stands, hanging signs, dice trays, and divider trays. Dimensions, material thickness, joint style, and fit clearance can be adjusted before downloading a LightBurn-ready SVG; test fits on scrap are still recommended.
 - **Reference** - official Genmitsu L8 20W and 40W speed/power starting points from SainSmart's resource center, selected by machine profile, plus focus, safety, maintenance, offline, and software notes pulled from the user manual. Any reference setting can be copied into the Library and tuned from there.
 - **Projects** - a searchable/sortable/taggable gallery of finished pieces with a saved settings snapshot, small offline photos, tags, notes, optional sale/cost/profit accounting, filtered accounting summaries, status filtering, accounting CSV export, and a copy-to-log action for repeating a past project. Projects can also be opened as drafts from Pricing estimates.
@@ -70,11 +70,11 @@ Log entries, Library profiles, Test Grids, and Projects track material, thicknes
 
 ## Built-in checks
 
-The standalone page includes browser-console fixture tests for storage recovery, material-test normalization, wizard metadata, and operation-aware baseline selection.
+The standalone page includes browser-console fixture tests for storage recovery, material-test normalization, Test Grid promotion, wizard metadata, and operation-aware baseline selection.
 
 - Open `index.html?selftest=all` to run every fixture group at startup.
-- Individual query values are `baseline`, `normalization`, `metadata`, and `storage`.
-- The same functions are exposed in the console as `runBaselineResolutionFixtures()`, `runMaterialTestNormalizationFixtures()`, `runWizardMetadataFixtures()`, and `runStorageRecoveryFixtures()`.
+- Individual query values are `baseline`, `normalization`, `grid`, `metadata`, and `storage`.
+- The same functions are exposed in the console as `runBaselineResolutionFixtures()`, `runMaterialTestNormalizationFixtures()`, `runGridPromotionFixtures()`, `runWizardMetadataFixtures()`, and `runStorageRecoveryFixtures()`.
 
 ## Status
 

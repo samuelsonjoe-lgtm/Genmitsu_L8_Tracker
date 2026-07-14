@@ -322,6 +322,7 @@
     let editingEntryId = null;
     let editingProfileId = null;
     let profileDraftTests = [];
+    let pendingGridPromotion = null;
     let materialTestWizard = null;
     let editingProjectId = null;
     let projectPhotosDraft = [];
@@ -2020,6 +2021,46 @@
         baselineTestId: typeof test.baselineTestId === 'string' ? test.baselineTestId : ''
       })) : [];
     }
+    function gridTestTypeFromGrid(grid) {
+      return grid?.jobType === 'engrave' || grid?.jobType === 'cut' ? (grid.jobType === 'cut' ? 'cut' : 'engrave_matrix') : 'other';
+    }
+    function gridIntendedOperationFromGrid(grid) {
+      if (grid?.jobType === 'cut') return 'cut';
+      if (grid?.jobType === 'engrave') return String(grid.ditherMode || 'none').toLowerCase() === 'none' ? 'engrave_vector' : 'photo';
+      return 'unknown';
+    }
+    function gridCellValues(cell = {}) {
+      return { rating: Math.max(0, Math.min(5, Math.round(num(cell.rating)))), best: !!cell.best, notes: String(cell.notes || '').trim() };
+    }
+    function gridCellSettingsFromKey(cellKey) {
+      const [power, speed] = String(cellKey || '').split('_').map(Number);
+      return { power: Number.isFinite(power) ? power : '', speed: Number.isFinite(speed) ? speed : '' };
+    }
+    function buildGridCellMaterialTestRecord(grid, cellKey, cell, machine) {
+      const values = gridCellValues(cell);
+      const settings = gridCellSettingsFromKey(cellKey);
+      const confidence = values.rating || 3;
+      const overallResult = values.rating === 5 ? 'Excellent' : values.rating === 4 ? 'Good' : values.rating === 3 ? 'Usable' : 'Poor';
+      const markedBest = values.best ? 'Marked best: yes.' : 'Marked best: no.';
+      const notes = [`Source Test Grid: ${grid.name || 'Untitled grid'}`, `Cell: ${settings.power}% / ${settings.speed} mm/min`, `Rating: ${values.rating}/5.`, markedBest, grid.software ? `Software: ${grid.software}.` : '', grid.ditherMode ? `Dither mode: ${grid.ditherMode}.` : '', values.notes ? `Cell notes: ${values.notes}` : ''].filter(Boolean).join('\n');
+      return normalizeMaterialTests([{
+        id: uid(), date: /^\d{4}-\d{2}-\d{2}$/.test(String(grid.createdDate || '')) ? grid.createdDate : today(), machine: machine || '', testType: gridTestTypeFromGrid(grid), status: values.best && values.rating >= 4 ? 'recommended' : 'experimental', notes,
+        winningSpeed: settings.speed, winningPower: settings.power, winningInterval: grid.lineInterval === '' || grid.lineInterval == null ? '' : num(grid.lineInterval), winningPasses: Math.max(1, Math.round(num(grid.passes, 1))), airAssist: !!grid.airAssist, confidence,
+        attachments: [], overallResult, observedTraits: [], resultSummary: values.notes, winnerLocation: '', winnerComment: '', intendedOperation: gridIntendedOperationFromGrid(grid), adaptiveMode: '', optimizationGoal: '', recommendationRationale: '', baselineSource: '', baselineLabel: '', baselineTestId: '',
+        sourceKind: 'test-grid', sourceGridId: grid.id || '', sourceCellKey: String(cellKey || ''), sourceGridName: grid.name || ''
+      }])[0];
+    }
+    function findGridPromotionTest(tests, promotion) {
+      return (Array.isArray(tests) ? tests : []).find(test => test?.sourceKind === 'test-grid' && test.sourceGridId === promotion?.grid?.id && test.sourceCellKey === promotion?.cellKey) || null;
+    }
+    function duplicateMaterialTests(tests) {
+      return normalizeMaterialTests(tests).map(test => ({
+        ...test,
+        id: uid(),
+        observedTraits: [...test.observedTraits],
+        attachments: test.attachments.map(attachment => attachment && typeof attachment === 'object' ? { ...attachment } : attachment)
+      }));
+    }
     function normalizeLibraryProfiles(profiles) {
       return Array.isArray(profiles) ? profiles.filter(profile => profile && typeof profile === 'object').map(profile => ({ ...profile, tests: normalizeMaterialTests(profile.tests) })) : [];
     }
@@ -2051,6 +2092,46 @@
       return { passed, failed, results };
     }
     window.runMaterialTestNormalizationFixtures = runMaterialTestNormalizationFixtures;
+    function runGridPromotionFixtures() {
+      const grid = overrides => ({ id: 'grid-1', name: 'Fixture Grid', createdDate: '2026-07-14', jobType: 'engrave', passes: 2, lineInterval: .12, airAssist: true, software: 'LightBurn', ditherMode: 'none', ...overrides });
+      const cell = overrides => ({ rating: 4, best: false, notes: 'Clean result', ...overrides });
+      const build = (gridOverrides = {}, cellOverrides = {}, key = '80_250') => buildGridCellMaterialTestRecord(grid(gridOverrides), key, cell(cellOverrides), 'Genmitsu L8 20W');
+      const fixture = (name, check) => ({ name, ...check() });
+      const results = [
+        fixture('Engrave grid maps to engrave matrix/vector', () => { const test = build(); return { expected: 'engrave_matrix / engrave_vector', actual: `${test.testType} / ${test.intendedOperation}`, pass: test.testType === 'engrave_matrix' && test.intendedOperation === 'engrave_vector' }; }),
+        fixture('Dithered engrave grid maps to photo', () => { const test = build({ ditherMode: 'Jarvis' }); return { expected: 'engrave_matrix / photo', actual: `${test.testType} / ${test.intendedOperation}`, pass: test.testType === 'engrave_matrix' && test.intendedOperation === 'photo' }; }),
+        fixture('Cut grid maps to cut', () => { const test = build({ jobType: 'cut' }); return { expected: 'cut / cut', actual: `${test.testType} / ${test.intendedOperation}`, pass: test.testType === 'cut' && test.intendedOperation === 'cut' }; }),
+        fixture('Legacy job type maps to other/unknown', () => { const test = build({ jobType: 'legacy' }); return { expected: 'other / unknown', actual: `${test.testType} / ${test.intendedOperation}`, pass: test.testType === 'other' && test.intendedOperation === 'unknown' }; }),
+        fixture('Cell key maps power and speed', () => { const test = build({}, {}, '80_250'); return { expected: '80 / 250', actual: `${test.winningPower} / ${test.winningSpeed}`, pass: test.winningPower === 80 && test.winningSpeed === 250 }; }),
+        fixture('Grid settings and notes map', () => { const test = build(); return { expected: 'passes, interval, air, machine, notes', actual: `${test.winningPasses}|${test.winningInterval}|${test.airAssist}|${test.machine}|${test.resultSummary}`, pass: test.winningPasses === 2 && test.winningInterval === .12 && test.airAssist && test.machine === 'Genmitsu L8 20W' && test.resultSummary === 'Clean result' && test.notes.includes('Fixture Grid') && test.notes.includes('LightBurn') }; }),
+        fixture('Rating zero defaults confidence to three', () => { const test = build({}, { rating: 0 }); return { expected: '3', actual: test.confidence, pass: test.confidence === 3 }; }),
+        fixture('Best five-star cell is recommended and excellent', () => { const test = build({}, { rating: 5, best: true }); return { expected: 'recommended / Excellent', actual: `${test.status} / ${test.overallResult}`, pass: test.status === 'recommended' && test.overallResult === 'Excellent' }; }),
+        fixture('Low rating is experimental and poor', () => { const test = build({}, { rating: 2 }); return { expected: 'experimental / Poor', actual: `${test.status} / ${test.overallResult}`, pass: test.status === 'experimental' && test.overallResult === 'Poor' }; }),
+        fixture('Builder creates fresh IDs', () => { const first = build(), second = build(); return { expected: 'different IDs', actual: first.id === second.id ? 'same' : 'different', pass: first.id !== second.id }; }),
+        fixture('Provenance duplicate detection works', () => { const promotion = { grid: grid(), cellKey: '80_250' }; const test = build(); return { expected: 'existing test found', actual: findGridPromotionTest([test], promotion) ? 'found' : 'missing', pass: !!findGridPromotionTest([test], promotion) }; }),
+        fixture('Appending preserves existing tests', () => { const existing = { id: 'existing', testType: 'other' }; const tests = [existing]; tests.push(build()); return { expected: '2 tests including existing', actual: `${tests.length} / ${tests[0].id}`, pass: tests.length === 2 && tests[0] === existing }; }),
+        fixture('Provenance survives normalization', () => { const test = normalizeMaterialTests([build()])[0]; return { expected: 'test-grid / grid-1 / 80_250', actual: `${test.sourceKind} / ${test.sourceGridId} / ${test.sourceCellKey}`, pass: test.sourceKind === 'test-grid' && test.sourceGridId === 'grid-1' && test.sourceCellKey === '80_250' }; }),
+        fixture('Source grid name survives normalization', () => { const test = normalizeMaterialTests([build()])[0]; return { expected: 'Fixture Grid', actual: test.sourceGridName, pass: test.sourceGridName === 'Fixture Grid' }; }),
+        fixture('Cut grid is excluded from engraving history', () => { const test = build({ jobType: 'cut' }); return { expected: 'excluded', actual: testIsCompatibleWithOperation(test, 'engrave_vector') ? 'included' : 'excluded', pass: !testIsCompatibleWithOperation(test, 'engrave_vector') }; }),
+        fixture('Engrave grid is excluded from cut history', () => { const test = build(); return { expected: 'excluded', actual: testIsCompatibleWithOperation(test, 'cut') ? 'included' : 'excluded', pass: !testIsCompatibleWithOperation(test, 'cut') }; }),
+        fixture('Best four-star cell is recommended and good', () => { const test = build({}, { rating: 4, best: true }); return { expected: 'recommended / Good', actual: `${test.status} / ${test.overallResult}`, pass: test.status === 'recommended' && test.overallResult === 'Good' }; }),
+        fixture('Profile duplication creates fresh test IDs', () => { const source = [build(), build()]; const copy = duplicateMaterialTests(source); return { expected: 'all IDs fresh', actual: copy.every((test, index) => test.id !== source[index].id) ? 'fresh' : 'reused', pass: copy.length === source.length && copy.every((test, index) => test.id !== source[index].id) }; }),
+        fixture('Duplicated traits have independent arrays', () => { const source = [{ ...build(), observedTraits: ['Clean'] }]; const copy = duplicateMaterialTests(source); return { expected: 'independent traits', actual: source[0].observedTraits === copy[0].observedTraits ? 'shared' : 'independent', pass: source[0].observedTraits !== copy[0].observedTraits && copy[0].observedTraits[0] === 'Clean' }; }),
+        fixture('Duplicated attachments have independent arrays', () => { const source = [{ ...build(), attachments: [{ id: 'attachment-1', label: 'Photo' }] }]; const copy = duplicateMaterialTests(source); return { expected: 'independent attachment arrays', actual: source[0].attachments === copy[0].attachments ? 'shared' : 'independent', pass: source[0].attachments !== copy[0].attachments && copy[0].attachments[0].label === 'Photo' }; }),
+        fixture('Duplicated attachment objects are independent', () => { const source = [{ ...build(), attachments: [{ id: 'attachment-1', label: 'Photo' }] }]; const copy = duplicateMaterialTests(source); return { expected: 'independent attachment objects', actual: source[0].attachments[0] === copy[0].attachments[0] ? 'shared' : 'independent', pass: source[0].attachments[0] !== copy[0].attachments[0] }; }),
+        fixture('Mutating duplicate traits and attachments leaves source unchanged', () => { const source = [{ ...build(), observedTraits: ['Clean'], attachments: [{ id: 'attachment-1', label: 'Photo' }] }]; const copy = duplicateMaterialTests(source); copy[0].observedTraits.push('Crisp detail'); copy[0].attachments[0].label = 'Changed'; return { expected: 'source unchanged', actual: `${source[0].observedTraits.join(', ')} / ${source[0].attachments[0].label}`, pass: source[0].observedTraits.join('|') === 'Clean' && source[0].attachments[0].label === 'Photo' }; }),
+        fixture('Profile duplication does not mutate source tests', () => { const source = [build()]; const before = JSON.stringify(source); const copy = duplicateMaterialTests(source); copy[0].notes = 'Changed copy'; return { expected: 'source unchanged', actual: JSON.stringify(source) === before ? 'unchanged' : 'changed', pass: JSON.stringify(source) === before && source[0].notes !== copy[0].notes }; })
+      ];
+      const passed = results.filter(result => result.pass).length;
+      const failed = results.length - passed;
+      console.group('Grid promotion fixtures');
+      console.table(results);
+      console.log(`${passed} passed`);
+      console.log(`${failed} failed`);
+      console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runGridPromotionFixtures = runGridPromotionFixtures;
     function runWizardMetadataFixtures() {
       const baseline = { source: 'latest', sourceLabel: 'Most recently saved winner', label: 'Most recently saved winner', test: { id: 'baseline-test-1' } };
       const draft = () => ({ date: '2026-07-12', machine: 'Genmitsu L8 20W', intendedOperation: 'engrave_vector', adaptiveMode: 'auto', optimizationGoal: 'Best overall', testFocus: 'material', notes: 'Fixture notes', plan: { baseline, adaptiveMode: 'refine', rationale: 'Stay near the known winner.', intervalSpeed: 18000, intervalPower: 55, intervalMin: .08, intervalMax: .14, intervalSteps: 7, intervalSize: 10, intervalFillMode: 'simple_fill', intervalAirAssist: false, focusGuidance: 'Surface focus.', verticalCount: 7, verticalParameter: 'Speed', verticalMin: 14000, verticalMax: 22000, verticalHeight: 10, horizontalCount: 7, horizontalParameter: 'Power', horizontalMin: 40, horizontalMax: 70, horizontalWidth: 10, materialMode: 'Fill', lineInterval: .10, passes: 1, scanAngle: 0, bidirectionalFill: true, overscanning: 2.5, airAssist: false, constantPowerMode: true, zOffset: 0, textSpeed: 18000, textPower: 55, textMode: 'Fill', textPasses: 1, borderEnabled: true, borderSetting: 'Frame', title: 'Fixture test' }, results: { status: 'recommended', winningSpeed: '18000', winningPower: '55', winningInterval: '.10', winningPasses: '1', airAssist: false, confidence: 5, overallResult: 'Excellent', observedTraits: ['Clean', 'Crisp detail'], winnerLocation: 'Row 3, Column 4', winnerComment: 'Best balance', resultSummary: 'Clean and crisp' } });
@@ -3103,7 +3184,11 @@
       document.querySelectorAll('[data-cell]').forEach(c => c.onclick = () => openCell(c.dataset.cell));
       document.querySelectorAll('[data-ref]').forEach(b => b.onclick = () => saveReference(b.dataset.ref));
     }
-    function closeModal(id) { document.getElementById(id).classList.remove('open'); document.getElementById(id).innerHTML = ''; }
+    function closeModal(id) {
+      if (id === 'profileModal') pendingGridPromotion = null;
+      document.getElementById(id).classList.remove('open');
+      document.getElementById(id).innerHTML = '';
+    }
     function openModal(id, html) { const m = document.getElementById(id); m.innerHTML = html; m.classList.add('open'); }
     function activeModal() {
       const openModals = [...document.querySelectorAll('.modal.open')];
@@ -3242,7 +3327,8 @@
         closeModal('entryModal');
       };
     }
-    function openProfile(profile) {
+    function openProfile(profile, options = {}) {
+      if (!options.keepPendingGridPromotion) pendingGridPromotion = null;
       editingProfileId = profile && profile.id ? profile.id : null;
       const data = { ...formDefaults('profile'), ...(profile || {}) };
       profileDraftTests = normalizeMaterialTests(data.tests);
@@ -3257,9 +3343,21 @@
         if (!f.material.trim()) return alert('Add a material name first.');
         const profileObj = normalizeSetting(f, editingProfileId);
         profileObj.tests = normalizeMaterialTests(profileDraftTests);
-        upsert('profiles', profileObj);
+        const promotion = pendingGridPromotion;
+        const duplicate = promotion?.recordTest && findGridPromotionTest(profileObj.tests, promotion);
+        if (promotion?.recordTest && !duplicate) profileObj.tests.push(buildGridCellMaterialTestRecord(promotion.grid, promotion.cellKey, promotion.cell, promotion.machine));
+        const index = state.profiles.findIndex(item => item.id === profileObj.id);
+        const previous = index >= 0 ? state.profiles[index] : null;
+        if (index >= 0) state.profiles[index] = profileObj; else state.profiles.unshift(profileObj);
+        if (!persist()) {
+          if (index >= 0) state.profiles[index] = previous;
+          else state.profiles.shift();
+          return;
+        }
         profileDraftTests = [];
         closeModal('profileModal');
+        render();
+        if (duplicate) showInfoToast('Material Test for this grid cell already exists.');
       };
     }
     function projectSettingsFields(settings) {
@@ -3645,6 +3743,7 @@
         <label>${labelText('Rating', 'Score this power/speed result from unusable to excellent.')}<select name="rating">${[0,1,2,3,4,5].map(n => `<option value="${n}" ${n === existing.rating ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label class="row"><input type="checkbox" name="best" ${existing.best ? 'checked' : ''} style="width:auto"> Mark as best setting ${help('Marks this cell as the winner for the material test.')}</label>
         <label>${labelText('Notes', 'What happened in this cell: cut through, scorch, weak mark, good result, etc.')}<textarea name="notes" rows="3">${esc(existing.notes)}</textarea></label>
+        <label class="row"><input type="checkbox" name="recordMaterialTest" style="width:auto"> Also record this cell as a Material Test when the Library profile is saved</label>
         <div class="actions"><button type="button" id="clearCell">Clear</button><button type="button" id="cellToLibrary">Save to library</button><button class="primary">Save</button></div>
       </form></div>`);
       bindModal('cellModal');
@@ -3652,10 +3751,8 @@
       document.getElementById('cellToLibrary').onclick = () => promoteCell();
       document.getElementById('cellForm').onsubmit = e => {
         e.preventDefault();
-        const fd = new FormData(e.target);
-        g.cells ||= {};
-        g.cells[key] = { rating: num(fd.get('rating')), best: e.target.best.checked, notes: String(fd.get('notes') || '').trim() };
-        persist(); closeModal('cellModal'); render();
+        if (!saveGridCellValues(g, key, { rating: e.target.elements.rating?.value, best: e.target.elements.best?.checked, notes: e.target.elements.notes?.value })) return;
+        closeModal('cellModal'); render();
       };
     }
     function bindModal(id) { document.querySelectorAll(`#${id} [data-close]`).forEach(b => b.onclick = () => closeModal(id)); }
@@ -4089,7 +4186,7 @@
     function duplicateProfile(id) {
       const p = state.profiles.find(x => x.id === id);
       if (!p) return;
-      openProfile({ ...p, id: null, notes: p.notes ? `Duplicated from Library profile. ${p.notes}` : 'Duplicated from Library profile.' });
+      openProfile({ ...p, id: null, tests: duplicateMaterialTests(p.tests), notes: p.notes ? `Duplicated from Library profile. ${p.notes}` : 'Duplicated from Library profile.' });
     }
     function saveReference(refKey) {
       const [watts, index] = refKey.split(':');
@@ -4103,18 +4200,35 @@
         notes: `Official SainSmart ${watts} starting point. Tune for your exact material, focus, airflow, and lens condition.${row.note ? ' ' + row.note : ''}`
       });
     }
+    function saveGridCellValues(grid, cellKey, cell) {
+      const hadCells = !!grid.cells;
+      const previous = grid.cells?.[cellKey];
+      grid.cells ||= {};
+      grid.cells[cellKey] = gridCellValues(cell);
+      if (persist()) return true;
+      if (previous === undefined) delete grid.cells[cellKey];
+      else grid.cells[cellKey] = previous;
+      if (!hadCells) delete grid.cells;
+      return false;
+    }
     function promoteCell() {
       const g = state.grids.find(x => x.id === activeGridId);
       if (!g || !activeCellKey) return;
-      const [power, speed] = activeCellKey.split('_').map(Number);
-      const cell = (g.cells || {})[activeCellKey] || {};
+      const form = document.getElementById('cellForm');
+      const cell = gridCellValues(form ? { rating: form.elements.rating?.value, best: form.elements.best?.checked, notes: form.elements.notes?.value } : g.cells?.[activeCellKey]);
+      if (!saveGridCellValues(g, activeCellKey, cell)) return;
+      const { power, speed } = gridCellSettingsFromKey(activeCellKey);
+      const grid = { id: g.id, name: g.name, createdDate: g.createdDate, jobType: g.jobType, passes: g.passes, lineInterval: g.lineInterval, airAssist: g.airAssist, software: g.software, ditherMode: g.ditherMode };
+      const requested = !!form?.elements.recordMaterialTest?.checked;
+      pendingGridPromotion = { grid, cellKey: activeCellKey, cell, machine: wizardMachineLabel(), recordTest: requested };
       closeModal('cellModal');
+      render();
       openProfile({
         ...formDefaults('profile'), material: g.material, thicknessValue: g.thicknessValue, thicknessUnit: g.thicknessUnit,
         jobType: g.jobType, minPower: power, maxPower: power, speed, passes: g.passes, lineInterval: g.lineInterval,
         airAssist: g.airAssist, airPressure: g.airPressure, ditherMode: g.ditherMode, software: g.software,
         notes: `Promoted from test grid "${g.name}" at ${power}% / ${speed} mm/min.${cell.notes ? ' ' + cell.notes : ''}`
-      });
+      }, { keepPendingGridPromotion: true });
     }
     function exportActiveGridCsv() {
       const g = state.grids.find(x => x.id === activeGridId);
@@ -4172,6 +4286,7 @@
     const selftest = new URLSearchParams(window.location.search).get('selftest');
     if (selftest === 'baseline' || selftest === 'all') runBaselineResolutionFixtures();
     if (selftest === 'normalization' || selftest === 'all') runMaterialTestNormalizationFixtures();
+    if (selftest === 'grid' || selftest === 'all') runGridPromotionFixtures();
     if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
     render();
