@@ -1398,14 +1398,16 @@
         return tagOk && statusOk && (!q || hay.includes(q));
       }), state.projectSort);
     }
-    function projectResultsHtml(filtered) {
-      return `${projectAccountingReportHtml(filtered)}${state.projects.length
+    function projectManageResultsHtml(filtered) {
+      return state.projects.length
         ? (filtered.length ? `<div class="grid cards">${filtered.map(projectCard).join('')}</div>` : empty('No project matches', 'Adjust the search, tag, or status filter.'))
-        : empty('No projects yet', 'Save a finished piece here with its settings snapshot.')}`;
+        : empty('No projects yet', 'Save a finished piece here with its settings snapshot.');
     }
-    function bindProjectResultActions(root) {
+    function bindProjectAccountingActions(root) {
       const copyProjectReport = root.querySelector('#copyProjectReport');
       if (copyProjectReport) copyProjectReport.onclick = copyProjectReportSummary;
+    }
+    function bindProjectManageResultActions(root) {
       root.querySelectorAll('[data-edit-project]').forEach(button => button.onclick = () => openProject(state.projects.find(project => project.id === button.dataset.editProject)));
       root.querySelectorAll('[data-delete-project]').forEach(button => button.onclick = () => del('projects', button.dataset.deleteProject, 'Delete this project?', 'Project'));
       root.querySelectorAll('[data-project-to-entry]').forEach(button => button.onclick = () => projectToEntry(button.dataset.projectToEntry));
@@ -1414,14 +1416,37 @@
         openProjectPhotoViewer(image.dataset.projectPhoto, Number(image.dataset.photoIndex || 0));
       });
     }
-    function refreshProjectSearchResults() {
+    function bindProjectResultActions(root) {
+      bindProjectAccountingActions(root);
+      bindProjectManageResultActions(root);
+    }
+    function refreshProjectAccountingSummary(filtered) {
+      const accounting = document.getElementById('projectAccountingSummary');
+      if (!accounting) return false;
+      accounting.innerHTML = projectAccountingReportHtml(filtered);
+      bindProjectAccountingActions(accounting);
+      return true;
+    }
+    function refreshProjectManageResults(filtered) {
+      const results = document.getElementById('projectViewResults');
+      if (!results) return false;
+      results.innerHTML = projectManageResultsHtml(filtered);
+      bindProjectManageResultActions(results);
+      return true;
+    }
+    function refreshProjectFilteredResults() {
       const count = document.getElementById('projectShownCount');
-      const results = document.getElementById('projectResults');
-      if (!count || !results) return render();
+      const accounting = document.getElementById('projectAccountingSummary');
+      const results = document.getElementById('projectViewResults');
+      if (!count || !accounting || !results) return render();
       const filtered = filteredProjects();
       count.textContent = `${filtered.length}/${state.projects.length} shown`;
-      results.innerHTML = projectResultsHtml(filtered);
-      bindProjectResultActions(results);
+      const clearTag = document.getElementById('clearProjectTag');
+      const clearStatus = document.getElementById('clearProjectStatus');
+      if (clearTag) clearTag.hidden = state.projectTagFilter === 'all';
+      if (clearStatus) clearStatus.hidden = state.projectStatusFilter === 'all';
+      refreshProjectAccountingSummary(filtered);
+      refreshProjectManageResults(filtered);
     }
     function renderProjects() {
       const tags = projectTags();
@@ -1459,9 +1484,10 @@
               <option value="rating-desc" ${state.projectSort === 'rating-desc' ? 'selected' : ''}>Rating high-low</option>
             </select>
           </div>
-          <div class="row"><span class="pill" id="projectShownCount">${filtered.length}/${state.projects.length} shown</span>${state.projectTagFilter !== 'all' ? '<button id="clearProjectTag" type="button">Clear tag</button>' : ''}${state.projectStatusFilter !== 'all' ? '<button id="clearProjectStatus" type="button">Clear status</button>' : ''}</div>
+          <div class="row"><span class="pill" id="projectShownCount">${filtered.length}/${state.projects.length} shown</span><button id="clearProjectTag" type="button" ${state.projectTagFilter === 'all' ? 'hidden' : ''}>Clear tag</button><button id="clearProjectStatus" type="button" ${state.projectStatusFilter === 'all' ? 'hidden' : ''}>Clear status</button></div>
         </div>
-        <div id="projectResults">${projectResultsHtml(filtered)}</div>
+        <div id="projectAccountingSummary">${projectAccountingReportHtml(filtered)}</div>
+        <div id="projectViewResults">${projectManageResultsHtml(filtered)}</div>
       `;
     }
     function filteredRawMaterials() {
@@ -3427,19 +3453,19 @@
       const machineProfile = document.getElementById('machineProfile');
       if (machineProfile) machineProfile.onchange = e => { state.machineProfile = e.target.value; persist(); render(); };
       const projectSearch = document.getElementById('projectSearch');
-      if (projectSearch) projectSearch.oninput = e => { state.projectSearch = e.target.value; refreshProjectSearchResults(); };
+      if (projectSearch) projectSearch.oninput = e => { state.projectSearch = e.target.value; refreshProjectFilteredResults(); };
       const projectTagFilter = document.getElementById('projectTagFilter');
-      if (projectTagFilter) projectTagFilter.onchange = e => { state.projectTagFilter = e.target.value; render(); };
+      if (projectTagFilter) projectTagFilter.onchange = e => { state.projectTagFilter = e.target.value; refreshProjectFilteredResults(); };
       const clearProjectTag = document.getElementById('clearProjectTag');
-      if (clearProjectTag) clearProjectTag.onclick = () => { state.projectTagFilter = 'all'; render(); };
+      if (clearProjectTag) clearProjectTag.onclick = () => { state.projectTagFilter = 'all'; projectTagFilter.value = 'all'; refreshProjectFilteredResults(); };
       const projectStatusFilter = document.getElementById('projectStatusFilter');
-      if (projectStatusFilter) projectStatusFilter.onchange = e => { state.projectStatusFilter = e.target.value; render(); };
+      if (projectStatusFilter) projectStatusFilter.onchange = e => { state.projectStatusFilter = e.target.value; refreshProjectFilteredResults(); };
       const clearProjectStatus = document.getElementById('clearProjectStatus');
-      if (clearProjectStatus) clearProjectStatus.onclick = () => { state.projectStatusFilter = 'all'; render(); };
+      if (clearProjectStatus) clearProjectStatus.onclick = () => { state.projectStatusFilter = 'all'; projectStatusFilter.value = 'all'; refreshProjectFilteredResults(); };
       const exportProjectsCsv = document.getElementById('exportProjectsCsv');
       if (exportProjectsCsv) exportProjectsCsv.onclick = exportProjectsAccountingCsv;
       const projectSort = document.getElementById('projectSort');
-      if (projectSort) projectSort.onchange = e => { state.projectSort = e.target.value; persist(); render(); };
+      if (projectSort) projectSort.onchange = e => { state.projectSort = e.target.value; persist(); refreshProjectFilteredResults(); };
       const inventorySearch = document.getElementById('inventorySearch');
       if (inventorySearch) inventorySearch.oninput = e => { state.inventorySearch = e.target.value; if (state.inventoryViewMode === 'browse') { refreshMaterialBrowserResults(); refreshInventoryBatchResults(); } else refreshInventorySearchResults(); };
       const inventoryBrowseMode = document.getElementById('inventoryBrowseMode');
