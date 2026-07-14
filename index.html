@@ -347,6 +347,10 @@
     let libraryBrowserSelectNewProfile = false;
     let projectBrowserSelectedId = '';
     let projectBrowserExpanded = new Set();
+    let gridBrowserSelectedId = '';
+    let gridBrowserExpanded = new Set();
+    let gridSearch = '';
+    let gridOperationFilter = 'all';
     let materialTestWizard = null;
     let editingProjectId = null;
     let projectPhotosDraft = [];
@@ -377,8 +381,9 @@
     function normalizeInventoryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function normalizeLibraryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function normalizeProjectViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
+    function normalizeGridViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function freshState() {
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', libraryViewMode: 'manage', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', projectViewMode: 'manage', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', inventoryViewMode: 'manage', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', libraryViewMode: 'manage', gridViewMode: 'manage', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', projectViewMode: 'manage', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', inventoryViewMode: 'manage', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
     }
     function loadState() {
       const decoded = decodeStoredState(localStorage.getItem(STORAGE_KEY));
@@ -403,6 +408,7 @@
         entrySort: data.entrySort || 'date-desc',
         librarySort: data.librarySort || 'material-asc',
         libraryViewMode: normalizeLibraryViewMode(data.libraryViewMode),
+        gridViewMode: normalizeGridViewMode(data.gridViewMode),
         projectSort: data.projectSort || 'date-desc',
         projectViewMode: normalizeProjectViewMode(data.projectViewMode),
         inventoryRawSort: data.inventoryRawSort || 'low-stock',
@@ -415,9 +421,9 @@
     }
     function persist(options = {}) {
       if (storageRecoveryIssue && !options.allowRecoveryOverwrite) return false;
-      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
+      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, gridViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, gridViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
         return true;
       } catch (err) {
         showStorageWarning();
@@ -471,6 +477,7 @@
         entrySort: state.entrySort,
         librarySort: state.librarySort,
         libraryViewMode: state.libraryViewMode,
+        gridViewMode: state.gridViewMode,
         projectSort: state.projectSort,
         projectViewMode: state.projectViewMode,
         inventoryRawSort: state.inventoryRawSort,
@@ -1233,14 +1240,168 @@
         <div class="print-only library-print-all">${libraryResultsHtml(filtered)}</div>
       `;
     }
+    function gridOperationMetadata(grid) {
+      const jobType = normalizeText(grid?.jobType);
+      const dither = normalizeText(grid?.ditherMode);
+      if (jobType === 'cut') return { key: 'cut', label: 'Cut', rank: 0 };
+      if (jobType === 'engrave' && (!dither || dither === 'none')) return { key: 'engrave', label: 'Engrave', rank: 1 };
+      if (jobType === 'engrave') return { key: 'photo', label: 'Photo', rank: 2 };
+      return { key: 'other', label: 'Other', rank: 3 };
+    }
+    function gridMaterialMetadata(grid, labels = null) {
+      const raw = String(grid?.material || '').trim();
+      const key = materialMatchKey(raw) || 'unspecified';
+      return { key, label: labels?.get(key) || raw || 'Unspecified material', unspecified: key === 'unspecified' };
+    }
+    function gridMaterialLabels(grids) {
+      const candidates = new Map();
+      (grids || []).forEach(grid => {
+        const raw = String(grid?.material || '').trim();
+        const key = materialMatchKey(raw) || 'unspecified';
+        if (!candidates.has(key)) candidates.set(key, new Set());
+        if (raw) candidates.get(key).add(raw);
+      });
+      return new Map([...candidates].map(([key, values]) => [key, key === 'unspecified' ? 'Unspecified material' : [...values].sort((a, b) => compareText(a, b) || String(a).localeCompare(String(b)))[0]]));
+    }
+    function validGridDate(value) {
+      const text = String(value || '');
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+      if (!match) return '';
+      const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+      return date.toISOString().slice(0, 10) === text ? text : '';
+    }
+    function gridCells(grid) { return grid?.cells && typeof grid.cells === 'object' && !Array.isArray(grid.cells) ? grid.cells : {}; }
+    function gridCompletion(grid) {
+      const powers = range(grid?.powerMin, grid?.powerMax, grid?.powerStep);
+      const speeds = range(grid?.speedMin, grid?.speedMax, grid?.speedStep);
+      const recorded = Object.keys(gridCells(grid)).length;
+      const total = powers.length * speeds.length;
+      const status = recorded === 0 ? 'Not started' : recorded >= total ? 'Complete' : 'In progress';
+      return { powers, speeds, recorded, total, status, truncated: rangeIsTruncated(grid?.powerMin, grid?.powerMax, grid?.powerStep) || rangeIsTruncated(grid?.speedMin, grid?.speedMax, grid?.speedStep) };
+    }
+    function gridBestCells(grid) {
+      return Object.entries(gridCells(grid)).filter(([, cell]) => cell && typeof cell === 'object' && cell.best).map(([key, cell]) => ({ key, cell, settings: gridCellSettingsFromKey(key) }));
+    }
+    function gridPromotionHistory(grid, profiles = state.profiles) {
+      const matches = [];
+      (profiles || []).forEach(profile => normalizeMaterialTests(profile?.tests).forEach(test => {
+        if (test.sourceKind === 'test-grid' && test.sourceGridId === grid?.id) matches.push({ profile, test });
+      }));
+      return matches.sort((a, b) => Number(!validGridDate(a.test.date)) - Number(!validGridDate(b.test.date)) || compareText(b.test.date, a.test.date) || compareText(a.profile.material, b.profile.material) || compareText(a.test.sourceCellKey, b.test.sourceCellKey) || compareText(a.profile.id, b.profile.id) || String(a.profile.id).localeCompare(String(b.profile.id)));
+    }
+    function gridSearchText(grid) {
+      const operation = gridOperationMetadata(grid);
+      return [grid?.name, grid?.material, operation.label, grid?.jobType, grid?.ditherMode, grid?.software, grid?.thicknessValue, grid?.thicknessUnit, `${grid?.thicknessValue ?? ''}${grid?.thicknessUnit || ''}`, grid?.createdDate].join(' ').toLowerCase();
+    }
+    function gridViewData(grids = state.grids, search = gridSearch, operationFilter = gridOperationFilter) {
+      const query = normalizeText(search);
+      return (grids || []).filter(grid => {
+        const operation = gridOperationMetadata(grid);
+        return (operationFilter === 'all' || operation.key === operationFilter) && (!query || gridSearchText(grid).includes(query));
+      });
+    }
+    function buildGridBrowserTree(grids) {
+      const labels = gridMaterialLabels(grids);
+      const enriched = (grids || []).map(grid => ({ grid, material: gridMaterialMetadata(grid, labels), operation: gridOperationMetadata(grid), label: String(grid?.name || '').trim() || 'Untitled Test Grid', date: validGridDate(grid?.createdDate) }));
+      const materials = new Map();
+      enriched.forEach(item => {
+        const materialPath = [`material:${item.material.key}`];
+        if (!materials.has(item.material.key)) materials.set(item.material.key, { key: browserNodeKey('grids', [], 'material', item.material.key), label: item.material.label, count: 0, badge: '', nodeType: 'material', recordId: '', children: [], metadata: { unspecified: item.material.unspecified }, operations: new Map() });
+        const material = materials.get(item.material.key);
+        if (!material.operations.has(item.operation.key)) material.operations.set(item.operation.key, { key: browserNodeKey('grids', materialPath, 'operation', item.operation.key), label: item.operation.label, count: 0, badge: '', nodeType: 'operation', recordId: '', children: [], metadata: { rank: item.operation.rank } });
+        const operation = material.operations.get(item.operation.key);
+        operation.children.push({ key: browserRecordNodeKey('grids', [...materialPath, `operation:${item.operation.key}`], 'grid', item.grid.id), label: item.label, count: 1, badge: `${gridCompletion(item.grid).recorded}/${gridCompletion(item.grid).total} recorded`, nodeType: 'grid', recordId: item.grid.id, children: [], metadata: { date: item.date } });
+      });
+      return [...materials.values()].map(material => {
+        material.children = [...material.operations.values()].map(operation => {
+          operation.children.sort((a, b) => Number(!a.metadata.date) - Number(!b.metadata.date) || compareText(b.metadata.date, a.metadata.date) || compareText(a.label, b.label) || compareText(a.recordId, b.recordId) || String(a.recordId).localeCompare(String(b.recordId)));
+          operation.count = browserDescendantCount(operation);
+          return operation;
+        }).sort((a, b) => a.metadata.rank - b.metadata.rank);
+        material.count = browserDescendantCount(material);
+        delete material.operations;
+        return material;
+      }).sort((a, b) => Number(a.metadata.unspecified) - Number(b.metadata.unspecified) || compareText(a.label, b.label) || compareText(a.key, b.key));
+    }
+    function gridTreeRecordIds(nodes) { return (nodes || []).flatMap(node => node.recordId ? [node.recordId] : gridTreeRecordIds(node.children)); }
+    function expandGridBrowserSelection(tree, selectedId, expanded = gridBrowserExpanded) {
+      findTreePathForRecord(tree, selectedId).slice(0, -1).forEach(key => expanded.add(key));
+      return expanded;
+    }
+    function gridBestCellsHtml(grid) {
+      const best = gridBestCells(grid);
+      const heading = !best.length ? 'No best cell marked' : best.length === 1 ? 'Best cell' : `${best.length} cells marked best`;
+      if (!best.length) return `<b>${heading}</b>`;
+      return `<b>${heading}</b>${best.map(item => `<div class="panel" style="margin-top:8px"><div class="small"><b>${item.settings.power === '' ? 'Unknown power' : `${esc(item.settings.power)}%`} / ${item.settings.speed === '' ? 'Unknown speed' : `${esc(item.settings.speed)} mm/min`}</b><br>Rating: ${esc(item.cell.rating ?? '-')} / Passes: ${esc(grid.passes || 1)} / Line interval: ${esc(fmt(grid.lineInterval, 'mm'))} / Air assist: ${grid.airAssist ? 'On' : 'Off'}${item.cell.notes ? `<br><span class="muted">${esc(item.cell.notes)}</span>` : ''}</div></div>`).join('')}`;
+    }
+    function gridPromotionHistoryHtml(grid) {
+      const history = gridPromotionHistory(grid);
+      if (!history.length) return '<div class="small muted">No completed Library Material Test promotions.</div>';
+      return history.map(({ profile, test }) => `<div class="small" style="margin-top:8px"><b>${esc(profile.material || 'Unspecified material')}</b><br>Cell: ${esc(test.sourceCellKey || '-')} / Date: ${esc(test.date || 'No date')} / Status: ${esc(test.status || 'experimental')} / Confidence: ${esc(test.confidence || 0)}/5<div class="actions"><button type="button" data-grid-library-profile="${esc(profile.id)}">Open Library profile</button></div></div>`).join('');
+    }
+    function gridBrowserDetailHtml(grid, hidden) {
+      if (!grid) return `<div class="panel nested-browser-detail"><b>No Test Grid selected</b><div class="small muted">Add a Test Grid or adjust the current filters.</div></div>`;
+      const operation = gridOperationMetadata(grid), completion = gridCompletion(grid);
+      const otherType = operation.key === 'other' ? ` / Raw job type: ${esc(grid.jobType || 'Unspecified')}` : '';
+      const dither = operation.key === 'photo' ? metric('Dither mode', grid.ditherMode || '-') : '';
+      const capped = completion.truncated ? '<div class="small" style="margin-top:8px"><span class="pill warn">range capped</span> Power or speed ranges are limited to 60 steps.</div>' : '';
+      return `<div class="panel nested-browser-detail"><div class="spread"><div><b>${esc(String(grid.name || '').trim() || 'Untitled Test Grid')}</b><div class="small muted">${esc(grid.material || 'Unspecified material')} / ${esc(fmt(grid.thicknessValue, grid.thicknessUnit))} / ${esc(operation.label)}${otherType} / ${esc(validGridDate(grid.createdDate) || 'No date')}</div></div><span class="pill">${esc(completion.status)}</span></div>${browserHiddenSelectionNotice(hidden, 'Test Grid')}${materialSafetyWarningHtml(grid.material)}<div class="metrics">${metric('Recorded', `${completion.recorded}/${completion.total}`)}${metric('Matrix', `${completion.powers.length}x${completion.speeds.length}`)}${metric('Power range', `${grid.powerMin ?? '-'}-${grid.powerMax ?? '-'}% / step ${grid.powerStep ?? '-'}`)}${metric('Speed range', `${grid.speedMin ?? '-'}-${grid.speedMax ?? '-'} mm/min / step ${grid.speedStep ?? '-'}`)}${metric('Passes', grid.passes || 1)}${metric('Line interval', fmt(grid.lineInterval, 'mm'))}${metric('Air assist', grid.airAssist ? 'On' : 'Off')}${metric('Air pressure', grid.airPressure === '' || grid.airPressure == null ? '-' : `${grid.airPressure} psi`)}${dither}${metric('Software', grid.software || '-')}</div>${capped}<hr>${gridBestCellsHtml(grid)}<hr><b>Completed Library Material Test promotions</b>${gridPromotionHistoryHtml(grid)}<div class="actions"><button type="button" class="primary" data-grid-browser-open="${esc(grid.id)}">Open Matrix</button><button type="button" data-grid-browser-export="${esc(grid.id)}">Export CSV</button></div></div>`;
+    }
+    function gridBrowserResultsHtml(filtered = gridViewData()) {
+      const tree = buildGridBrowserTree(filtered);
+      const visible = gridTreeRecordIds(tree).map(id => filtered.find(grid => grid.id === id)).filter(Boolean);
+      const selection = resolveBrowserSelection(state.grids, visible, gridBrowserSelectedId);
+      gridBrowserSelectedId = selection.selectedId;
+      expandGridBrowserSelection(tree, selection.selectedId);
+      const treeHtml = visible.length ? `<div class="panel nested-browser-tree">${browserTreeHtml(tree, { expanded: gridBrowserExpanded, selectedId: selection.selectedId })}</div>` : `<div class="panel nested-browser-tree"><b>${state.grids.length ? 'No Test Grids match the current search or operation filter.' : 'No Test Grids yet.'}</b><div class="small muted">${state.grids.length ? 'Adjust the search or operation filter.' : 'Run a matrix to dial in settings fast.'}</div></div>`;
+      return `<div class="nested-browser-layout">${treeHtml}${gridBrowserDetailHtml(selection.selected, selection.hidden)}</div>`;
+    }
+    function gridManageResultsHtml(filtered = gridViewData()) {
+      return state.grids.length ? (filtered.length ? `<div class="grid cards">${filtered.map(gridCard).join('')}</div>` : empty('No test grids match', 'Adjust the search or operation filter.')) : empty('No test grids yet', 'Run a matrix to dial in settings fast.');
+    }
+    function gridResultCountText(filtered) { return `Showing ${filtered.length} of ${state.grids.length} Test Grid${state.grids.length === 1 ? '' : 's'}`; }
+    function bindGridResultActions(root) {
+      root.querySelectorAll('[data-open-grid]').forEach(card => card.onclick = () => { activeGridId = card.dataset.openGrid; gridBrowserSelectedId = activeGridId; render(); });
+      bindBrowserTreeActions(root, {
+        select: id => { gridBrowserSelectedId = id; refreshGridBrowserResults(); },
+        toggle: (key, open) => { open ? gridBrowserExpanded.add(key) : gridBrowserExpanded.delete(key); }
+      });
+      root.querySelectorAll('[data-grid-browser-open]').forEach(button => button.onclick = () => { activeGridId = button.dataset.gridBrowserOpen; gridBrowserSelectedId = activeGridId; render(); });
+      root.querySelectorAll('[data-grid-browser-export]').forEach(button => button.onclick = () => exportGridCsvById(button.dataset.gridBrowserExport));
+      root.querySelectorAll('[data-grid-library-profile]').forEach(button => button.onclick = () => openProfile(state.profiles.find(profile => profile.id === button.dataset.gridLibraryProfile)));
+    }
+    function refreshGridBrowserResults(filtered = gridViewData()) {
+      const results = document.getElementById('gridViewResults');
+      if (!results) return false;
+      results.innerHTML = gridBrowserResultsHtml(filtered);
+      bindGridResultActions(results);
+      return true;
+    }
+    function refreshGridFilteredResults() {
+      const count = document.getElementById('gridShownCount'), results = document.getElementById('gridViewResults');
+      if (!count || !results) return render();
+      const filtered = gridViewData();
+      count.textContent = gridResultCountText(filtered);
+      results.innerHTML = state.gridViewMode === 'browse' ? gridBrowserResultsHtml(filtered) : gridManageResultsHtml(filtered);
+      bindGridResultActions(results);
+    }
     function renderGrids() {
       if (activeGridId) return renderGridDetail();
+      const filtered = gridViewData();
       return `
         <div class="toolbar" style="margin-bottom:14px">
-          <div class="muted">Plan a power x speed test matrix for a new material, then record results per cell.</div>
+          <div><b>Test Grids</b><div class="small muted">Plan a power x speed test matrix for a new material, then record results per cell.</div></div>
           <button class="primary" id="newGrid">New Test Grid</button>
         </div>
-        ${state.grids.length ? `<div class="grid cards">${state.grids.map(gridCard).join('')}</div>` : empty('No test grids yet', 'Run a matrix to dial in settings fast.')}
+        <div class="toolbar" style="margin-bottom:14px">
+          <div class="row"><button id="gridBrowseMode" class="${state.gridViewMode === 'browse' ? 'primary' : ''}">Browse</button><button id="gridManageMode" class="${state.gridViewMode === 'manage' ? 'primary' : ''}">Manage</button></div>
+          <span class="pill" id="gridShownCount">${gridResultCountText(filtered)}</span>
+        </div>
+        <div class="toolbar" style="margin-bottom:14px"><div class="row" style="flex:1">
+          <input id="gridSearch" placeholder="Search Test Grids..." value="${esc(gridSearch)}" style="min-width:230px;flex:1">
+          <select id="gridOperationFilter" style="max-width:180px"><option value="all" ${gridOperationFilter === 'all' ? 'selected' : ''}>All operations</option><option value="cut" ${gridOperationFilter === 'cut' ? 'selected' : ''}>Cut</option><option value="engrave" ${gridOperationFilter === 'engrave' ? 'selected' : ''}>Engrave</option><option value="photo" ${gridOperationFilter === 'photo' ? 'selected' : ''}>Photo</option><option value="other" ${gridOperationFilter === 'other' ? 'selected' : ''}>Other</option></select>
+        </div></div>
+        <div id="gridViewResults">${state.gridViewMode === 'browse' ? gridBrowserResultsHtml(filtered) : gridManageResultsHtml(filtered)}</div>
       `;
     }
     function renderDesigns() {
@@ -3444,13 +3605,11 @@
       </article>`;
     }
     function gridCard(g) {
-      const powers = range(g.powerMin, g.powerMax, g.powerStep);
-      const speeds = range(g.speedMin, g.speedMax, g.speedStep);
-      const truncated = rangeIsTruncated(g.powerMin, g.powerMax, g.powerStep) || rangeIsTruncated(g.speedMin, g.speedMax, g.speedStep);
+      const completion = gridCompletion(g);
       return `<article class="card" data-open-grid="${g.id}" style="cursor:pointer">
         <b>${esc(g.name)}</b><div class="small muted">${esc(g.material)} - ${fmt(g.thicknessValue, g.thicknessUnit)} - ${esc(g.createdDate)}</div>
         ${materialSafetyWarningHtml(g.material)}
-        <div class="row" style="margin-top:10px"><span class="pill">${powers.length}x${speeds.length} grid</span><span class="pill">${Object.keys(g.cells || {}).length}/${powers.length * speeds.length} recorded</span>${truncated ? '<span class="pill warn">range capped</span>' : ''}</div>
+        <div class="row" style="margin-top:10px"><span class="pill">${completion.powers.length}x${completion.speeds.length} grid</span><span class="pill">${completion.recorded}/${completion.total} recorded</span>${completion.truncated ? '<span class="pill warn">range capped</span>' : ''}</div>
       </article>`;
     }
     function metric(label, value) { return `<div class="metric"><b>${esc(label)}</b>${esc(value)}</div>`; }
@@ -3604,6 +3763,14 @@
       if (exportProjectsCsv) exportProjectsCsv.onclick = exportProjectsAccountingCsv;
       const projectSort = document.getElementById('projectSort');
       if (projectSort) projectSort.onchange = e => { state.projectSort = e.target.value; persist(); refreshProjectFilteredResults(); };
+      const gridSearchInput = document.getElementById('gridSearch');
+      if (gridSearchInput) gridSearchInput.oninput = e => { gridSearch = e.target.value; refreshGridFilteredResults(); };
+      const gridOperationFilterInput = document.getElementById('gridOperationFilter');
+      if (gridOperationFilterInput) gridOperationFilterInput.onchange = e => { gridOperationFilter = e.target.value; refreshGridFilteredResults(); };
+      const gridBrowseMode = document.getElementById('gridBrowseMode');
+      if (gridBrowseMode) gridBrowseMode.onclick = () => { state.gridViewMode = 'browse'; persist(); render(); };
+      const gridManageMode = document.getElementById('gridManageMode');
+      if (gridManageMode) gridManageMode.onclick = () => { state.gridViewMode = 'manage'; persist(); render(); };
       const inventorySearch = document.getElementById('inventorySearch');
       if (inventorySearch) inventorySearch.oninput = e => { state.inventorySearch = e.target.value; if (state.inventoryViewMode === 'browse') { refreshMaterialBrowserResults(); refreshInventoryBatchResults(); } else refreshInventorySearchResults(); };
       const inventoryBrowseMode = document.getElementById('inventoryBrowseMode');
@@ -3707,7 +3874,7 @@
       bindProjectResultActions(document);
       bindInventoryResultActions(document);
       bindMaterialBrowserActions(document);
-      document.querySelectorAll('[data-open-grid]').forEach(c => c.onclick = () => { activeGridId = c.dataset.openGrid; render(); });
+      bindGridResultActions(document);
       document.querySelectorAll('[data-cell]').forEach(c => c.onclick = () => openCell(c.dataset.cell));
       document.querySelectorAll('[data-ref]').forEach(b => b.onclick = () => saveReference(b.dataset.ref));
     }
@@ -3739,6 +3906,7 @@
     function activeSearchInput() {
       if (state.activeTab === 'log') return document.getElementById('search');
       if (state.activeTab === 'library') return document.getElementById('librarySearch');
+      if (state.activeTab === 'grids' && !activeGridId) return document.getElementById('gridSearch');
       if (state.activeTab === 'projects') return document.getElementById('projectSearch');
       if (state.activeTab === 'inventory') return document.getElementById('inventorySearch');
       return null;
@@ -4478,6 +4646,121 @@
       return { passed, failed, results };
     }
     window.runProjectBrowserFixtures = runProjectBrowserFixtures;
+    function runGridBrowserFixtures() {
+      const fixture = (name, pass, actual = '') => ({ name, pass: !!pass, actual });
+      const grids = [
+        { id: 'cut-3', name: 'Cut newest', material: 'Basswood Plywood', createdDate: '2026-07-12', jobType: 'cut', thicknessValue: 3, thicknessUnit: 'mm', powerMin: 10, powerMax: 20, powerStep: 10, speedMin: 100, speedMax: 200, speedStep: 100, passes: 2, lineInterval: .1, airAssist: true, airPressure: 15, ditherMode: 'none', software: 'LightBurn', cells: { '10_100': { rating: 0, best: false, notes: 'Recorded zero' }, '20_200': { rating: 5, best: true, notes: 'Winner' } } },
+        { id: 'cut 3', name: 'Same name', material: 'basswood-plywood', createdDate: '2026-07-10', jobType: 'cut', thicknessValue: 3, thicknessUnit: 'mm', powerMin: 10, powerMax: 20, powerStep: 10, speedMin: 100, speedMax: 200, speedStep: 100, passes: 1, cells: {} },
+        { id: 'same-b', name: 'Same name', material: 'Basswood plywood', createdDate: '2026-07-10', jobType: 'cut', powerMin: 10, powerMax: 10, powerStep: 10, speedMin: 100, speedMax: 100, speedStep: 100, cells: {} },
+        { id: 'engrave', name: 'Vector marks', material: 'Slate', createdDate: '2026-07-09', jobType: 'engrave', ditherMode: 'none', software: 'LaserGRBL', thicknessValue: .125, thicknessUnit: 'in', powerMin: 10, powerMax: 20, powerStep: 10, speedMin: 500, speedMax: 1000, speedStep: 500, cells: {} },
+        { id: 'photo', name: 'Portrait test', material: 'Slate', createdDate: '2026-07-08', jobType: 'engrave', ditherMode: 'Jarvis', software: 'LightBurn', powerMin: 10, powerMax: 10, powerStep: 10, speedMin: 500, speedMax: 500, speedStep: 500, cells: {} },
+        { id: 'legacy', name: 'Legacy score', material: '', createdDate: 'not-a-date', jobType: 'score', ditherMode: '', software: 'OldApp', powerMin: 1, powerMax: 1, powerStep: 1, speedMin: 2, speedMax: 2, speedStep: 1, cells: {} }
+      ];
+      const beforeGrids = JSON.stringify(grids);
+      const tree = buildGridBrowserTree(grids), reversedTree = buildGridBrowserTree([...grids].reverse());
+      const flatten = nodes => (nodes || []).flatMap(node => [node, ...flatten(node.children)]);
+      const nodes = flatten(tree), leaves = nodes.filter(node => node.recordId);
+      const basswood = tree.find(node => materialMatchKey(node.label) === 'basswood plywood');
+      const cutBranch = basswood?.children.find(node => node.label === 'Cut');
+      const allOperationTree = buildGridBrowserTree([
+        { ...grids[0], id: 'all-cut', material: 'Order material' },
+        { ...grids[3], id: 'all-engrave', material: 'Order material' },
+        { ...grids[4], id: 'all-photo', material: 'Order material' },
+        { ...grids[5], id: 'all-other', material: 'Order material' }
+      ]);
+      const partial = gridCompletion(grids[0]);
+      const completeGrid = { ...grids[0], id: 'complete', cells: { '10_100': {}, '10_200': {}, '20_100': {}, '20_200': {} } };
+      const cappedGrid = { ...grids[0], powerMin: 0, powerMax: 100, powerStep: 1, speedMin: 1, speedMax: 1, speedStep: 1, cells: {} };
+      const malformedGrid = { ...grids[0], id: 'malformed', cells: 'bad' };
+      const malformedBest = { ...grids[0], id: 'malformed-best', cells: { broken: { rating: 4, best: true, notes: 'Legacy' }, '10_100': null } };
+      const multipleBest = { ...grids[0], id: 'multiple-best', cells: { '10_100': { best: true }, '20_200': { best: true } } };
+      const noBest = { ...grids[0], cells: { '10_100': { best: false } } };
+      const profiles = [
+        { id: 'profile-a', material: 'Basswood', tests: [{ id: 'promotion-a', sourceKind: 'test-grid', sourceGridId: 'cut-3', sourceCellKey: '20_200', date: '2026-07-12', status: 'recommended', confidence: 5 }] },
+        { id: 'profile-b', material: 'Plywood', tests: [{ id: 'promotion-b', sourceKind: 'test-grid', sourceGridId: 'cut-3', sourceCellKey: '10_100', date: '2026-07-11', status: 'experimental', confidence: 3 }, { id: 'unrelated', sourceKind: 'test-grid', sourceGridId: 'other-grid', notes: 'Source Test Grid: cut-3' }] },
+        { id: 'notes-only', material: 'Notes', tests: [{ id: 'notes', notes: 'Source Test Grid: cut-3', status: 'experimental' }] }
+      ];
+      const beforeProfiles = JSON.stringify(profiles), history = gridPromotionHistory(grids[0], profiles);
+      const csv = gridCsv(grids[0]), exportData = gridExportDataById('cut-3', grids);
+      const previousMode = state.gridViewMode;
+      state.gridViewMode = 'browse';
+      const backup = backupObject();
+      state.gridViewMode = previousMode;
+      const visible = [grids[3], grids[4]], selected = resolveBrowserSelection(grids, visible, 'cut-3');
+      const results = [
+        fixture('Missing Test Grid mode normalizes to Manage', normalizeGridViewMode(undefined) === 'manage'),
+        fixture('Invalid Test Grid mode normalizes to Manage', normalizeGridViewMode('sideways') === 'manage'),
+        fixture('Browse preference survives backup round trip', backup.gridViewMode === 'browse'),
+        fixture('Old backup without Test Grid mode falls back to Manage', normalizeGridViewMode((({ gridViewMode, ...rest }) => rest)(backup).gridViewMode) === 'manage'),
+        fixture('Grid browser session state is absent from backup', !('gridBrowserSelectedId' in backup) && !('gridBrowserExpanded' in backup) && !('gridSearch' in backup) && !('gridOperationFilter' in backup)),
+        fixture('Cut maps to Cut', gridOperationMetadata(grids[0]).label === 'Cut'),
+        fixture('Nondithered engrave maps to Engrave', gridOperationMetadata(grids[3]).label === 'Engrave'),
+        fixture('Dithered engrave maps to Photo', gridOperationMetadata(grids[4]).label === 'Photo'),
+        fixture('Unknown legacy type maps to Other', gridOperationMetadata(grids[5]).label === 'Other'),
+        fixture('Operation filter uses tree classification', gridViewData(grids, '', 'photo').map(grid => grid.id).join('|') === 'photo' && findTreePathForRecord(tree, 'photo')[1]?.includes('operation:photo')),
+        fixture('Equivalent material names share one branch', findTreePathForRecord(tree, 'cut-3')[0] === findTreePathForRecord(tree, 'cut 3')[0]),
+        fixture('Blank material becomes Unspecified material', tree.some(node => node.label === 'Unspecified material')),
+        fixture('Unspecified material sorts last', tree.at(-1)?.label === 'Unspecified material'),
+        fixture('Material display label is deterministic', basswood?.label === reversedTree.find(node => materialMatchKey(node.label) === 'basswood plywood')?.label),
+        fixture('Reversed input preserves material labels and tree order', JSON.stringify(tree) === JSON.stringify(reversedTree)),
+        fixture('Tree hierarchy is Material then Operation then Test Grid', findTreePathForRecord(tree, 'cut-3').length === 3),
+        fixture('Operation branches use required order', allOperationTree[0]?.children.map(node => node.label).join('|') === 'Cut|Engrave|Photo|Other'),
+        fixture('Newest valid date sorts first', cutBranch?.children[0]?.recordId === 'cut-3'),
+        fixture('Invalid dates sort last', tree.at(-1)?.children[0]?.children.at(-1)?.recordId === 'legacy'),
+        fixture('Name tie-break is deterministic', cutBranch?.children.filter(node => node.metadata.date === '2026-07-10').map(node => node.recordId).join('|') === 'cut 3|same-b'),
+        fixture('ID tie-break is deterministic', cutBranch?.children.filter(node => node.label === 'Same name').map(node => node.recordId).join('|') === 'cut 3|same-b'),
+        fixture('Duplicate display names remain separate', leaves.filter(node => node.label === 'Same name').length === 2),
+        fixture('Punctuation-containing IDs remain distinct', leaves.find(node => node.recordId === 'cut-3')?.key !== leaves.find(node => node.recordId === 'cut 3')?.key),
+        fixture('Tree lookup finds punctuation-distinct records', findTreePathForRecord(tree, 'cut-3').at(-1) !== findTreePathForRecord(tree, 'cut 3').at(-1)),
+        fixture('Tree construction does not mutate source grids', JSON.stringify(grids) === beforeGrids),
+        fixture('No cells reports Not started', gridCompletion(grids[1]).status === 'Not started'),
+        fixture('Partial cells report In progress', partial.status === 'In progress'),
+        fixture('Complete cells report Complete', gridCompletion(completeGrid).status === 'Complete'),
+        fixture('Recorded count matches card semantics', partial.recorded === Object.keys(grids[0].cells).length),
+        fixture('Rating-zero cell counts as recorded', partial.recorded === 2),
+        fixture('Capped ranges remain capped defensively', gridCompletion(cappedGrid).truncated && gridCompletion(cappedGrid).powers.length === 60),
+        fixture('Malformed cells do not crash completion', gridCompletion(malformedGrid).recorded === 0),
+        fixture('No best cells are reported', gridBestCells(noBest).length === 0 && gridBestCellsHtml(noBest).includes('No best cell marked')),
+        fixture('One best cell is reported', gridBestCells(grids[0]).length === 1 && gridBestCellsHtml(grids[0]).includes('Best cell')),
+        fixture('Multiple best cells remain separate', gridBestCells(multipleBest).length === 2 && gridBestCellsHtml(multipleBest).includes('2 cells marked best')),
+        fixture('Cleared best cell is not included', gridBestCells({ ...grids[0], cells: { '10_100': { best: false } } }).length === 0),
+        fixture('Malformed best cell key renders safely', gridBestCells(malformedBest)[0]?.settings.power === '' && gridBestCellsHtml(malformedBest).includes('Unknown power')),
+        fixture('Best-cell helpers do not mutate grids', JSON.stringify(grids) === beforeGrids),
+        fixture('Initial selection uses first visible leaf', resolveBrowserSelection(grids, [grids[3], grids[4]], '').selectedId === 'engrave'),
+        fixture('Valid selection is retained', resolveBrowserSelection(grids, grids, 'photo').selectedId === 'photo'),
+        fixture('Hidden selection is retained', selected.selectedId === 'cut-3' && selected.hidden),
+        fixture('Hidden-selection notice uses shared wording', browserHiddenSelectionNotice(true, 'Test Grid').includes('This Test Grid is hidden by the current filters.')),
+        fixture('Missing selection falls back to first visible', resolveBrowserSelection(grids.slice(1), grids.slice(1), 'cut-3').selectedId === 'cut 3'),
+        fixture('Unrelated removal retains selected grid', resolveBrowserSelection(grids.slice(1), grids.slice(1), 'photo').selectedId === 'photo'),
+        fixture('Empty grid collection clears selection', resolveBrowserSelection([], [], 'photo').selectedId === ''),
+        fixture('Selected tree path auto-expands both branches', expandGridBrowserSelection(tree, 'photo', new Set()).size === 2),
+        fixture('Search matches grid name', gridViewData(grids, 'portrait', 'all')[0]?.id === 'photo'),
+        fixture('Search matches material', gridViewData(grids, 'slate', 'all').length === 2),
+        fixture('Search matches normalized operation', gridViewData(grids, 'photo', 'all')[0]?.id === 'photo'),
+        fixture('Search matches raw job type', gridViewData(grids, 'score', 'all')[0]?.id === 'legacy'),
+        fixture('Search matches software', gridViewData(grids, 'lasergrbl', 'all')[0]?.id === 'engrave'),
+        fixture('Search matches thickness', gridViewData(grids, '.125 in', 'all')[0]?.id === 'engrave'),
+        fixture('Search matches creation date', gridViewData(grids, '2026-07-12', 'all')[0]?.id === 'cut-3'),
+        fixture('Clearing search and filter restores all grids', gridViewData(grids, '', 'all').length === grids.length),
+        fixture('Manage filtering preserves source-relative order', gridViewData(grids, 'basswood', 'all').map(grid => grid.id).join('|') === 'cut-3|cut 3|same-b'),
+        fixture('Matching promotion provenance is found', history.some(item => item.test.id === 'promotion-a')),
+        fixture('Unrelated promotion tests are excluded', !history.some(item => item.test.id === 'unrelated')),
+        fixture('Multiple Library profiles remain separate relationships', history.map(item => item.profile.id).join('|') === 'profile-a|profile-b'),
+        fixture('Promotion relationship is not inferred from notes', !history.some(item => item.profile.id === 'notes-only')),
+        fixture('Promotion scan does not mutate profiles or tests', JSON.stringify(profiles) === beforeProfiles),
+        fixture('Browse and active export resolve the same grid', exportData?.grid === grids[0] && gridExportDataById('cut-3', grids)?.grid.id === 'cut-3'),
+        fixture('Existing Grid CSV columns are unchanged', csv.startsWith('grid_id,grid_name,material,thickness,thickness_unit,job_type,created_date,updated_date,power_min,power_max,power_step,speed_min,speed_max,speed_step,passes,line_interval_mm,air_assist,air_pressure_psi,dither_mode,software,power_percent,speed_mm_min,rating,best,notes\r\n')),
+        fixture('Grid CSV includes only recorded cells', csv.trim().split(/\r?\n/).length === 3),
+        fixture('Grid CSV keeps numeric cell ordering', csv.indexOf(',10,100,0,no,Recorded zero') < csv.indexOf(',20,200,5,yes,Winner')),
+        fixture('Grid CSV preserves best and notes fields', csv.includes(',20,200,5,yes,Winner')),
+        fixture('Grid CSV filename convention is unchanged', exportData?.filename === `l8-grid-cut-newest-${today()}.csv`),
+        fixture('CSV projection does not mutate source grid', JSON.stringify(grids) === beforeGrids)
+      ];
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Grid browser fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runGridBrowserFixtures = runGridBrowserFixtures;
     function normalizeFinishedBatch(f, existingId) {
       const made = Math.max(0, Math.round(num(f.quantityMade)));
       const sellable = Math.max(0, Math.round(num(f.quantitySellable)));
@@ -4600,7 +4883,7 @@
           airAssist: !!f.airAssist, airPressure: f.airPressure === '' ? '' : num(f.airPressure), ditherMode: f.ditherMode,
           software: (f.software || '').trim(), cells: {}
         };
-        state.grids.unshift(grid); activeGridId = grid.id; persist(); closeModal('gridModal'); render();
+        state.grids.unshift(grid); gridBrowserSelectedId = grid.id; activeGridId = grid.id; persist(); closeModal('gridModal'); render();
       };
     }
     function openCell(key) {
@@ -4905,6 +5188,7 @@
       if ('entrySort' in data) state.entrySort = data.entrySort || 'date-desc';
       if ('librarySort' in data) state.librarySort = data.librarySort || 'material-asc';
       if ('libraryViewMode' in data) state.libraryViewMode = normalizeLibraryViewMode(data.libraryViewMode);
+      if ('gridViewMode' in data) state.gridViewMode = normalizeGridViewMode(data.gridViewMode);
       if ('projectSort' in data) state.projectSort = data.projectSort || 'date-desc';
       if ('projectViewMode' in data) state.projectViewMode = normalizeProjectViewMode(data.projectViewMode);
       if ('inventoryRawSort' in data) state.inventoryRawSort = data.inventoryRawSort || 'low-stock';
@@ -4921,6 +5205,7 @@
       state.entrySort = 'date-desc';
       state.librarySort = 'material-asc';
       state.libraryViewMode = 'manage';
+      state.gridViewMode = 'manage';
       state.projectSort = 'date-desc';
       state.projectViewMode = 'manage';
       state.inventoryRawSort = 'low-stock';
@@ -5104,12 +5389,18 @@
         notes: `Promoted from test grid "${g.name}" at ${power}% / ${speed} mm/min.${cell.notes ? ' ' + cell.notes : ''}`
       }, { keepPendingGridPromotion: true });
     }
-    function exportActiveGridCsv() {
-      const g = state.grids.find(x => x.id === activeGridId);
-      if (!g) return;
-      if (!Object.keys(g.cells || {}).length) return alert('Record at least one grid cell before exporting CSV.');
-      downloadTextFile(`l8-grid-${fileSlug(g.name)}-${today()}.csv`, gridCsv(g), 'text/csv;charset=utf-8');
+    function gridExportDataById(gridId, grids = state.grids) {
+      const grid = (grids || []).find(item => item.id === gridId) || null;
+      return grid ? { grid, filename: `l8-grid-${fileSlug(grid.name)}-${today()}.csv`, csv: gridCsv(grid) } : null;
     }
+    function exportGridCsvById(gridId) {
+      const data = gridExportDataById(gridId);
+      if (!data) return false;
+      if (!Object.keys(gridCells(data.grid)).length) { alert('Record at least one grid cell before exporting CSV.'); return false; }
+      downloadTextFile(data.filename, data.csv, 'text/csv;charset=utf-8');
+      return true;
+    }
+    function exportActiveGridCsv() { return exportGridCsvById(activeGridId); }
     function deleteActiveGrid() {
       del('grids', activeGridId, 'Delete this test grid?', 'Test grid');
     }
@@ -5161,6 +5452,7 @@
     if (selftest === 'baseline' || selftest === 'all') runBaselineResolutionFixtures();
     if (selftest === 'normalization' || selftest === 'all') runMaterialTestNormalizationFixtures();
     if (selftest === 'grid' || selftest === 'all') runGridPromotionFixtures();
+    if (selftest === 'grid-browser' || selftest === 'all') runGridBrowserFixtures();
     if (selftest === 'materials' || selftest === 'all') window.runMaterialBrowserFixtures();
     if (selftest === 'library-browser' || selftest === 'all') runLibraryBrowserFixtures();
     if (selftest === 'project-browser' || selftest === 'all') runProjectBrowserFixtures();
