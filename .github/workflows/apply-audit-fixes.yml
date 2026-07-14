@@ -20,10 +20,388 @@ jobs:
       - name: Apply targeted audit fixes
         shell: bash
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           from pathlib import Path
           import re
 
           index_path = Path('index.html')
           readme_path = Path('README.md')
           text = index_path.read_text(encoding='utf-8')
+
+          def replace_once(source, old, new, label):
+              count = source.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{label}: expected 1 exact match, found {count}')
+              return source.replace(old, new, 1)
+
+          def replace_block(source, pattern, replacement, label):
+              updated, count = re.subn(pattern, replacement, source, count=1, flags=re.S | re.M)
+              if count != 1:
+                  raise RuntimeError(f'{label}: expected 1 block match, found {count}')
+              return updated
+
+          text = replace_once(
+              text,
+              "    let storageWarningShown = false;\n    let designDraft = designDefaults();",
+              "    let storageWarningShown = false;\n    let pricingPersistTimer = null;\n    let designDraft = designDefaults();",
+              'pricing timer state'
+          )
+
+          text = replace_once(
+              text,
+              "    function runStorageRecoveryFixtures() {",
+              "    function schedulePricingPersist() {\n      clearTimeout(pricingPersistTimer);\n      pricingPersistTimer = setTimeout(() => { pricingPersistTimer = null; persist(); }, 400);\n    }\n    function flushPricingPersist() {\n      clearTimeout(pricingPersistTimer);\n      pricingPersistTimer = null;\n      persist();\n    }\n    function runStorageRecoveryFixtures() {",
+              'pricing debounce helpers'
+          )
+
+          log_block = r'''    function filteredLogEntries() {
+      const q = state.search.toLowerCase();
+      return sortBy(state.entries.filter(e => {
+        const materialOk = state.materialFilter === 'all' || e.material === state.materialFilter;
+        const hay = [e.material, e.notes, e.software, e.settingsFile].join(' ').toLowerCase();
+        return materialOk && (!q || hay.includes(q));
+      }), state.entrySort);
+    }
+    function logResultsHtml(filtered) {
+      return filtered.length ? `<div class="grid cards">${filtered.map(entryCard).join('')}</div>` : empty('No entries yet', 'Log your first cut or engrave to start building a repeatable settings history.');
+    }
+    function bindLogResultActions(root) {
+      root.querySelectorAll('[data-edit-entry]').forEach(button => button.onclick = () => openEntry(state.entries.find(entry => entry.id === button.dataset.editEntry)));
+      root.querySelectorAll('[data-duplicate-entry]').forEach(button => button.onclick = () => duplicateEntry(button.dataset.duplicateEntry));
+      root.querySelectorAll('[data-delete-entry]').forEach(button => button.onclick = () => del('entries', button.dataset.deleteEntry, 'Delete this log entry?', 'Log entry'));
+      root.querySelectorAll('[data-promote-entry]').forEach(button => button.onclick = () => promoteEntry(button.dataset.promoteEntry));
+      root.querySelectorAll('[data-project-entry]').forEach(button => button.onclick = () => projectFromEntry(button.dataset.projectEntry));
+    }
+    function refreshLogSearchResults() {
+      const results = document.getElementById('logResults');
+      if (!results) return render();
+      const filtered = filteredLogEntries();
+      results.innerHTML = logResultsHtml(filtered);
+      bindLogResultActions(results);
+    }
+    function renderLog() {
+      const materials = materialNames();
+      const filtered = filteredLogEntries();
+      return `
+        <div class="grid stats">
+          ${stat('Entries logged', state.entries.length, 'blue')}
+          ${stat('Materials tried', materials.length, 'green')}
+          ${stat('Library settings', state.profiles.length, 'violet')}
+          ${stat('Test grids run', state.grids.length, 'amber')}
+        </div>
+        <div class="toolbar" style="margin-bottom:14px">
+          <div class="row" style="flex:1">
+            <input id="search" placeholder="Search notes, material, software..." value="${esc(state.search)}" style="min-width:230px; flex:1">
+            <select id="materialFilter" style="max-width:220px">
+              <option value="all">All materials</option>
+              ${materials.map(m => `<option ${state.materialFilter === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}
+            </select>
+            <select id="entrySort" style="max-width:190px">
+              <option value="date-desc" ${state.entrySort === 'date-desc' ? 'selected' : ''}>Newest first</option>
+              <option value="date-asc" ${state.entrySort === 'date-asc' ? 'selected' : ''}>Oldest first</option>
+              <option value="material-asc" ${state.entrySort === 'material-asc' ? 'selected' : ''}>Material A-Z</option>
+              <option value="rating-desc" ${state.entrySort === 'rating-desc' ? 'selected' : ''}>Rating high-low</option>
+              <option value="speed-asc" ${state.entrySort === 'speed-asc' ? 'selected' : ''}>Speed low-high</option>
+            </select>
+          </div>
+          <button class="primary" id="newEntry">New Entry</button>
+        </div>
+        <div id="logResults">${logResultsHtml(filtered)}</div>
+      `;
+    }
+'''
+          text = replace_block(text, r"    function renderLog\(\) \{.*?^    \}\n    function libraryViewData", log_block + "    function libraryViewData", 'log partial refresh')
+
+          project_block = r'''    function projectResultsHtml(filtered) {
+      return `${projectAccountingReportHtml(filtered)}${state.projects.length ? (filtered.length ? `<div class="grid cards">${filtered.map(projectCard).join('')}</div>` : empty('No project matches', 'Adjust the search, tag, or status filter.')) : empty('No projects yet', 'Save a finished piece here with its settings snapshot.')}`;
+    }
+    function bindProjectResultActions(root) {
+      root.querySelectorAll('[data-edit-project]').forEach(button => button.onclick = () => openProject(state.projects.find(project => project.id === button.dataset.editProject)));
+      root.querySelectorAll('[data-delete-project]').forEach(button => button.onclick = () => del('projects', button.dataset.deleteProject, 'Delete this project?', 'Project'));
+      root.querySelectorAll('[data-project-to-entry]').forEach(button => button.onclick = () => projectToEntry(button.dataset.projectToEntry));
+      root.querySelectorAll('[data-project-photo]').forEach(img => img.onclick = event => {
+        event.stopPropagation();
+        openProjectPhotoViewer(img.dataset.projectPhoto, Number(img.dataset.photoIndex || 0));
+      });
+      const copyProjectReport = root.querySelector('#copyProjectReport');
+      if (copyProjectReport) copyProjectReport.onclick = copyProjectReportSummary;
+    }
+    function refreshProjectSearchResults() {
+      const count = document.getElementById('projectShownCount');
+      const results = document.getElementById('projectResults');
+      if (!count || !results) return render();
+      const filtered = filteredProjects();
+      count.textContent = `${filtered.length}/${state.projects.length} shown`;
+      results.innerHTML = projectResultsHtml(filtered);
+      bindProjectResultActions(results);
+    }
+    function renderProjects() {
+      const tags = projectTags();
+      const filtered = filteredProjects();
+      return `
+        <div class="toolbar" style="margin-bottom:14px">
+          <div>
+            <b>Project Gallery</b>
+            <div class="small muted">Finished pieces with their exact repeatable settings snapshot.</div>
+          </div>
+          <div class="row">
+            <button id="exportProjectsCsv" type="button">Export filtered accounting CSV</button>
+            <button class="primary" id="newProject">New Project</button>
+          </div>
+        </div>
+        <div class="toolbar" style="margin-bottom:14px">
+          <div class="row" style="flex:1">
+            <input id="projectSearch" placeholder="Search projects, material, notes, tags..." value="${esc(state.projectSearch)}" style="min-width:230px; flex:1">
+            <select id="projectTagFilter" style="max-width:220px">
+              <option value="all">All tags</option>
+              ${tags.map(t => `<option ${state.projectTagFilter === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}
+            </select>
+            <select id="projectStatusFilter" style="max-width:180px">
+              <option value="all" ${state.projectStatusFilter === 'all' ? 'selected' : ''}>All statuses</option>
+              <option value="kept" ${state.projectStatusFilter === 'kept' ? 'selected' : ''}>Kept</option>
+              <option value="gifted" ${state.projectStatusFilter === 'gifted' ? 'selected' : ''}>Gifted</option>
+              <option value="for-sale" ${state.projectStatusFilter === 'for-sale' ? 'selected' : ''}>For sale</option>
+              <option value="sold" ${state.projectStatusFilter === 'sold' ? 'selected' : ''}>Sold</option>
+            </select>
+            <select id="projectSort" style="max-width:190px">
+              <option value="date-desc" ${state.projectSort === 'date-desc' ? 'selected' : ''}>Newest first</option>
+              <option value="date-asc" ${state.projectSort === 'date-asc' ? 'selected' : ''}>Oldest first</option>
+              <option value="name-asc" ${state.projectSort === 'name-asc' ? 'selected' : ''}>Name A-Z</option>
+              <option value="material-asc" ${state.projectSort === 'material-asc' ? 'selected' : ''}>Material A-Z</option>
+              <option value="rating-desc" ${state.projectSort === 'rating-desc' ? 'selected' : ''}>Rating high-low</option>
+            </select>
+          </div>
+          <div class="row"><span class="pill" id="projectShownCount">${filtered.length}/${state.projects.length} shown</span>${state.projectTagFilter !== 'all' ? '<button id="clearProjectTag" type="button">Clear tag</button>' : ''}${state.projectStatusFilter !== 'all' ? '<button id="clearProjectStatus" type="button">Clear status</button>' : ''}</div>
+        </div>
+        <div id="projectResults">${projectResultsHtml(filtered)}</div>
+      `;
+    }
+'''
+          text = replace_block(text, r"    function renderProjects\(\) \{.*?^    \}\n    function filteredRawMaterials", project_block + "    function filteredRawMaterials", 'project partial refresh')
+
+          inventory_block = r'''    function inventoryResultsHtml(inv, raw, batches) {
+      return `<div class="toolbar" style="margin-bottom:12px">
+          <div><b>Raw materials</b><div class="small muted">Stock on hand, unit cost, supplier, and low-stock notes.</div></div>
+          <button class="primary" id="newRawMaterial">New raw material</button>
+        </div>
+        ${inv.rawMaterials.length ? (raw.length ? `<div class="grid cards" style="margin-bottom:18px">${raw.map(rawMaterialCard).join('')}</div>` : empty('No raw materials match', 'Adjust search or category filters.')) : empty('No raw materials yet', 'Add sheets, slate, blanks, hardware, packaging, and other shop supplies.')}
+        <div class="toolbar" style="margin:18px 0 12px">
+          <div><b>Finished batches</b><div class="small muted">Manual count of made, sellable, rejected, sold, and remaining items.</div></div>
+          <button class="primary" id="newFinishedBatch">New finished batch</button>
+        </div>
+        ${inv.finishedBatches.length ? (batches.length ? `<div class="grid cards">${batches.map(finishedBatchCard).join('')}</div>` : empty('No batches match', 'Adjust search or status filter.')) : empty('No finished batches yet', 'Track small batches of finished items without creating invoices or SKUs.')}`;
+    }
+    function bindInventoryResultActions(root) {
+      const newRawMaterial = root.querySelector('#newRawMaterial');
+      if (newRawMaterial) newRawMaterial.onclick = () => openRawMaterial();
+      const newFinishedBatch = root.querySelector('#newFinishedBatch');
+      if (newFinishedBatch) newFinishedBatch.onclick = () => openFinishedBatch();
+      root.querySelectorAll('[data-edit-raw-material]').forEach(button => button.onclick = () => openRawMaterial(inventoryList('rawMaterials').find(item => item.id === button.dataset.editRawMaterial)));
+      root.querySelectorAll('[data-delete-raw-material]').forEach(button => button.onclick = () => delInventory('rawMaterials', button.dataset.deleteRawMaterial, 'Delete this raw material?', 'Raw material'));
+      root.querySelectorAll('[data-edit-finished-batch]').forEach(button => button.onclick = () => openFinishedBatch(inventoryList('finishedBatches').find(batch => batch.id === button.dataset.editFinishedBatch)));
+      root.querySelectorAll('[data-delete-finished-batch]').forEach(button => button.onclick = () => delInventory('finishedBatches', button.dataset.deleteFinishedBatch, 'Delete this finished batch?', 'Finished batch'));
+    }
+    function refreshInventorySearchResults() {
+      const rawCount = document.getElementById('inventoryRawShownCount');
+      const batchCount = document.getElementById('inventoryBatchShownCount');
+      const results = document.getElementById('inventoryResults');
+      if (!rawCount || !batchCount || !results) return render();
+      const inv = normalizeInventory(state.inventory);
+      const raw = filteredRawMaterials();
+      const batches = filteredFinishedBatches();
+      rawCount.textContent = `${raw.length}/${inv.rawMaterials.length} raw`;
+      batchCount.textContent = `${batches.length}/${inv.finishedBatches.length} batches`;
+      results.innerHTML = inventoryResultsHtml(inv, raw, batches);
+      bindInventoryResultActions(results);
+    }
+    function renderInventory() {
+      const inv = normalizeInventory(state.inventory);
+      const raw = filteredRawMaterials();
+      const batches = filteredFinishedBatches();
+      const rawValue = inv.rawMaterials.reduce((sum, item) => sum + inventoryValue(item), 0);
+      const lowCount = inv.rawMaterials.filter(rawIsLow).length;
+      const remaining = inv.finishedBatches.reduce((sum, batch) => sum + batchRemaining(batch), 0);
+      return `
+        <div class="grid stats">
+          ${stat('Raw value', money(rawValue), 'green')}
+          ${stat('Low stock', lowCount, 'amber')}
+          ${stat('Finished batches', inv.finishedBatches.length, 'violet')}
+          ${stat('Remaining items', remaining, 'blue')}
+        </div>
+        <div class="toolbar" style="margin-bottom:14px">
+          <div>
+            <b>Inventory</b>
+            <div class="small muted">Manual raw materials and finished batches. Nothing auto-deducts from Projects. Ctrl+N starts a raw material, or a finished batch when a batch status filter is active.</div>
+          </div>
+          <div class="row">
+            <button id="addStarterInventory" type="button">Add common starter materials</button>
+            <button id="exportRawInventoryCsv" type="button">Export raw CSV</button>
+            <button id="exportBatchInventoryCsv" type="button">Export batches CSV</button>
+          </div>
+        </div>
+        <div class="toolbar" style="margin-bottom:14px">
+          <div class="row" style="flex:1">
+            <input id="inventorySearch" placeholder="Search inventory, supplier, notes, tags..." value="${esc(state.inventorySearch)}" style="min-width:230px; flex:1">
+            <select id="inventoryCategoryFilter" style="max-width:180px">
+              <option value="all" ${state.inventoryCategoryFilter === 'all' ? 'selected' : ''}>All material categories</option>
+              ${rawMaterialCategories.map(c => `<option value="${esc(c)}" ${state.inventoryCategoryFilter === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+            </select>
+            <select id="inventoryBatchStatusFilter" style="max-width:170px">
+              <option value="all" ${state.inventoryBatchStatusFilter === 'all' ? 'selected' : ''}>All batch statuses</option>
+              ${batchStatuses.map(s => `<option value="${esc(s)}" ${state.inventoryBatchStatusFilter === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}
+            </select>
+            <select id="inventoryRawSort" style="max-width:170px">
+              <option value="low-stock" ${state.inventoryRawSort === 'low-stock' ? 'selected' : ''}>Raw: low stock first</option>
+              <option value="name-asc" ${state.inventoryRawSort === 'name-asc' ? 'selected' : ''}>Raw: name A-Z</option>
+              <option value="category-asc" ${state.inventoryRawSort === 'category-asc' ? 'selected' : ''}>Raw: category A-Z</option>
+              <option value="quantity-asc" ${state.inventoryRawSort === 'quantity-asc' ? 'selected' : ''}>Raw: quantity low-high</option>
+              <option value="value-desc" ${state.inventoryRawSort === 'value-desc' ? 'selected' : ''}>Raw: value high-low</option>
+            </select>
+            <select id="inventoryBatchSort" style="max-width:170px">
+              <option value="name-asc" ${state.inventoryBatchSort === 'name-asc' ? 'selected' : ''}>Batches: name A-Z</option>
+              <option value="status-asc" ${state.inventoryBatchSort === 'status-asc' ? 'selected' : ''}>Batches: status A-Z</option>
+              <option value="remaining-desc" ${state.inventoryBatchSort === 'remaining-desc' ? 'selected' : ''}>Batches: remaining high-low</option>
+              <option value="sold-desc" ${state.inventoryBatchSort === 'sold-desc' ? 'selected' : ''}>Batches: sold high-low</option>
+            </select>
+          </div>
+          <div class="row"><span class="pill" id="inventoryRawShownCount">${raw.length}/${inv.rawMaterials.length} raw</span><span class="pill" id="inventoryBatchShownCount">${batches.length}/${inv.finishedBatches.length} batches</span></div>
+        </div>
+        <div id="inventoryResults">${inventoryResultsHtml(inv, raw, batches)}</div>
+      `;
+    }
+'''
+          text = replace_block(text, r"    function renderInventory\(\) \{.*?^    \}\n    function renderPricing", inventory_block + "    function renderPricing", 'inventory partial refresh')
+
+          text = replace_once(text, "      if (search) search.oninput = e => { state.search = e.target.value; render(); };", "      if (search) search.oninput = e => { state.search = e.target.value; refreshLogSearchResults(); };", 'log search handler')
+          text = replace_once(text, "      if (projectSearch) projectSearch.oninput = e => { state.projectSearch = e.target.value; render(); };", "      if (projectSearch) projectSearch.oninput = e => { state.projectSearch = e.target.value; refreshProjectSearchResults(); };", 'project search handler')
+          text = replace_once(text, "      if (inventorySearch) inventorySearch.oninput = e => { state.inventorySearch = e.target.value; render(); };", "      if (inventorySearch) inventorySearch.oninput = e => { state.inventorySearch = e.target.value; refreshInventorySearchResults(); };", 'inventory search handler')
+
+          old_pricing = """        const refreshPricing = () => {
+          updatePricingDraft(pricingForm);
+          persist();
+          const results = document.getElementById('pricingResults');"""
+          new_pricing = """        const refreshPricing = saveNow => {
+          updatePricingDraft(pricingForm);
+          if (saveNow) flushPricingPersist(); else schedulePricingPersist();
+          const results = document.getElementById('pricingResults');"""
+          text = replace_once(text, old_pricing, new_pricing, 'pricing refresh debounce')
+          text = replace_once(text, "        pricingForm.oninput = refreshPricing;\n        pricingForm.onchange = refreshPricing;", "        pricingForm.oninput = () => refreshPricing(false);\n        pricingForm.onchange = () => refreshPricing(true);", 'pricing handlers')
+
+          text = replace_once(text, "${['raw','painted','coated','sealed','unknown'].map(value => `<option ${value === draft.surfaceFinish ? 'selected' : ''}>${value}</option>`).join('')}", "${['raw','painted','coated','sealed','unknown'].map(value => `<option value=\"${esc(value)}\" ${value === draft.surfaceFinish ? 'selected' : ''}>${esc(value)}</option>`).join('')}", 'surface finish values')
+          text = replace_once(text, "${goals.map(goal => `<option ${goal === draft.optimizationGoal ? 'selected' : ''}>${esc(goal)}</option>`).join('')}", "${goals.map(goal => `<option value=\"${esc(goal)}\" ${goal === draft.optimizationGoal ? 'selected' : ''}>${esc(goal)}</option>`).join('')}", 'optimization goal values')
+
+          adaptive_result = r'''    function wizardAdaptiveResultFields(draft) {
+      const r = draft.results;
+      const traits = ['Too light','Too dark','Uneven','Visible scan lines','Rough or pitted','Sooty','Charred','Clean','Crisp detail','Lost fine detail','Cut did not complete','Cut completed inconsistently','Clean cut-through'];
+      return `<label>${labelText('Overall result')}<select name="overallResult">${['Poor','Usable','Good','Excellent'].map(value => `<option value="${esc(value)}" ${value === r.overallResult ? 'selected' : ''}>${esc(value)}</option>`).join('')}</select></label>${field('winnerLocation','Winner location',r.winnerLocation,'text','placeholder="Row 3, Column 4"','Where the winning cell appeared in the test grid.')}<div class="span2"><b class="small">Observed traits</b><div class="row" style="margin-top:6px">${traits.map(trait => `<label class="row small"><input name="observedTraits" type="checkbox" value="${esc(trait)}" ${(r.observedTraits || []).includes(trait) ? 'checked' : ''} style="width:auto"> ${esc(trait)}</label>`).join('')}</div></div><label class="span2">${labelText('Winner comment')}<input name="winnerComment" value="${esc(r.winnerComment)}"></label>`;
+    }
+'''
+          text = replace_block(text, r"    function wizardAdaptiveResultFields\(draft\) \{.*?^    \}\n    function wizardWinningChanges", adaptive_result + "    function wizardWinningChanges", 'wizard result controls')
+
+          next_test_block = r'''    function nextRecommendedTestActions(test, draft) {
+      const operation = draft.intendedOperation || test.intendedOperation || '';
+      const cutting = operation === 'cut' || operation === 'kerf' || test.testType === 'cut' || test.testType === 'kerf';
+      if (cutting) {
+        const actions = [
+          ['refine', 'Refine this winner'],
+          ['Faster cutting', 'Optimize for faster cutting'],
+          ['Fewer passes', 'Reduce passes'],
+          ['Cleaner edge', 'Optimize for cleaner edge'],
+          ['Less charring', 'Reduce charring'],
+          ['Find minimum cut-through power', 'Find minimum cut-through power'],
+          ['Find maximum cut-through speed', 'Find maximum cut-through speed']
+        ];
+        if (operation === 'kerf' || test.testType === 'kerf') actions.push(['Kerf refinement', 'Refine kerf']);
+        return actions;
+      }
+      return [
+        ['refine', 'Refine this winner'],
+        ['Faster production', 'Optimize for speed'],
+        ['Darker engraving', 'Optimize for darker engraving'],
+        ['Find minimum usable power', 'Find minimum usable power'],
+        ['Find maximum usable speed', 'Find maximum usable speed'],
+        ['interval', 'Test interval around this winner']
+      ];
+    }
+    function openNextRecommendedTest(profile, test, draft) {
+      const winner = [test.winningSpeed !== '' ? `${test.winningSpeed} mm/min` : '', test.winningPower !== '' ? `${test.winningPower}%` : '', test.winningInterval !== '' ? `${test.winningInterval} mm` : ''].filter(Boolean).join(' / ');
+      const overall = draft.results.overallResult || 'Usable';
+      const noFurther = overall === 'Excellent' && !draft.optimizationGoal?.startsWith('Find ');
+      const uncertain = (draft.results.observedTraits || []).length ? `Observed: ${(draft.results.observedTraits || []).join(', ')}.` : 'No structured traits were recorded.';
+      const recommendation = noFurther ? 'No further test is necessary unless you want to optimize for a specific goal.' : winner ? 'The most informative next step is a narrower comparison around the selected winner.' : 'No clear winner was recorded; confirm a plausible baseline or run another broad comparison.';
+      const actionButtons = nextRecommendedTestActions(test, draft).map(([value, label]) => `<button data-next-test="${esc(value)}">${esc(label)}</button>`).join('');
+      openModal('materialTestWizardModal', `<div class="dialog"><div class="spread"><div><h2>Next Recommended Test</h2><div class="small muted">Saved to ${esc(profile.material)}</div></div><button data-close>&times;</button></div><div class="panel"><b>Just tested</b><div class="small">${esc(materialTestLabel(test.testType))}${winner ? ` - winner: ${esc(winner)}` : ' - no winner recorded'}</div><div class="small muted" style="margin-top:6px">${esc(uncertain)}</div></div><div class="panel" style="margin-top:10px"><b>Recommendation</b><div class="small" style="margin-top:6px">${esc(recommendation)}</div></div><div class="actions" style="margin-top:12px">${actionButtons}<button data-close>No further testing needed</button></div></div>`);
+      bindModal('materialTestWizardModal');
+      document.querySelectorAll('#materialTestWizardModal [data-next-test]').forEach(button => button.onclick = () => startNextRecommendedTest(profile, test, button.dataset.nextTest));
+    }
+'''
+          text = replace_block(text, r"    function openNextRecommendedTest\(profile, test, draft\) \{.*?^    \}\n    function startNextRecommendedTest", next_test_block + "    function startNextRecommendedTest", 'cut-aware next tests')
+
+          index_path.write_text(text, encoding='utf-8')
+
+          readme = readme_path.read_text(encoding='utf-8')
+          readme = replace_once(readme, 'The app has seven views:', 'The app has eight views:', 'README view count')
+          readme = replace_once(
+              readme,
+              '- **Test Grids** - a power x speed test matrix planner for dialing in a brand-new material: set ranges and step sizes, get a grid, then click each cell to record a rating/notes and mark the winning combination. Any cell can be promoted straight to the Library, and recorded results can be exported as CSV.\n- **Reference**',
+              '- **Test Grids** - a power x speed test matrix planner for dialing in a brand-new material: set ranges and step sizes, get a grid, then click each cell to record a rating/notes and mark the winning combination. Any cell can be promoted straight to the Library, and recorded results can be exported as CSV.\n- **Designs** - offline parametric SVG exports for QR stands, hanging signs, dice trays, and divider trays. Layouts are generated locally for LightBurn and should be test-fit on scrap before production.\n- **Reference**',
+              'README Designs view'
+          )
+          readme = replace_once(
+              readme,
+              '- Storage failures are caught with a warning, and photo-heavy JSON exports show an approximate size warning before download.',
+              '- Storage failures are caught with a warning. Unreadable local data opens a recovery panel that blocks overwrite until you download the damaged data, import a valid backup, or explicitly start fresh. Photo-heavy JSON exports show an approximate size warning before download.',
+              'README recovery flow'
+          )
+          readme = replace_once(
+              readme,
+              '- All data persists automatically in the browser (localStorage) between sessions.',
+              '- All data persists automatically in the browser (localStorage) between sessions. The Designs form is session-only and is not included in JSON backups.\n- Console regression fixtures can be run by adding `?selftest=baseline`, `normalization`, `metadata`, `storage`, or `all` to the local file URL and reviewing the browser console.',
+              'README self-tests'
+          )
+          readme_path.write_text(readme, encoding='utf-8')
+          PY
+
+      - name: Validate syntax and patch markers
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          text = Path('index.html').read_text(encoding='utf-8')
+          match = re.search(r'<script>(.*)</script>', text, flags=re.S)
+          if not match:
+              raise SystemExit('Could not locate application script')
+          Path('/tmp/tracker.js').write_text(match.group(1), encoding='utf-8')
+          required = [
+              'schedulePricingPersist',
+              'refreshLogSearchResults',
+              'refreshProjectSearchResults',
+              'refreshInventorySearchResults',
+              'nextRecommendedTestActions',
+              'placeholder="Row 3, Column 4"'
+          ]
+          missing = [marker for marker in required if marker not in text]
+          if missing:
+              raise SystemExit(f'Missing patch markers: {missing}')
+          forbidden = [
+              "state.projectSearch = e.target.value; render();",
+              "state.inventorySearch = e.target.value; render();",
+              "updatePricingDraft(pricingForm);\n          persist();"
+          ]
+          leftovers = [marker for marker in forbidden if marker in text]
+          if leftovers:
+              raise SystemExit(f'Old behavior still present: {leftovers}')
+          PY
+          node --check /tmp/tracker.js
+          git diff --check
+
+      - name: Commit patched files
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html README.md
+          git rm .github/workflows/apply-audit-fixes.yml
+          git commit -m "Fix audited tracker performance and wizard UX"
+          git push origin HEAD:audit-fixes-2026-07-14
