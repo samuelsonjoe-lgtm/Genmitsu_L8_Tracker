@@ -1,0 +1,29 @@
+name: Apply audited tracker fixes
+
+on:
+  push:
+    branches:
+      - audit-fixes-2026-07-14
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: audit-fixes-2026-07-14
+          fetch-depth: 0
+
+      - name: Apply targeted audit fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          index_path = Path('index.html')
+          readme_path = Path('README.md')
+          text = index_path.read_text(encoding='utf-8')
