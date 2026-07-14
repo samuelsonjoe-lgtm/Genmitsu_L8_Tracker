@@ -13,11 +13,12 @@ Getting clean, repeatable cuts and engraves out of a diode laser depends on a pi
 
 ## What it does
 
-The app has seven views:
+The app has eight views:
 
 - **Log** - a quick-entry record of every job you run: material, thickness, job type (cut/engrave), power (with optional min/max ramp), speed, passes, line interval, air assist + pressure, overscan %, kerf offset, dither mode, focus height/material Z-offset, software used, settings file name, a 1-5 result rating, and free-form notes. Searchable, sortable, and filterable by material.
 - **Library** - a curated set of "best known settings" per material/thickness, promoted from log entries once you've dialed something in. This is the searchable/sortable/taggable reference sheet you check before starting a new job. Its Material Test Wizard guides matrix, interval, cut, kerf, and manual tests into each material's test history, with an explicit option to apply winners to primary settings.
 - **Test Grids** - a power x speed test matrix planner for dialing in a brand-new material: set ranges and step sizes, get a grid, then click each cell to record a rating/notes and mark the winning combination. Any cell can be promoted straight to the Library, and recorded results can be exported as CSV.
+- **Designs** - offline SVG generators for freestanding QR/sign stands, hanging signs, dice trays, and divider trays. Dimensions, material thickness, joint style, and fit clearance can be adjusted before downloading a LightBurn-ready SVG; test fits on scrap are still recommended.
 - **Reference** - official Genmitsu L8 20W and 40W speed/power starting points from SainSmart's resource center, selected by machine profile, plus focus, safety, maintenance, offline, and software notes pulled from the user manual. Any reference setting can be copied into the Library and tuned from there.
 - **Projects** - a searchable/sortable/taggable gallery of finished pieces with a saved settings snapshot, small offline photos, tags, notes, optional sale/cost/profit accounting, filtered accounting summaries, status filtering, accounting CSV export, and a copy-to-log action for repeating a past project. Projects can also be opened as drafts from Pricing estimates.
 - **Inventory** - a lightweight manual tracker for raw materials on hand and simple finished-item batches, with low-stock badges, estimated raw-material value, remaining finished counts, starter-material helpers, canonical material aliases, and CSV exports.
@@ -27,7 +28,7 @@ Other features:
 
 - Toggle between imperial and metric units, with stored thickness/focus/Z-offset values converted when switching.
 - Export/import your data and portable app preferences as a JSON backup file, with merge or replace import modes.
-- Storage failures are caught with a warning, and photo-heavy JSON exports show an approximate size warning before download.
+- Storage failures are caught without overwriting unreadable browser data. The recovery panel can download the damaged raw data, import a valid backup, or explicitly start fresh. Photo-heavy JSON exports also show an approximate size warning before download.
 - Material suggestions include saved materials, official SainSmart reference materials, and raw Inventory material names with stock status when available.
 - Inventory raw materials can store comma-separated aliases so Amazon-style listing titles or old shorthand can match a clean canonical material name without blocking free typing.
 - Material safety warnings flag obvious risky/unknown terms such as PVC, vinyl, chlorinated plastics, unknown plastics, fiberglass, and carbon fiber without blocking saves.
@@ -45,13 +46,16 @@ Other features:
 - **Accounting report** on the Projects tab summarizes filtered project revenue, cost, profit, margin, quantity, and status counts.
 - **Export accounting CSV** on the Projects tab exports one row per project with accounting inputs and calculated totals, including a material line count and material line total.
 - **Inventory CSV exports** save filtered raw-material stock and finished-batch counts as plain CSV files.
-- All data persists automatically in the browser (localStorage) between sessions.
+- All data persists automatically in the browser (`localStorage`) between sessions. Pricing results update immediately while browser writes are briefly debounced to avoid serializing the full tracker on every keystroke.
+- Log, Projects, Library, and Inventory searches update only their result areas, preserving search focus and avoiding unnecessary full-tab rebuilds.
 
 ## Current storage model
 
 The standalone `index.html` app saves live data in the browser's `localStorage` under `genmitsu-l8-tracker-v1`. That means data is tied to the browser/profile that opened the app. Use Export regularly for portable JSON backups until a future desktop build writes to a real app data file.
 
 JSON backups include Log entries, Library profiles, Test Grids, Projects, Project photos, Inventory records including raw-material aliases, unit preference, saved sort preferences, Library match helper inputs, selected machine profile, Pricing draft, and Pricing defaults. Session-only search text, tag/status filters, active tab, and open modal state are intentionally not backed up.
+
+If the saved `localStorage` value is malformed, the app opens with temporary empty data and blocks normal saving so the damaged value is not silently replaced. Use the recovery controls before continuing.
 
 ## Fields tracked
 
@@ -63,6 +67,14 @@ Log entries, Library profiles, Test Grids, and Projects track material, thicknes
 - Local 20W chart: `docs/L8_Engraving_Speed_Power_Reference_Chart_20W.pdf`
 - SainSmart L8 resources: https://docs.sainsmart.com/article/1wosao83f2-genmitsu-l-8-resources
 - SainSmart L8 speed/power chart: https://docs.sainsmart.com/article/389gfcep9u-l-8-engraving-speed-power-reference-chart
+
+## Built-in checks
+
+The standalone page includes browser-console fixture tests for storage recovery, material-test normalization, wizard metadata, and operation-aware baseline selection.
+
+- Open `index.html?selftest=all` to run every fixture group at startup.
+- Individual query values are `baseline`, `normalization`, `metadata`, and `storage`.
+- The same functions are exposed in the console as `runBaselineResolutionFixtures()`, `runMaterialTestNormalizationFixtures()`, `runWizardMetadataFixtures()`, and `runStorageRecoveryFixtures()`.
 
 ## Status
 
