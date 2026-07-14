@@ -154,10 +154,17 @@
     .cell.done { background: #eef8f1; border-color: #78b38d; color: var(--green); }
     .cell.best { background: #fff4db; border-color: #d9982f; color: var(--amber); }
     .axis { font-size: 12px; font-weight: 800; color: var(--muted); text-align: center; }
-    .material-browser-layout { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.2fr); gap: 14px; }
-    .material-browser-layout > * { min-width: 0; }
+    .nested-browser-layout, .material-browser-layout { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.2fr); gap: 14px; }
+    .nested-browser-layout > *, .material-browser-layout > * { min-width: 0; }
+    .nested-browser-layout .panel, .nested-browser-layout .small, .nested-browser-layout b,
     .material-browser-layout .panel, .material-browser-layout .small, .material-browser-layout b { overflow-wrap: anywhere; }
-    .material-browser-layout .actions { flex-wrap: wrap; }
+    .nested-browser-layout .actions, .material-browser-layout .actions { flex-wrap: wrap; }
+    .nested-browser-tree details { margin: 5px 0 5px 10px; }
+    .nested-browser-tree > details { margin-left: 0; }
+    .nested-browser-tree summary { cursor: pointer; font-weight: 700; padding: 4px 2px; }
+    .nested-browser-leaf { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: calc(100% - 12px); margin: 4px 0 4px 12px; text-align: left; font-weight: 700; }
+    .nested-browser-leaf.nested-browser-selected { border-color: var(--blue); box-shadow: inset 3px 0 0 var(--blue); background: #eef6fb; }
+    .nested-browser-detail hr { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
     .print-only { display: none; }
     @media (max-width: 700px) {
       .modal { padding: 10px 8px; }
@@ -167,7 +174,7 @@
       .metrics { grid-template-columns: 1fr; }
       .modal-actions { bottom: -14px; margin: 4px -14px -14px; padding: 10px 14px; }
       .modal-actions button { flex: 1; }
-      .material-browser-layout { grid-template-columns: minmax(0, 1fr); }
+      .nested-browser-layout, .material-browser-layout { grid-template-columns: minmax(0, 1fr); }
     }
     @media print {
       body { background: white; color: #111827; }
@@ -183,6 +190,7 @@
       .metric { padding: 6px; background: #f9fafb; }
       .pill { border: 1px solid #9ca3af; background: white; color: #111827; }
       .print-only { display: block; }
+      body[data-active-tab="library"] .library-screen-content { display: none !important; }
       .pricing-defaults-card, .pricing-form-card, .pricing-results-card { display: none; }
       .pricing-print-summary { display: block !important; border: 0; padding: 0; }
     }
@@ -331,6 +339,9 @@
     let inventoryBrowserSelectedId = '';
     let inventoryBrowserInStockOnly = false;
     let inventoryBrowserExpanded = new Set();
+    let libraryBrowserSelectedId = '';
+    let libraryBrowserExpanded = new Set();
+    let libraryBrowserSelectNewProfile = false;
     let materialTestWizard = null;
     let editingProjectId = null;
     let projectPhotosDraft = [];
@@ -359,8 +370,9 @@
       return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12' };
     }
     function normalizeInventoryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
+    function normalizeLibraryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function freshState() {
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', inventoryViewMode: 'manage', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', libraryViewMode: 'manage', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', inventoryViewMode: 'manage', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
     }
     function loadState() {
       const decoded = decodeStoredState(localStorage.getItem(STORAGE_KEY));
@@ -384,6 +396,7 @@
         libraryMatchUnit: data.libraryMatchUnit || data.unit || 'in',
         entrySort: data.entrySort || 'date-desc',
         librarySort: data.librarySort || 'material-asc',
+        libraryViewMode: normalizeLibraryViewMode(data.libraryViewMode),
         projectSort: data.projectSort || 'date-desc',
         inventoryRawSort: data.inventoryRawSort || 'low-stock',
         inventoryBatchSort: data.inventoryBatchSort || 'name-asc',
@@ -395,9 +408,9 @@
     }
     function persist(options = {}) {
       if (storageRecoveryIssue && !options.allowRecoveryOverwrite) return false;
-      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
+      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, projectSort, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, projectSort, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
         return true;
       } catch (err) {
         showStorageWarning();
@@ -450,6 +463,7 @@
         unit: state.unit,
         entrySort: state.entrySort,
         librarySort: state.librarySort,
+        libraryViewMode: state.libraryViewMode,
         projectSort: state.projectSort,
         inventoryRawSort: state.inventoryRawSort,
         inventoryBatchSort: state.inventoryBatchSort,
@@ -762,6 +776,62 @@
       });
       return sorted;
     }
+    function browserNodeKey(namespace, parentPath, nodeType, value) {
+      const normalized = materialMatchKey(value) || 'unspecified';
+      return [namespace, ...(parentPath || []), `${nodeType}:${normalized}`].join('|');
+    }
+    function browserRecordNodeKey(namespace, parentPath, nodeType, recordId) {
+      return [namespace, ...(parentPath || []), `${nodeType}:${encodeURIComponent(String(recordId ?? ''))}`].join('|');
+    }
+    function browserDescendantCount(node) {
+      if (!node) return 0;
+      if (node.recordId) return 1;
+      return (node.children || []).reduce((total, child) => total + browserDescendantCount(child), 0);
+    }
+    function resolveBrowserSelection(allRecords, visibleRecords, selectedId) {
+      const all = Array.isArray(allRecords) ? allRecords : [];
+      const visible = Array.isArray(visibleRecords) ? visibleRecords : [];
+      const selected = all.find(record => record.id === selectedId) || null;
+      const resolved = selected || visible[0] || null;
+      return {
+        selectedId: resolved?.id || '',
+        selected: resolved,
+        hidden: !!resolved && !visible.some(record => record.id === resolved.id)
+      };
+    }
+    function findTreePathForRecord(nodes, recordId, path = []) {
+      for (const node of nodes || []) {
+        const nextPath = [...path, node.key];
+        if (node.recordId === recordId) return nextPath;
+        const found = findTreePathForRecord(node.children, recordId, nextPath);
+        if (found.length) return found;
+      }
+      return [];
+    }
+    function browserHiddenSelectionNotice(hidden, recordLabel = 'record') {
+      return hidden ? `<div class="small muted">This ${esc(recordLabel)} is hidden by the current filters.</div>` : '';
+    }
+    function browserTreeHtml(nodes, context = {}) {
+      const expanded = context.expanded instanceof Set ? context.expanded : new Set();
+      const selectedId = context.selectedId || '';
+      const branch = node => {
+        if (node.recordId) {
+          const selected = node.recordId === selectedId;
+          return `<button type="button" class="nested-browser-leaf ${selected ? 'nested-browser-selected' : ''}" data-nested-browser-record="${esc(node.recordId)}" ${selected ? 'aria-current="true"' : ''}><span>${esc(node.label)}</span><span class="small muted">${node.badge ? esc(node.badge) : ''}${selected ? `${node.badge ? ' / ' : ''}Selected` : ''}</span></button>`;
+        }
+        const count = node.count || browserDescendantCount(node);
+        return `<details data-nested-browser-node="${esc(node.key)}" ${expanded.has(node.key) ? 'open' : ''}><summary>${esc(node.label)} <span class="small muted">(${count})${node.badge ? ` ${esc(node.badge)}` : ''}</span></summary>${(node.children || []).map(branch).join('')}</details>`;
+      };
+      return (nodes || []).map(branch).join('');
+    }
+    function bindBrowserTreeActions(root, callbacks = {}) {
+      root.querySelectorAll('[data-nested-browser-record]').forEach(button => {
+        button.onclick = () => callbacks.select?.(button.dataset.nestedBrowserRecord);
+      });
+      root.querySelectorAll('[data-nested-browser-node]').forEach(details => {
+        details.ontoggle = () => callbacks.toggle?.(details.dataset.nestedBrowserNode, details.open);
+      });
+    }
     function settingsFromSetting(o) {
       return {
         minPower: o.minPower ?? '', maxPower: o.maxPower ?? '', speed: o.speed ?? '', passes: o.passes ?? 1,
@@ -930,6 +1000,141 @@
       }), state.librarySort);
       return { materials, tags, matches, filtered };
     }
+    const LIBRARY_THICKNESS_GROUP_MM = 0.05;
+    function libraryThicknessMetadata(profile, displayUnit = state.unit) {
+      const value = Number(profile?.thicknessValue);
+      const unit = String(profile?.thicknessUnit || '').toLowerCase();
+      if (!Number.isFinite(value) || value <= 0 || !['mm', 'in'].includes(unit)) {
+        return { key: 'unspecified', label: 'Unspecified thickness', mm: null };
+      }
+      const mm = unit === 'in' ? value * 25.4 : value;
+      const bucket = Math.round(mm / LIBRARY_THICKNESS_GROUP_MM);
+      const shown = displayUnit === 'in' ? mm / 25.4 : mm;
+      const rounded = Number(shown.toFixed(displayUnit === 'in' ? 3 : 2));
+      return { key: `mm-${bucket}`, label: `${rounded} ${displayUnit === 'in' ? 'in' : 'mm'}`, mm };
+    }
+    function libraryOperationMetadata(profile) {
+      if (profile?.jobType === 'cut') return { key: 'cut', label: 'Cut', rank: 0 };
+      if (profile?.jobType === 'engrave') {
+        const dither = String(profile.ditherMode || 'none').trim().toLowerCase();
+        return dither && dither !== 'none' ? { key: 'photo', label: 'Photo', rank: 2 } : { key: 'engrave', label: 'Engrave', rank: 1 };
+      }
+      return { key: 'other', label: 'Other', rank: 3 };
+    }
+    function libraryProfileTestSummary(profile) {
+      const tests = normalizeMaterialTests(profile?.tests);
+      const valid = tests.filter(test => /^\d{4}-\d{2}-\d{2}$/.test(String(test.date || '')));
+      const latestTest = [...valid].sort((a, b) => compareText(b.date, a.date) || compareText(a.id, b.id))[0] || null;
+      const recommendedCount = tests.filter(test => test.status === 'recommended').length;
+      const experimentalCount = tests.filter(test => test.status === 'experimental').length;
+      const highestConfidence = tests.reduce((highest, test) => Math.max(highest, num(test.confidence)), 0);
+      const hasPrimary = [profile?.speed, profile?.minPower, profile?.maxPower].some(value => value !== '' && value != null);
+      const statusText = recommendedCount
+        ? 'Recommended Material Test available'
+        : tests.length && experimentalCount === tests.length
+          ? 'Experimental tests only'
+          : tests.length
+            ? 'Material Tests saved - none recommended'
+            : hasPrimary
+              ? 'Primary setting saved - no Material Tests'
+              : 'No primary setting or Material Tests';
+      return { tests, latestTest, recommendedCount, experimentalCount, highestConfidence, hasPrimary, statusText };
+    }
+    function libraryProfileLeafLabel(profile) {
+      const title = String(profile?.title || profile?.name || '').trim();
+      return title || `${String(profile?.material || 'Unspecified material').trim() || 'Unspecified material'} - ${libraryOperationMetadata(profile).label}`;
+    }
+    function libraryProfileStatusLabel(profile, summary = libraryProfileTestSummary(profile)) {
+      const starter = tagsOf(profile).some(tag => normalizeText(tag) === 'starter') || /\b(?:starter|unverified)\b/i.test(profile?.notes || '');
+      if (starter) return 'starter/unverified';
+      if (summary.recommendedCount) return 'Best Known';
+      if (summary.tests.length) return 'Experimental';
+      if (summary.hasPrimary) return 'Saved setting';
+      return 'Unverified';
+    }
+    function libraryProfileLeafBadge(profile) {
+      const summary = libraryProfileTestSummary(profile);
+      return [summary.recommendedCount ? `${summary.recommendedCount} recommended` : '', summary.tests.length ? `${summary.tests.length} test${summary.tests.length === 1 ? '' : 's'}` : '', libraryProfileStatusLabel(profile, summary)].filter(Boolean).join(' / ');
+    }
+    function buildLibraryBrowserTree(profiles, displayUnit = state.unit) {
+      const enriched = (profiles || []).map(profile => {
+        const materialKey = materialMatchKey(profile.material) || 'unspecified-material';
+        const materialLabel = String(profile.material || '').trim() || 'Unspecified material';
+        return { profile, materialKey, materialLabel, thickness: libraryThicknessMetadata(profile, displayUnit), operation: libraryOperationMetadata(profile), leafLabel: libraryProfileLeafLabel(profile) };
+      }).sort((a, b) => compareText(a.materialKey, b.materialKey) || compareText(a.materialLabel, b.materialLabel) || compareText(a.thickness.key, b.thickness.key) || a.operation.rank - b.operation.rank || compareText(a.leafLabel, b.leafLabel) || compareText(a.profile.id, b.profile.id));
+      const materials = new Map();
+      enriched.forEach(item => {
+        const materialPath = [`material:${item.materialKey}`];
+        if (!materials.has(item.materialKey)) materials.set(item.materialKey, { key: browserNodeKey('library', [], 'material', item.materialKey), label: item.materialLabel, count: 0, badge: '', nodeType: 'material', recordId: '', children: [], metadata: {}, thicknesses: new Map() });
+        const material = materials.get(item.materialKey);
+        if (!material.thicknesses.has(item.thickness.key)) material.thicknesses.set(item.thickness.key, { key: browserNodeKey('library', materialPath, 'thickness', item.thickness.key), label: item.thickness.label, count: 0, badge: '', nodeType: 'thickness', recordId: '', children: [], metadata: { mm: item.thickness.mm }, operations: new Map() });
+        const thickness = material.thicknesses.get(item.thickness.key);
+        const thicknessPath = [...materialPath, `thickness:${item.thickness.key}`];
+        if (!thickness.operations.has(item.operation.key)) thickness.operations.set(item.operation.key, { key: browserNodeKey('library', thicknessPath, 'operation', item.operation.key), label: item.operation.label, count: 0, badge: '', nodeType: 'operation', recordId: '', children: [], metadata: { rank: item.operation.rank } });
+        const operation = thickness.operations.get(item.operation.key);
+        const operationPath = [...thicknessPath, `operation:${item.operation.key}`];
+        operation.children.push({ key: browserRecordNodeKey('library', operationPath, 'profile', item.profile.id), label: item.leafLabel, count: 1, badge: libraryProfileLeafBadge(item.profile), nodeType: 'profile', recordId: item.profile.id, children: [], metadata: {} });
+      });
+      return [...materials.values()].map(material => {
+        material.children = [...material.thicknesses.values()].map(thickness => {
+          thickness.children = [...thickness.operations.values()].sort((a, b) => a.metadata.rank - b.metadata.rank || compareText(a.label, b.label)).map(operation => {
+            operation.children.sort((a, b) => compareText(a.label, b.label) || compareText(a.recordId, b.recordId) || String(a.recordId).localeCompare(String(b.recordId)));
+            operation.count = browserDescendantCount(operation);
+            return operation;
+          });
+          thickness.count = browserDescendantCount(thickness);
+          delete thickness.operations;
+          return thickness;
+        }).sort((a, b) => (a.metadata.mm == null) - (b.metadata.mm == null) || (a.metadata.mm ?? 0) - (b.metadata.mm ?? 0) || compareText(a.label, b.label));
+        material.count = browserDescendantCount(material);
+        delete material.thicknesses;
+        return material;
+      }).sort((a, b) => compareText(a.label, b.label) || compareText(a.key, b.key));
+    }
+    function libraryInventorySuggestions(profile, inventory = normalizeInventory(state.inventory).rawMaterials) {
+      return (inventory || []).map(item => {
+        const match = libraryProfilesForInventory(item, [profile])[0];
+        return match ? { item, ...match } : null;
+      }).filter(Boolean).sort((a, b) => b.materialScore - a.materialScore || ((a.thicknessDelta == null ? Infinity : Math.abs(a.thicknessDelta)) - (b.thicknessDelta == null ? Infinity : Math.abs(b.thicknessDelta))) || compareText(a.item.name, b.item.name) || compareText(a.item.id, b.item.id));
+    }
+    function libraryInventoryMatchReason(match) {
+      return ({ 'exact-name': 'Exact Inventory name', 'exact-alias': 'Exact alias', 'similar-name': 'Similar Inventory name', 'similar-alias': 'Similar alias' })[match.matchType] || 'Possible Inventory match';
+    }
+    function projectsForLibraryProfile(profile, projects = state.projects) {
+      const profileKey = materialMatchKey(profile?.material);
+      const byId = new Map();
+      (projects || []).forEach(project => {
+        const reasons = [];
+        if (profile?.id && project?.sourceProfileId === profile.id) reasons.push('Source Library profile');
+        if (profileKey && materialMatchKey(project?.material) === profileKey) reasons.push('Exact material');
+        if (profileKey && normalizeProjectMaterialLines(project?.materialLines).some(line => materialMatchKey(line.name) === profileKey)) reasons.push('Exact material line');
+        if (!reasons.length || !project?.id) return;
+        byId.set(project.id, { project, reasons, sourceMatch: reasons.includes('Source Library profile') });
+      });
+      return [...byId.values()].sort((a, b) => Number(b.sourceMatch) - Number(a.sourceMatch) || compareText(validProjectDate(b.project.dateCreated), validProjectDate(a.project.dateCreated)) || compareText(a.project.name, b.project.name) || compareText(a.project.id, b.project.id));
+    }
+    function libraryBrowserDetailHtml(profile, hidden) {
+      if (!profile) return `<div class="panel nested-browser-detail"><b>No Library profile selected</b><div class="small muted">Add a material or adjust the current filters.</div></div>`;
+      const operation = libraryOperationMetadata(profile);
+      const summary = libraryProfileTestSummary(profile);
+      const latest = summary.latestTest;
+      const tags = tagsOf(profile);
+      const inventory = libraryInventorySuggestions(profile).slice(0, 5);
+      const related = projectsForLibraryProfile(profile).slice(0, 5);
+      const inventoryHtml = inventory.length ? inventory.map(match => `<div class="small" style="margin-top:8px"><b>${esc(match.item.name || 'Unnamed Inventory material')}</b><br>${esc(stockUnitText(match.item.quantityOnHand, match.item.unit))} / ${esc(rawStockStatus(match.item).text)}${match.item.supplier ? `<br>Supplier: ${esc(match.item.supplier)}` : ''}<br><span class="muted">${esc(libraryInventoryMatchReason(match))}</span>${materialBrowserSafetyWarningHtml(match.item)}</div>`).join('') : '<div class="small muted">No matching Inventory material found.</div>';
+      const relatedHtml = related.length ? related.map(match => `<div class="small" style="margin-top:8px"><b>${esc(match.project.name || 'Untitled Project')}</b><br>${esc(match.project.dateCreated || 'No date')} / ${esc(match.project.status || 'kept')} / ${esc(match.project.material || 'No material')}<br><span class="muted">${esc(match.reasons.join(' / '))}</span><div class="actions"><button type="button" data-library-related-project="${esc(match.project.id)}">Open Project</button></div></div>`).join('') : '<div class="small muted">No related Projects found.</div>';
+      const provenance = latest?.sourceGridName ? `Test Grid: ${latest.sourceGridName}` : latest?.sourceKind ? `Source: ${latest.sourceKind}` : latest?.baselineSource ? `Baseline: ${latest.baselineSource}` : '';
+      return `<div class="panel nested-browser-detail"><div class="spread"><div><b>${esc(profile.material || 'Unspecified material')}</b><div class="small muted">${esc(fmt(profile.thicknessValue, profile.thicknessUnit))} - ${esc(operation.label)}</div></div><span class="pill">${esc(libraryProfileLeafBadge(profile))}</span></div>${browserHiddenSelectionNotice(hidden, 'Library profile')}${materialSafetyWarningHtml(profile.material)}${tags.length ? `<div class="row" style="margin-top:8px">${tags.map(tag => `<span class="pill">${esc(tag)}</span>`).join('')}</div>` : ''}<div class="metrics" style="margin-top:9px">${metric('Power', powerLabel(profile))}${metric('Speed', `${profile.speed} mm/min`)}${metric('Passes', profile.passes)}${metric('Line int.', fmt(profile.lineInterval, 'mm'))}</div><div class="small muted" style="margin-top:9px">Air: ${profile.airAssist ? 'On' : 'Off'} - Focus/Z-offset: ${fmt(profile.focusValue, profile.focusUnit)}${profile.software ? ` - ${esc(profile.software)}` : ''}</div>${profile.notes ? `<p class="small">${esc(profile.notes)}</p>` : ''}<div class="panel" style="margin-top:10px"><b>${esc(summary.statusText)}</b><div class="small muted">${summary.tests.length} Material Test${summary.tests.length === 1 ? '' : 's'} / ${summary.recommendedCount} recommended / ${summary.experimentalCount} experimental${summary.highestConfidence ? ` / highest confidence ${summary.highestConfidence}/5` : ''}</div>${latest ? `<div class="small" style="margin-top:8px">Latest valid test: ${esc(latest.date)} - ${esc(materialTestLabel(latest.testType))}<br>Result: ${esc(latest.overallResult || latest.resultSummary || latest.status || 'Recorded')}${provenance ? `<br><span class="muted">${esc(provenance)}</span>` : ''}</div>` : '<div class="small muted" style="margin-top:8px">No Material Test has a valid date.</div>'}</div><div class="actions"><button type="button" data-library-edit-profile="${esc(profile.id)}">Edit</button><button type="button" data-library-duplicate-profile="${esc(profile.id)}">Duplicate</button><button type="button" data-library-project-profile="${esc(profile.id)}">Save as project</button><button type="button" data-library-wizard-profile="${esc(profile.id)}">Material Test Wizard</button><button type="button" class="danger" data-library-delete-profile="${esc(profile.id)}">Delete</button></div><hr><b>Suggested Inventory</b>${inventoryHtml}<hr><b>Related Projects</b>${relatedHtml}</div>`;
+    }
+    function libraryBrowserResultsHtml() {
+      const { filtered } = libraryViewData();
+      const selection = resolveBrowserSelection(state.profiles, filtered, libraryBrowserSelectedId);
+      libraryBrowserSelectedId = selection.selectedId;
+      const tree = buildLibraryBrowserTree(filtered);
+      findTreePathForRecord(tree, selection.selectedId).slice(0, -1).forEach(key => libraryBrowserExpanded.add(key));
+      const treeHtml = filtered.length ? `<div class="panel nested-browser-tree">${browserTreeHtml(tree, { expanded: libraryBrowserExpanded, selectedId: selection.selectedId })}</div>` : `<div class="panel nested-browser-tree"><b>No Library profiles match the current filters.</b><div class="small muted">Adjust search, material, or tag filters.</div></div>`;
+      return `<div class="nested-browser-layout">${treeHtml}${libraryBrowserDetailHtml(selection.selected, selection.hidden)}</div>`;
+    }
     function libraryResultsHtml(filtered) {
       return state.profiles.length ? (filtered.length ? `<div class="grid cards">${filtered.map(profileCard).join('')}</div>` : empty('No library matches', 'Adjust the search or material filter.')) : empty('Library is empty', 'Save tuned settings here as your go-to reference.');
     }
@@ -949,12 +1154,39 @@
       results.innerHTML = libraryResultsHtml(filtered);
       bindLibraryResultActions(results);
     }
+    function bindLibraryBrowserActions(root) {
+      bindBrowserTreeActions(root, {
+        select: id => { libraryBrowserSelectedId = id; refreshLibraryBrowserResults(); },
+        toggle: (key, open) => { open ? libraryBrowserExpanded.add(key) : libraryBrowserExpanded.delete(key); }
+      });
+      root.querySelectorAll('[data-library-edit-profile]').forEach(button => button.onclick = () => openProfile(state.profiles.find(profile => profile.id === button.dataset.libraryEditProfile)));
+      root.querySelectorAll('[data-library-duplicate-profile]').forEach(button => button.onclick = () => { libraryBrowserSelectNewProfile = true; duplicateProfile(button.dataset.libraryDuplicateProfile); });
+      root.querySelectorAll('[data-library-delete-profile]').forEach(button => button.onclick = () => del('profiles', button.dataset.libraryDeleteProfile, 'Remove this material from your library?', 'Library profile'));
+      root.querySelectorAll('[data-library-project-profile]').forEach(button => button.onclick = () => projectFromProfile(button.dataset.libraryProjectProfile));
+      root.querySelectorAll('[data-library-wizard-profile]').forEach(button => button.onclick = () => openMaterialTestWizard(button.dataset.libraryWizardProfile));
+      root.querySelectorAll('[data-library-related-project]').forEach(button => button.onclick = () => openProject(state.projects.find(project => project.id === button.dataset.libraryRelatedProject)));
+    }
+    function refreshLibraryBrowserResults() {
+      const count = document.getElementById('libraryShownCount');
+      const results = document.getElementById('libraryBrowserResults');
+      if (!count || !results) return render();
+      const { filtered } = libraryViewData();
+      count.textContent = `${filtered.length}/${state.profiles.length} shown`;
+      const clearTag = document.getElementById('clearLibraryTag');
+      if (clearTag) clearTag.hidden = state.libraryTagFilter === 'all';
+      results.innerHTML = libraryBrowserResultsHtml();
+      bindLibraryBrowserActions(results);
+    }
     function renderLibrary() {
       const { materials, tags, matches, filtered } = libraryViewData();
       return `
         <div class="toolbar" style="margin-bottom:14px">
           <div class="muted">Curated best-known settings per material. Promote from a log entry, grid cell, or reference row.</div>
           <div class="row"><button id="printLibrary">Print Library</button><button id="openMaterialTestWizard">Material Test Wizard</button><button class="primary" id="newProfile">Add Material</button></div>
+        </div>
+        <div class="toolbar" style="margin-bottom:14px">
+          <div class="row"><button id="libraryBrowseMode" class="${state.libraryViewMode === 'browse' ? 'primary' : ''}">Browse</button><button id="libraryManageMode" class="${state.libraryViewMode === 'manage' ? 'primary' : ''}">Manage</button></div>
+          <div class="row"><span class="pill" id="libraryShownCount">${filtered.length}/${state.profiles.length} shown</span><button id="clearLibraryTag" type="button" ${state.libraryTagFilter === 'all' ? 'hidden' : ''}>Clear tag</button></div>
         </div>
         <div class="toolbar" style="margin-bottom:14px">
           <div class="row" style="flex:1">
@@ -967,14 +1199,14 @@
               <option value="all">All tags</option>
               ${tags.map(t => `<option value="${esc(t)}" ${state.libraryTagFilter === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}
             </select>
-            <select id="librarySort" style="max-width:190px">
+            ${state.libraryViewMode === 'manage' ? `<select id="librarySort" style="max-width:190px">
               <option value="material-asc" ${state.librarySort === 'material-asc' ? 'selected' : ''}>Material A-Z</option>
               <option value="rating-desc" ${state.librarySort === 'rating-desc' ? 'selected' : ''}>Rating high-low</option>
               <option value="speed-asc" ${state.librarySort === 'speed-asc' ? 'selected' : ''}>Speed low-high</option>
-            </select>
+            </select>` : ''}
           </div>
-          <div class="row"><span class="pill" id="libraryShownCount">${filtered.length}/${state.profiles.length} shown</span>${state.libraryTagFilter !== 'all' ? '<button id="clearLibraryTag" type="button">Clear tag</button>' : ''}</div>
         </div>
+        <div class="library-screen-content">
         <div class="panel" style="margin-bottom:14px">
           <div class="toolbar">
             <div>
@@ -988,7 +1220,9 @@
           </div>
           ${matches.length ? `<div class="grid cards" style="margin-top:12px">${matches.map(matchCard).join('')}</div>` : `<div class="small muted" style="margin-top:10px">Enter a material and optional thickness to surface nearby Library profiles.</div>`}
         </div>
-        <div id="libraryResults">${libraryResultsHtml(filtered)}</div>
+        ${state.libraryViewMode === 'browse' ? `<div id="libraryBrowserResults">${libraryBrowserResultsHtml()}</div>` : `<div id="libraryResults">${libraryResultsHtml(filtered)}</div>`}
+        </div>
+        <div class="print-only library-print-all">${libraryResultsHtml(filtered)}</div>
       `;
     }
     function renderGrids() {
@@ -1336,12 +1570,7 @@
       if (match.matchedProfileIds.length) labels.push('Source Library profile');
       return labels.join(' / ');
     }
-    function resolveMaterialBrowserSelection(allItems, visibleItems, selectedId) {
-      const all = allItems || [], visible = visibleItems || [];
-      const selected = all.find(item => item.id === selectedId) || null;
-      const resolved = selected || visible[0] || null;
-      return { selectedId: resolved?.id || '', selected: resolved, hidden: !!resolved && !visible.some(item => item.id === resolved.id) };
-    }
+    function resolveMaterialBrowserSelection(allItems, visibleItems, selectedId) { return resolveBrowserSelection(allItems, visibleItems, selectedId); }
     function revealMaterialBrowserSelection(selected) {
       if (!selected) return;
       inventoryBrowserExpanded.add(`0:${selected.categoryKey}`);
@@ -3172,13 +3401,17 @@
       const entrySort = document.getElementById('entrySort');
       if (entrySort) entrySort.onchange = e => { state.entrySort = e.target.value; persist(); render(); };
       const librarySearch = document.getElementById('librarySearch');
-      if (librarySearch) librarySearch.oninput = e => { state.librarySearch = e.target.value; refreshLibrarySearchResults(); };
+      if (librarySearch) librarySearch.oninput = e => { state.librarySearch = e.target.value; state.libraryViewMode === 'browse' ? refreshLibraryBrowserResults() : refreshLibrarySearchResults(); };
       const libraryFilter = document.getElementById('libraryFilter');
-      if (libraryFilter) libraryFilter.onchange = e => { state.libraryFilter = e.target.value; render(); };
+      if (libraryFilter) libraryFilter.onchange = e => { state.libraryFilter = e.target.value; state.libraryViewMode === 'browse' ? refreshLibraryBrowserResults() : render(); };
       const libraryTagFilter = document.getElementById('libraryTagFilter');
-      if (libraryTagFilter) libraryTagFilter.onchange = e => { state.libraryTagFilter = e.target.value; render(); };
+      if (libraryTagFilter) libraryTagFilter.onchange = e => { state.libraryTagFilter = e.target.value; state.libraryViewMode === 'browse' ? refreshLibraryBrowserResults() : render(); };
       const clearLibraryTag = document.getElementById('clearLibraryTag');
-      if (clearLibraryTag) clearLibraryTag.onclick = () => { state.libraryTagFilter = 'all'; render(); };
+      if (clearLibraryTag) clearLibraryTag.onclick = () => { state.libraryTagFilter = 'all'; state.libraryViewMode === 'browse' ? refreshLibraryBrowserResults() : render(); };
+      const libraryBrowseMode = document.getElementById('libraryBrowseMode');
+      if (libraryBrowseMode) libraryBrowseMode.onclick = () => { state.libraryViewMode = 'browse'; persist(); render(); };
+      const libraryManageMode = document.getElementById('libraryManageMode');
+      if (libraryManageMode) libraryManageMode.onclick = () => { state.libraryViewMode = 'manage'; persist(); render(); };
       const libraryMatchMaterial = document.getElementById('libraryMatchMaterial');
       if (libraryMatchMaterial) libraryMatchMaterial.onchange = e => { state.libraryMatchMaterial = e.target.value; persist(); render(); };
       const libraryMatchThickness = document.getElementById('libraryMatchThickness');
@@ -3301,6 +3534,7 @@
       const exportGridCsv = document.getElementById('exportGridCsv');
       if (exportGridCsv) exportGridCsv.onclick = exportActiveGridCsv;
       bindLogResultActions(document);
+      bindLibraryBrowserActions(document);
       document.querySelectorAll('[data-edit-profile]').forEach(b => b.onclick = () => openProfile(state.profiles.find(p => p.id === b.dataset.editProfile)));
       document.querySelectorAll('[data-duplicate-profile]').forEach(b => b.onclick = () => duplicateProfile(b.dataset.duplicateProfile));
       document.querySelectorAll('[data-delete-profile]').forEach(b => b.onclick = () => del('profiles', b.dataset.deleteProfile, 'Remove this material from your library?', 'Library profile'));
@@ -3315,6 +3549,7 @@
     }
     function closeModal(id) {
       if (id === 'profileModal') pendingGridPromotion = null;
+      if (id === 'profileModal') libraryBrowserSelectNewProfile = false;
       document.getElementById(id).classList.remove('open');
       document.getElementById(id).innerHTML = '';
     }
@@ -3483,6 +3718,8 @@
           else state.profiles.shift();
           return;
         }
+        if (!editingProfileId && libraryBrowserSelectNewProfile) libraryBrowserSelectedId = profileObj.id;
+        libraryBrowserSelectNewProfile = false;
         profileDraftTests = [];
         closeModal('profileModal');
         render();
@@ -3829,6 +4066,129 @@
       return { passed, failed, results: all };
     }
     window.runMaterialBrowserFixtures = runMaterialBrowserCorrectionFixtures;
+    function runLibraryBrowserFixtures() {
+      const fixture = (name, pass, actual = '') => ({ name, pass: !!pass, actual });
+      const profiles = [
+        { id: 'cut-3', material: 'Basswood Plywood', thicknessValue: 3, thicknessUnit: 'mm', jobType: 'cut', ditherMode: 'none', minPower: 70, maxPower: 70, speed: 400, passes: 2, tests: [] },
+        { id: 'cut 3', material: 'Basswood Plywood', thicknessValue: 3, thicknessUnit: 'mm', jobType: 'cut', ditherMode: 'none', minPower: 70, maxPower: 70, speed: 400, passes: 2, tests: [] },
+        { id: 'engrave-118', material: 'basswood-plywood', thicknessValue: .118, thicknessUnit: 'in', jobType: 'engrave', ditherMode: 'none', minPower: 20, maxPower: 20, speed: 12000, passes: 1, tests: [] },
+        { id: 'cut-32', material: 'Basswood plywood', thicknessValue: 3.2, thicknessUnit: 'mm', jobType: 'cut', ditherMode: 'none', tests: [] },
+        { id: 'missing', material: 'Basswood plywood', thicknessValue: '', thicknessUnit: 'mm', jobType: 'engrave', ditherMode: 'none', tests: [] },
+        { id: 'photo', material: 'Basswood plywood', thicknessValue: 3, thicknessUnit: 'mm', jobType: 'engrave', ditherMode: 'Jarvis', tests: [] },
+        { id: 'other', material: 'Basswood plywood', thicknessValue: 3, thicknessUnit: 'mm', jobType: 'score', tests: [] },
+        { id: 'duplicate-a', material: 'Cork', thicknessValue: 3, thicknessUnit: 'mm', jobType: 'engrave', ditherMode: 'none', title: 'Coaster', tests: [] },
+        { id: 'duplicate-b', material: 'Cork', thicknessValue: 3, thicknessUnit: 'mm', jobType: 'engrave', ditherMode: 'none', title: 'Coaster', tests: [] },
+        { id: 'blank-material', material: '', thicknessValue: 1, thicknessUnit: 'mm', jobType: 'engrave', ditherMode: 'none', tests: [] }
+      ];
+      const beforeProfiles = JSON.stringify(profiles);
+      const tree = buildLibraryBrowserTree(profiles, 'mm');
+      const reversedTree = buildLibraryBrowserTree([...profiles].reverse(), 'mm');
+      const flatten = nodes => (nodes || []).flatMap(node => [node, ...flatten(node.children)]);
+      const nodes = flatten(tree), leaves = nodes.filter(node => node.recordId);
+      const basswood = tree.find(node => materialMatchKey(node.label) === 'basswood plywood');
+      const thickness3 = basswood?.children.find(node => node.label === '3 mm');
+      const testProfile = { id: 'tested', material: 'Slate', speed: 10000, minPower: 20, maxPower: 20, tests: [
+        { id: 'invalid', date: 'not-a-date', status: 'failed', confidence: 1 },
+        { id: 'older', date: '2026-06-01', status: 'experimental', confidence: 5, overallResult: 'Usable' },
+        { id: 'latest', date: '2026-07-01', status: 'recommended', confidence: 4, overallResult: 'Excellent' }
+      ] };
+      const experimentalProfile = { id: 'experimental', speed: 9000, tests: [{ id: 'one', date: '', status: 'experimental', confidence: 2 }] };
+      const starterProfile = { id: 'starter-status', material: 'Basswood', tags: ['starter'], tests: [{ id: 'starter-recommended', date: '2026-07-01', status: 'recommended', confidence: 4 }] };
+      const unverifiedProfile = { id: 'unverified-status', material: 'Basswood', notes: 'UNVERIFIED starting point.', tests: [] };
+      const bestKnownProfile = { id: 'best-known-status', material: 'Basswood', tests: [{ id: 'recommended-status', date: '2026-07-01', status: 'recommended', confidence: 4 }] };
+      const emptyProfile = { id: 'empty-status', material: 'Basswood', tests: [] };
+      const statusProfilesBefore = JSON.stringify([starterProfile, unverifiedProfile, bestKnownProfile, experimentalProfile, emptyProfile]);
+      const testBefore = JSON.stringify(testProfile), summary = libraryProfileTestSummary(testProfile), experimentalSummary = libraryProfileTestSummary(experimentalProfile);
+      const inventory = [
+        { id: 'inventory-name', name: 'Slate', aliases: '', quantityOnHand: 2, unit: 'each' },
+        { id: 'inventory-alias', name: 'Stone blank', aliases: 'Slate', quantityOnHand: 1, unit: 'each' },
+        { id: 'inventory-similar-name', name: 'Black slate engraving blank', aliases: '', quantityOnHand: 3, unit: 'each' },
+        { id: 'inventory-similar-alias', name: 'Stone serving board', aliases: 'Natural slate serving board', quantityOnHand: 1, unit: 'each' },
+        { id: 'inventory-similar-coaster', name: 'Slate coaster blank', aliases: '', quantityOnHand: 6, unit: 'each' },
+        { id: 'inventory-similar-board', name: 'Slate cheese board', aliases: '', quantityOnHand: 2, unit: 'each' },
+        { id: 'inventory-other', name: 'Walnut', aliases: '', quantityOnHand: 3, unit: 'sheet' }
+      ];
+      const inventoryBefore = JSON.stringify(inventory), suggestions = libraryInventorySuggestions(testProfile, inventory);
+      const projects = [
+        { id: 'source-project', name: 'Source', material: 'Walnut', dateCreated: '2026-07-01', sourceProfileId: 'tested', materialLines: [] },
+        { id: 'material-project', name: 'Material', material: 'Slate', dateCreated: '2026-07-02', sourceProfileId: '', materialLines: [] },
+        { id: 'multi-project', name: 'Multi', material: 'Slate', dateCreated: '2026-07-03', sourceProfileId: 'tested', materialLines: [{ id: 'line', name: 'Slate' }] },
+        { id: 'unrelated-project', name: 'Other', material: 'Cork', dateCreated: '2026-07-04', sourceProfileId: '', materialLines: [] }
+      ];
+      const projectsBefore = JSON.stringify(projects), related = projectsForLibraryProfile(testProfile, projects), reversedRelated = projectsForLibraryProfile(testProfile, [...projects].reverse());
+      const selectedRecords = [{ id: 'a', label: 'Same' }, { id: 'b', label: 'Same' }];
+      const previousMode = state.libraryViewMode;
+      state.libraryViewMode = 'browse';
+      const backup = backupObject();
+      state.libraryViewMode = previousMode;
+      const results = [
+        fixture('Deterministic tree sorting', JSON.stringify(tree) === JSON.stringify(reversedTree)),
+        fixture('Duplicate labels remain separate by record ID', leaves.filter(node => node.label === 'Coaster').map(node => node.recordId).sort().join('|') === 'duplicate-a|duplicate-b'),
+        fixture('Parent-qualified keys do not collide', new Set(nodes.map(node => node.key)).size === nodes.length),
+        fixture('Punctuation-distinct record IDs produce distinct leaf keys', leaves.find(node => node.recordId === 'cut-3')?.key !== leaves.find(node => node.recordId === 'cut 3')?.key),
+        fixture('Tree paths preserve each punctuation-distinct record ID', findTreePathForRecord(tree, 'cut-3').at(-1) === leaves.find(node => node.recordId === 'cut-3')?.key && findTreePathForRecord(tree, 'cut 3').at(-1) === leaves.find(node => node.recordId === 'cut 3')?.key),
+        fixture('Full path found for selected record', findTreePathForRecord(tree, 'photo').length === 4),
+        fixture('Valid selection retained', resolveBrowserSelection(selectedRecords, selectedRecords, 'b').selectedId === 'b'),
+        fixture('Hidden selected record retained and marked hidden', resolveBrowserSelection(selectedRecords, [selectedRecords[0]], 'b').selectedId === 'b' && resolveBrowserSelection(selectedRecords, [selectedRecords[0]], 'b').hidden),
+        fixture('Deleted selection falls back to first visible record', resolveBrowserSelection([selectedRecords[0]], [selectedRecords[0]], 'b').selectedId === 'a'),
+        fixture('Empty records produce no selection', resolveBrowserSelection([], [], 'b').selectedId === ''),
+        fixture('Source records are not mutated', JSON.stringify(profiles) === beforeProfiles),
+        fixture('One material has several thicknesses', (basswood?.children.length || 0) >= 3),
+        fixture('Equivalent mm and inch thickness share a group', thickness3?.count >= 4 && findTreePathForRecord(tree, 'cut-3')[1] === findTreePathForRecord(tree, 'engrave-118')[1]),
+        fixture('Meaningfully different thicknesses stay separate', findTreePathForRecord(tree, 'cut-3')[1] !== findTreePathForRecord(tree, 'cut-32')[1]),
+        fixture('Missing thickness bucket', nodes.some(node => node.nodeType === 'thickness' && node.label === 'Unspecified thickness')),
+        fixture('Cut and engrave at same thickness are separate operations', thickness3?.children.some(node => node.label === 'Cut') && thickness3?.children.some(node => node.label === 'Engrave')),
+        fixture('Dithered engraving maps to Photo', libraryOperationMetadata(profiles.find(profile => profile.id === 'photo')).label === 'Photo'),
+        fixture('Unsupported job type maps to Other', libraryOperationMetadata(profiles.find(profile => profile.id === 'other')).label === 'Other'),
+        fixture('Duplicate profile display labels remain distinct', leaves.filter(node => node.label === 'Coaster').length === 2),
+        fixture('Reversed input produces identical ordered tree', JSON.stringify(tree) === JSON.stringify(reversedTree)),
+        fixture('Blank material uses Unspecified material', tree.some(node => node.label === 'Unspecified material')),
+        fixture('Starter profile with recommended test remains starter/unverified', libraryProfileStatusLabel(starterProfile) === 'starter/unverified' && libraryProfileLeafBadge(starterProfile).endsWith('starter/unverified')),
+        fixture('Unverified notes produce starter/unverified badge', libraryProfileLeafBadge(unverifiedProfile) === 'starter/unverified'),
+        fixture('Recommended profile qualifies as Best Known', libraryProfileLeafBadge(bestKnownProfile).endsWith('Best Known')),
+        fixture('Primary setting without tests is Saved setting', libraryProfileStatusLabel(profiles[0]) === 'Saved setting' && !libraryProfileLeafBadge(profiles[0]).includes('Best Known')),
+        fixture('Experimental tests do not imply Best Known', libraryProfileStatusLabel(experimentalProfile) === 'Experimental' && libraryProfileLeafBadge(experimentalProfile).endsWith('Experimental') && !libraryProfileLeafBadge(experimentalProfile).includes('Best Known')),
+        fixture('Profile without settings or tests is Unverified', libraryProfileStatusLabel(emptyProfile) === 'Unverified'),
+        fixture('Badge composer uses authoritative status helper', libraryProfileLeafBadge(bestKnownProfile).endsWith(libraryProfileStatusLabel(bestKnownProfile)) && libraryProfileLeafBadge(experimentalProfile).endsWith(libraryProfileStatusLabel(experimentalProfile))),
+        fixture('Status helpers do not mutate profile or test inputs', JSON.stringify([starterProfile, unverifiedProfile, bestKnownProfile, experimentalProfile, emptyProfile]) === statusProfilesBefore),
+        fixture('Primary settings without tests are not proven', libraryProfileTestSummary(profiles[0]).statusText === 'Primary setting saved - no Material Tests'),
+        fixture('Experimental-only tests are identified', experimentalSummary.statusText === 'Experimental tests only'),
+        fixture('Recommended test count is correct', summary.recommendedCount === 1),
+        fixture('Latest valid test selected', summary.latestTest?.id === 'latest'),
+        fixture('Highest confidence is correct', summary.highestConfidence === 5),
+        fixture('Missing and invalid dates handled safely', experimentalSummary.latestTest === null && summary.latestTest?.id !== 'invalid'),
+        fixture('Profile and test inputs are not mutated', JSON.stringify(testProfile) === testBefore),
+        fixture('Exact Inventory-name suggestion', suggestions.some(match => match.item.id === 'inventory-name' && match.matchType === 'exact-name')),
+        fixture('Alias Inventory suggestion', suggestions.some(match => match.item.id === 'inventory-alias' && match.matchType === 'exact-alias')),
+        fixture('Similar Inventory-name suggestion', suggestions.some(match => match.item.id === 'inventory-similar-name' && match.matchType === 'similar-name')),
+        fixture('Similar Inventory-alias suggestion', suggestions.some(match => match.item.id === 'inventory-similar-alias' && match.matchType === 'similar-alias')),
+        fixture('Original similar alias text retained', suggestions.find(match => match.item.id === 'inventory-similar-alias')?.matchedAlias === 'Natural slate serving board'),
+        fixture('Similar Inventory reasons are human readable', libraryInventoryMatchReason(suggestions.find(match => match.item.id === 'inventory-similar-name')) === 'Similar Inventory name' && libraryInventoryMatchReason(suggestions.find(match => match.item.id === 'inventory-similar-alias')) === 'Similar alias'),
+        fixture('Exact Inventory suggestions outrank similar suggestions', suggestions.slice(0, 2).map(match => match.matchType).join('|') === 'exact-name|exact-alias'),
+        fixture('Multiple Inventory suggestions remain separate', suggestions.length === 6 && new Set(suggestions.map(match => match.item.id)).size === 6),
+        fixture('Pure Inventory suggestion helper remains uncapped', suggestions.length > 5),
+        fixture('Inventory inputs are not mutated', JSON.stringify(inventory) === inventoryBefore),
+        fixture('sourceProfileId Projects are newest first before material fallback', related.map(match => match.project.id).join('|') === 'multi-project|source-project|material-project'),
+        fixture('Reversed Project input keeps deterministic relation order', reversedRelated.map(match => match.project.id).join('|') === 'multi-project|source-project|material-project'),
+        fixture('Material fallback Project relation', related.some(match => match.project.id === 'material-project' && match.reasons.includes('Exact material'))),
+        fixture('Duplicate Project paths deduplicate', related.filter(match => match.project.id === 'multi-project').length === 1),
+        fixture('Unrelated Project excluded', !related.some(match => match.project.id === 'unrelated-project')),
+        fixture('Project inputs are not mutated', JSON.stringify(projects) === projectsBefore),
+        fixture('Legacy state defaults to Manage', normalizeLibraryViewMode(undefined) === 'manage'),
+        fixture('Browse preference survives backup object', backup.libraryViewMode === 'browse'),
+        fixture('Invalid imported mode normalizes to Manage', normalizeLibraryViewMode('sideways') === 'manage'),
+        fixture('Selection and expansion absent from backup', !('libraryBrowserSelectedId' in backup) && !('libraryBrowserExpanded' in backup))
+      ];
+      const passed = results.filter(result => result.pass).length;
+      const failed = results.length - passed;
+      console.group('Library browser fixtures');
+      console.table(results);
+      console.log(`${passed} passed`);
+      console.log(`${failed} failed`);
+      console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runLibraryBrowserFixtures = runLibraryBrowserFixtures;
     function normalizeFinishedBatch(f, existingId) {
       const made = Math.max(0, Math.round(num(f.quantityMade)));
       const sellable = Math.max(0, Math.round(num(f.quantitySellable)));
@@ -4255,6 +4615,7 @@
       if (!data || typeof data !== 'object') return;
       if ('entrySort' in data) state.entrySort = data.entrySort || 'date-desc';
       if ('librarySort' in data) state.librarySort = data.librarySort || 'material-asc';
+      if ('libraryViewMode' in data) state.libraryViewMode = normalizeLibraryViewMode(data.libraryViewMode);
       if ('projectSort' in data) state.projectSort = data.projectSort || 'date-desc';
       if ('inventoryRawSort' in data) state.inventoryRawSort = data.inventoryRawSort || 'low-stock';
       if ('inventoryBatchSort' in data) state.inventoryBatchSort = data.inventoryBatchSort || 'name-asc';
@@ -4269,6 +4630,7 @@
     function resetBackupPreferences() {
       state.entrySort = 'date-desc';
       state.librarySort = 'material-asc';
+      state.libraryViewMode = 'manage';
       state.projectSort = 'date-desc';
       state.inventoryRawSort = 'low-stock';
       state.inventoryBatchSort = 'name-asc';
@@ -4509,6 +4871,7 @@
     if (selftest === 'normalization' || selftest === 'all') runMaterialTestNormalizationFixtures();
     if (selftest === 'grid' || selftest === 'all') runGridPromotionFixtures();
     if (selftest === 'materials' || selftest === 'all') window.runMaterialBrowserFixtures();
+    if (selftest === 'library-browser' || selftest === 'all') runLibraryBrowserFixtures();
     if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
     render();
