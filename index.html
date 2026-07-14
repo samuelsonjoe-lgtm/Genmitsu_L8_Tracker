@@ -89,6 +89,9 @@
     .photo-thumb { border: 1px solid var(--line); border-radius: 7px; padding: 7px; background: #f8fafc; }
     .photo-thumb img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 5px; display: block; }
     .photo-thumb button { width: 100%; margin-top: 6px; padding: 6px; }
+    .project-browser-photo-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .project-browser-photo { flex: 0 1 96px; width: 96px; padding: 0; overflow: hidden; }
+    .project-browser-photo img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
     .photo-preview-large { max-width: 100%; max-height: 72vh; border-radius: 8px; display: block; margin: 10px auto 0; }
     .empty { text-align: center; padding: 48px 20px; color: var(--muted); }
     .modal {
@@ -342,6 +345,8 @@
     let libraryBrowserSelectedId = '';
     let libraryBrowserExpanded = new Set();
     let libraryBrowserSelectNewProfile = false;
+    let projectBrowserSelectedId = '';
+    let projectBrowserExpanded = new Set();
     let materialTestWizard = null;
     let editingProjectId = null;
     let projectPhotosDraft = [];
@@ -371,8 +376,9 @@
     }
     function normalizeInventoryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function normalizeLibraryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
+    function normalizeProjectViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function freshState() {
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', libraryViewMode: 'manage', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', inventoryViewMode: 'manage', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', libraryViewMode: 'manage', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', projectViewMode: 'manage', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', inventoryViewMode: 'manage', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
     }
     function loadState() {
       const decoded = decodeStoredState(localStorage.getItem(STORAGE_KEY));
@@ -398,6 +404,7 @@
         librarySort: data.librarySort || 'material-asc',
         libraryViewMode: normalizeLibraryViewMode(data.libraryViewMode),
         projectSort: data.projectSort || 'date-desc',
+        projectViewMode: normalizeProjectViewMode(data.projectViewMode),
         inventoryRawSort: data.inventoryRawSort || 'low-stock',
         inventoryBatchSort: data.inventoryBatchSort || 'name-asc',
         inventoryViewMode: normalizeInventoryViewMode(data.inventoryViewMode),
@@ -408,9 +415,9 @@
     }
     function persist(options = {}) {
       if (storageRecoveryIssue && !options.allowRecoveryOverwrite) return false;
-      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, projectSort, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
+      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, projectSort, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
         return true;
       } catch (err) {
         showStorageWarning();
@@ -465,6 +472,7 @@
         librarySort: state.librarySort,
         libraryViewMode: state.libraryViewMode,
         projectSort: state.projectSort,
+        projectViewMode: state.projectViewMode,
         inventoryRawSort: state.inventoryRawSort,
         inventoryBatchSort: state.inventoryBatchSort,
         inventoryViewMode: state.inventoryViewMode,
@@ -1392,11 +1400,113 @@
       return sortBy(state.projects.filter(p => {
         const tags = tagsOf(p);
         const tagOk = state.projectTagFilter === 'all' || tags.includes(state.projectTagFilter);
-        const status = p.status || 'kept';
-        const statusOk = state.projectStatusFilter === 'all' || status === state.projectStatusFilter;
+        const statusOk = projectMatchesStatusFilter(p, state.projectStatusFilter);
         const hay = [p.name, p.material, p.notes, ...tags].join(' ').toLowerCase();
         return tagOk && statusOk && (!q || hay.includes(q));
       }), state.projectSort);
+    }
+    function normalizeProjectStatus(value) { return String(value ?? '').trim() || 'kept'; }
+    function projectMatchesStatusFilter(project, statusFilter) { return statusFilter === 'all' || normalizeProjectStatus(project?.status) === statusFilter; }
+    function projectStatusMetadata(value) {
+      const raw = normalizeProjectStatus(value);
+      const known = {
+        'for-sale': { key: 'for-sale', label: 'For sale', rank: 0 },
+        sold: { key: 'sold', label: 'Sold', rank: 1 },
+        gifted: { key: 'gifted', label: 'Gifted', rank: 2 },
+        kept: { key: 'kept', label: 'Kept', rank: 3 }
+      };
+      if (known[raw]) return known[raw];
+      return { key: `other-${materialMatchKey(raw) || 'unknown'}`, label: `Other: ${raw}`, rank: 5 };
+    }
+    function projectMaterialMetadata(project) {
+      const raw = String(project?.material || '').trim();
+      return { key: materialMatchKey(raw) || 'unspecified', label: raw || 'Unspecified material' };
+    }
+    function projectLeafLabel(project) { return String(project?.name || '').trim() || 'Untitled Project'; }
+    function projectHasFinancialValues(project) {
+      return ['soldPrice', 'materialCost', 'hardwareCost', 'packagingCost', 'machineMinutes', 'laserMinutes', 'laborMinutes', 'machineRate', 'laborRate', 'feePercent', 'fixedFee', 'saleDate', 'accountingNotes'].some(key => {
+        const value = project?.[key];
+        return typeof value === 'number' ? value !== 0 : String(value ?? '').trim() !== '';
+      }) || normalizeProjectMaterialLines(project?.materialLines).length > 0;
+    }
+    function projectLeafBadge(project) {
+      const date = validProjectDate(project?.dateCreated) || 'No date';
+      if (!projectHasFinancialValues(project)) return date;
+      const totals = projectAccountingTotals(project);
+      const showProfit = project?.status === 'sold' || totals.profit < 0;
+      return showProfit ? `${date} / ${money(totals.profit)} profit` : date;
+    }
+    function buildProjectBrowserTree(projects) {
+      const enriched = (projects || []).map(project => ({
+        project,
+        status: projectStatusMetadata(project?.status),
+        material: projectMaterialMetadata(project),
+        label: projectLeafLabel(project),
+        date: validProjectDate(project?.dateCreated)
+      })).sort((a, b) => a.status.rank - b.status.rank || compareText(a.status.key, b.status.key) || compareText(a.status.label, b.status.label) || compareText(a.material.key, b.material.key) || compareText(a.material.label, b.material.label) || Number(!a.date) - Number(!b.date) || compareText(b.date, a.date) || compareText(a.label, b.label) || compareText(a.project.id, b.project.id) || String(a.project.id).localeCompare(String(b.project.id)));
+      const statuses = new Map();
+      enriched.forEach(item => {
+        const statusPath = [`status:${item.status.key}`];
+        if (!statuses.has(item.status.key)) statuses.set(item.status.key, { key: browserNodeKey('projects', [], 'status', item.status.key), label: item.status.label, count: 0, badge: '', nodeType: 'status', recordId: '', children: [], metadata: { rank: item.status.rank }, materials: new Map() });
+        const status = statuses.get(item.status.key);
+        if (!status.materials.has(item.material.key)) status.materials.set(item.material.key, { key: browserNodeKey('projects', statusPath, 'material', item.material.key), label: item.material.label, count: 0, badge: '', nodeType: 'material', recordId: '', children: [], metadata: {} });
+        const material = status.materials.get(item.material.key);
+        material.children.push({ key: browserRecordNodeKey('projects', [...statusPath, `material:${item.material.key}`], 'project', item.project.id), label: item.label, count: 1, badge: projectLeafBadge(item.project), nodeType: 'project', recordId: item.project.id, children: [], metadata: { date: item.date } });
+      });
+      return [...statuses.values()].map(status => {
+        status.children = [...status.materials.values()].map(material => {
+          material.children.sort((a, b) => Number(!a.metadata.date) - Number(!b.metadata.date) || compareText(b.metadata.date, a.metadata.date) || compareText(a.label, b.label) || compareText(a.recordId, b.recordId) || String(a.recordId).localeCompare(String(b.recordId)));
+          material.count = browserDescendantCount(material);
+          return material;
+        }).sort((a, b) => compareText(a.label, b.label) || compareText(a.key, b.key));
+        status.count = browserDescendantCount(status);
+        delete status.materials;
+        return status;
+      }).sort((a, b) => a.metadata.rank - b.metadata.rank || compareText(a.label, b.label) || compareText(a.key, b.key));
+    }
+    function projectTreeRecordIds(nodes) {
+      return (nodes || []).flatMap(node => node.recordId ? [node.recordId] : projectTreeRecordIds(node.children));
+    }
+    function projectSourceProfile(project, profiles = state.profiles) { return (profiles || []).find(profile => profile.id === project?.sourceProfileId) || null; }
+    function projectSourceEntry(project, entries = state.entries) { return (entries || []).find(entry => entry.id === project?.sourceEntryId) || null; }
+    function projectInventorySuggestions(project, inventory = normalizeInventory(state.inventory).rawMaterials) { return libraryInventorySuggestions(project, inventory); }
+    function projectRelatedFinishedBatches(project, batches = normalizeInventory(state.inventory).finishedBatches) {
+      const byId = new Map();
+      (batches || []).forEach(batch => { if (batch?.id && batch.projectId === project?.id) byId.set(batch.id, batch); });
+      return [...byId.values()].sort((a, b) => compareText(a.itemName, b.itemName) || compareText(a.id, b.id) || String(a.id).localeCompare(String(b.id)));
+    }
+    function projectHasSettingsSnapshot(project) {
+      const settings = project?.settings;
+      return !!settings && typeof settings === 'object' && ['minPower', 'maxPower', 'speed', 'passes', 'lineInterval', 'airPressure', 'overscanPercent', 'kerfOffset', 'focusValue', 'software', 'settingsFile'].some(key => settings[key] !== '' && settings[key] != null) || !!settings?.airAssist;
+    }
+    function projectBrowserPhotoItems(photos) { return normalizeProjectPhotos(photos).map((photo, index) => ({ photo, index })); }
+    function projectBrowserPhotosHtml(project) {
+      const items = projectBrowserPhotoItems(project?.photos);
+      if (!items.length) return '';
+      return `<div class="project-browser-photo-strip">${items.map(({ photo, index }) => `<button type="button" class="project-browser-photo" data-project-browser-photo="${esc(project.id)}" data-photo-index="${index}" aria-label="Open ${esc(photo.name || `Project photo ${index + 1}`)}"><img src="${esc(photo.dataUrl)}" alt="${esc(photo.name || project.name || `Project photo ${index + 1}`)}"></button>`).join('')}</div><div class="small muted">${items.length} photo${items.length === 1 ? '' : 's'}</div>`;
+    }
+    function projectBrowserDetailHtml(project, hidden) {
+      if (!project) return `<div class="panel nested-browser-detail"><b>No Project selected</b><div class="small muted">Add a Project or adjust the current filters.</div></div>`;
+      const status = projectStatusMetadata(project.status), tags = tagsOf(project), lines = normalizeProjectMaterialLines(project.materialLines);
+      const sourceProfile = projectSourceProfile(project), sourceEntry = projectSourceEntry(project), inventory = projectInventorySuggestions(project).slice(0, 5), batches = projectRelatedFinishedBatches(project);
+      const settings = project.settings || {}, hasSettings = projectHasSettingsSnapshot(project), hasFinancial = projectHasFinancialValues(project);
+      const settingsHtml = hasSettings ? `<div class="metrics">${metric('Power', powerLabel(settings))}${metric('Speed', settings.speed === '' || settings.speed == null ? '-' : `${settings.speed} mm/min`)}${metric('Passes', settings.passes || '-')}${metric('Line int.', fmt(settings.lineInterval, 'mm'))}${metric('Air assist', settings.airAssist ? 'On' : 'Off')}${metric('Air pressure', settings.airPressure === '' || settings.airPressure == null ? '-' : settings.airPressure)}${metric('Focus/Z-offset', fmt(settings.focusValue, settings.focusUnit))}${metric('Overscan', settings.overscanPercent === '' || settings.overscanPercent == null ? '-' : `${settings.overscanPercent}%`)}${metric('Kerf offset', fmt(settings.kerfOffset, 'mm'))}${metric('Dither', settings.ditherMode || 'none')}${metric('Software', settings.software || '-')}${metric('Settings file', settings.settingsFile || '-')}</div>` : '<div class="small muted">No settings snapshot recorded.</div>';
+      const linesHtml = lines.length ? lines.map(line => `<div class="small" style="margin-top:8px"><b>${esc(line.name)}</b> - ${esc(line.quantity === '' ? '-' : line.quantity)} ${esc(line.unit)} at ${esc(line.unitCost === '' ? '-' : money(num(line.unitCost)))}${line.unitCost === '' ? '' : ` / ${esc(money(projectMaterialLineTotal(line)))}`}${line.notes ? `<br><span class="muted">${esc(line.notes)}</span>` : ''}</div>`).join('') : '<div class="small muted">No material cost lines recorded.</div>';
+      const accountingHtml = hasFinancial ? `${projectAccountingResultsHtml(project)}<div class="small muted" style="margin-top:8px">Quantity: ${esc(projectQuantity(project))} / Sold price: ${project.soldPrice === '' || project.soldPrice == null ? 'not recorded' : esc(money(num(project.soldPrice)))} / Material cost mode: ${esc(project.materialCostMode || 'total')} / Fixed fee mode: ${esc(project.fixedFeeMode || 'order')}</div>` : `<div class="small muted">No accounting values recorded.${project.status === 'sold' && (project.soldPrice === '' || project.soldPrice == null) ? ' Sold price not recorded.' : ''}</div>`;
+      const inventoryHtml = inventory.length ? inventory.map(match => `<div class="small" style="margin-top:8px"><b>${esc(match.item.name || 'Unnamed Inventory material')}</b><br>${esc(stockUnitText(match.item.quantityOnHand, match.item.unit))} / ${esc(rawStockStatus(match.item).text)}${match.item.supplier ? `<br>Supplier: ${esc(match.item.supplier)}` : ''}<br><span class="muted">${esc(libraryInventoryMatchReason(match))}</span>${materialBrowserSafetyWarningHtml(match.item)}<div class="actions"><button type="button" data-project-inventory="${esc(match.item.id)}">Open Inventory</button></div></div>`).join('') : '<div class="small muted">No matching Inventory material found.</div>';
+      const batchesHtml = batches.length ? batches.map(batch => `<div class="small" style="margin-top:8px"><b>${esc(batch.itemName || 'Unnamed batch')}</b><br>${esc(batchRemaining(batch))} remaining / ${esc(batch.status || 'made')}</div>`).join('') : '<div class="small muted">No related finished batches.</div>';
+      const sourceProfileHtml = project.sourceProfileId ? (sourceProfile ? `<div class="small"><b>${esc(sourceProfile.material || 'Unspecified material')}</b> - ${esc(libraryOperationMetadata(sourceProfile).label)}<div class="actions"><button type="button" data-project-source-profile="${esc(sourceProfile.id)}">Open Library profile</button></div></div>` : '<div class="small muted">Source Library profile is no longer available.</div>') : '<div class="small muted">No source Library profile recorded.</div>';
+      const sourceEntryHtml = project.sourceEntryId ? (sourceEntry ? `<div class="small"><b>${esc(sourceEntry.material || 'Unspecified material')}</b> - ${esc(sourceEntry.date || 'No date')}<div class="actions"><button type="button" data-project-source-entry="${esc(sourceEntry.id)}">Open Log entry</button></div></div>` : '<div class="small muted">Source Log entry is no longer available.</div>') : '<div class="small muted">No source Log entry recorded.</div>';
+      return `<div class="panel nested-browser-detail"><div class="spread"><div><b>${esc(projectLeafLabel(project))}</b><div class="small muted">${esc(status.label)} / ${esc(validProjectDate(project.dateCreated) || 'No date')}${project.saleDate ? ` / sold ${esc(project.saleDate)}` : ''}</div></div><span class="pill">${esc(projectLeafBadge(project))}</span></div>${browserHiddenSelectionNotice(hidden, 'Project')}${projectBrowserPhotosHtml(project)}<div class="small" style="margin-top:8px">Rating: ${stars(project.rating)} / Quantity: ${esc(projectQuantity(project))}</div>${tags.length ? `<div class="row" style="margin-top:8px">${tags.map(tag => `<span class="pill">${esc(tag)}</span>`).join('')}</div>` : ''}<hr><b>Primary material</b><div class="small">${esc(project.material || 'Unspecified material')} / ${esc(fmt(project.thicknessValue, project.thicknessUnit))} / ${esc(project.jobType || 'Unspecified operation')}</div>${materialSafetyWarningHtml(project.material)}<hr><b>Material cost lines</b>${linesHtml}<hr><b>Settings snapshot</b>${settingsHtml}<hr><b>Accounting</b>${accountingHtml}${project.accountingNotes ? `<p class="small"><b>Accounting notes:</b> ${esc(project.accountingNotes)}</p>` : ''}${project.notes ? `<p class="small"><b>Notes:</b> ${esc(project.notes)}</p>` : ''}<div class="actions"><button type="button" data-project-browser-edit="${esc(project.id)}">Edit</button><button type="button" data-project-browser-log="${esc(project.id)}">Copy to log</button><button type="button" class="danger" data-project-browser-delete="${esc(project.id)}">Delete</button></div><hr><b>Source Library profile</b>${sourceProfileHtml}<hr><b>Source Log entry</b>${sourceEntryHtml}<hr><b>Suggested Inventory</b>${inventoryHtml}<hr><b>Related finished batches</b>${batchesHtml}</div>`;
+    }
+    function projectBrowserResultsHtml(filtered) {
+      const tree = buildProjectBrowserTree(filtered);
+      const visibleIds = projectTreeRecordIds(tree), visible = visibleIds.map(id => filtered.find(project => project.id === id)).filter(Boolean);
+      const selection = resolveBrowserSelection(state.projects, visible, projectBrowserSelectedId);
+      projectBrowserSelectedId = selection.selectedId;
+      findTreePathForRecord(tree, selection.selectedId).slice(0, -1).forEach(key => projectBrowserExpanded.add(key));
+      const treeHtml = visible.length ? `<div class="panel nested-browser-tree">${browserTreeHtml(tree, { expanded: projectBrowserExpanded, selectedId: selection.selectedId })}</div>` : `<div class="panel nested-browser-tree"><b>${state.projects.length ? 'No Projects match the current filters.' : 'No Projects yet.'}</b><div class="small muted">${state.projects.length ? 'Adjust search, tag, or status filters.' : 'Save a finished piece to begin browsing Projects.'}</div></div>`;
+      return `<div class="nested-browser-layout">${treeHtml}${projectBrowserDetailHtml(selection.selected, selection.hidden)}</div>`;
     }
     function projectManageResultsHtml(filtered) {
       return state.projects.length
@@ -1416,9 +1526,23 @@
         openProjectPhotoViewer(image.dataset.projectPhoto, Number(image.dataset.photoIndex || 0));
       });
     }
+    function bindProjectBrowserActions(root) {
+      bindBrowserTreeActions(root, {
+        select: id => { projectBrowserSelectedId = id; refreshProjectBrowserResults(); },
+        toggle: (key, open) => { open ? projectBrowserExpanded.add(key) : projectBrowserExpanded.delete(key); }
+      });
+      root.querySelectorAll('[data-project-browser-edit]').forEach(button => button.onclick = () => openProject(state.projects.find(project => project.id === button.dataset.projectBrowserEdit)));
+      root.querySelectorAll('[data-project-browser-log]').forEach(button => button.onclick = () => projectToEntry(button.dataset.projectBrowserLog));
+      root.querySelectorAll('[data-project-browser-delete]').forEach(button => button.onclick = () => del('projects', button.dataset.projectBrowserDelete, 'Delete this project?', 'Project'));
+      root.querySelectorAll('[data-project-browser-photo]').forEach(image => image.onclick = event => { event.stopPropagation(); openProjectPhotoViewer(image.dataset.projectBrowserPhoto, Number(image.dataset.photoIndex || 0)); });
+      root.querySelectorAll('[data-project-source-profile]').forEach(button => button.onclick = () => openProfile(state.profiles.find(profile => profile.id === button.dataset.projectSourceProfile)));
+      root.querySelectorAll('[data-project-source-entry]').forEach(button => button.onclick = () => openEntry(state.entries.find(entry => entry.id === button.dataset.projectSourceEntry)));
+      root.querySelectorAll('[data-project-inventory]').forEach(button => button.onclick = () => openRawMaterial(inventoryList('rawMaterials').find(item => item.id === button.dataset.projectInventory)));
+    }
     function bindProjectResultActions(root) {
       bindProjectAccountingActions(root);
       bindProjectManageResultActions(root);
+      bindProjectBrowserActions(root);
     }
     function refreshProjectAccountingSummary(filtered) {
       const accounting = document.getElementById('projectAccountingSummary');
@@ -1434,6 +1558,13 @@
       bindProjectManageResultActions(results);
       return true;
     }
+    function refreshProjectBrowserResults(filtered = filteredProjects()) {
+      const results = document.getElementById('projectViewResults');
+      if (!results) return false;
+      results.innerHTML = projectBrowserResultsHtml(filtered);
+      bindProjectBrowserActions(results);
+      return true;
+    }
     function refreshProjectFilteredResults() {
       const count = document.getElementById('projectShownCount');
       const accounting = document.getElementById('projectAccountingSummary');
@@ -1446,7 +1577,7 @@
       if (clearTag) clearTag.hidden = state.projectTagFilter === 'all';
       if (clearStatus) clearStatus.hidden = state.projectStatusFilter === 'all';
       refreshProjectAccountingSummary(filtered);
-      refreshProjectManageResults(filtered);
+      state.projectViewMode === 'browse' ? refreshProjectBrowserResults(filtered) : refreshProjectManageResults(filtered);
     }
     function renderProjects() {
       const tags = projectTags();
@@ -1463,6 +1594,10 @@
           </div>
         </div>
         <div class="toolbar" style="margin-bottom:14px">
+          <div class="row"><button id="projectBrowseMode" class="${state.projectViewMode === 'browse' ? 'primary' : ''}">Browse</button><button id="projectManageMode" class="${state.projectViewMode === 'manage' ? 'primary' : ''}">Manage</button></div>
+          <div class="row"><span class="pill" id="projectShownCount">${filtered.length}/${state.projects.length} shown</span><button id="clearProjectTag" type="button" ${state.projectTagFilter === 'all' ? 'hidden' : ''}>Clear tag</button><button id="clearProjectStatus" type="button" ${state.projectStatusFilter === 'all' ? 'hidden' : ''}>Clear status</button></div>
+        </div>
+        <div class="toolbar" style="margin-bottom:14px">
           <div class="row" style="flex:1">
             <input id="projectSearch" placeholder="Search projects, material, notes, tags..." value="${esc(state.projectSearch)}" style="min-width:230px; flex:1">
             <select id="projectTagFilter" style="max-width:220px">
@@ -1476,18 +1611,17 @@
               <option value="for-sale" ${state.projectStatusFilter === 'for-sale' ? 'selected' : ''}>For sale</option>
               <option value="sold" ${state.projectStatusFilter === 'sold' ? 'selected' : ''}>Sold</option>
             </select>
-            <select id="projectSort" style="max-width:190px">
+            ${state.projectViewMode === 'manage' ? `<select id="projectSort" style="max-width:190px">
               <option value="date-desc" ${state.projectSort === 'date-desc' ? 'selected' : ''}>Newest first</option>
               <option value="date-asc" ${state.projectSort === 'date-asc' ? 'selected' : ''}>Oldest first</option>
               <option value="name-asc" ${state.projectSort === 'name-asc' ? 'selected' : ''}>Name A-Z</option>
               <option value="material-asc" ${state.projectSort === 'material-asc' ? 'selected' : ''}>Material A-Z</option>
               <option value="rating-desc" ${state.projectSort === 'rating-desc' ? 'selected' : ''}>Rating high-low</option>
-            </select>
+            </select>` : ''}
           </div>
-          <div class="row"><span class="pill" id="projectShownCount">${filtered.length}/${state.projects.length} shown</span><button id="clearProjectTag" type="button" ${state.projectTagFilter === 'all' ? 'hidden' : ''}>Clear tag</button><button id="clearProjectStatus" type="button" ${state.projectStatusFilter === 'all' ? 'hidden' : ''}>Clear status</button></div>
         </div>
         <div id="projectAccountingSummary">${projectAccountingReportHtml(filtered)}</div>
-        <div id="projectViewResults">${projectManageResultsHtml(filtered)}</div>
+        <div id="projectViewResults">${state.projectViewMode === 'browse' ? projectBrowserResultsHtml(filtered) : projectManageResultsHtml(filtered)}</div>
       `;
     }
     function filteredRawMaterials() {
@@ -3454,6 +3588,10 @@
       if (machineProfile) machineProfile.onchange = e => { state.machineProfile = e.target.value; persist(); render(); };
       const projectSearch = document.getElementById('projectSearch');
       if (projectSearch) projectSearch.oninput = e => { state.projectSearch = e.target.value; refreshProjectFilteredResults(); };
+      const projectBrowseMode = document.getElementById('projectBrowseMode');
+      if (projectBrowseMode) projectBrowseMode.onclick = () => { state.projectViewMode = 'browse'; persist(); render(); };
+      const projectManageMode = document.getElementById('projectManageMode');
+      if (projectManageMode) projectManageMode.onclick = () => { state.projectViewMode = 'manage'; persist(); render(); };
       const projectTagFilter = document.getElementById('projectTagFilter');
       if (projectTagFilter) projectTagFilter.onchange = e => { state.projectTagFilter = e.target.value; refreshProjectFilteredResults(); };
       const clearProjectTag = document.getElementById('clearProjectTag');
@@ -3873,6 +4011,7 @@
         if (!f.name.trim() || !f.material.trim()) return alert('Add a project name and material first.');
         const projectObj = normalizeProject(f, editingProjectId);
         try {
+          if (!editingProjectId && state.projectViewMode === 'browse') projectBrowserSelectedId = projectObj.id;
           if (!upsert('projects', projectObj)) return;
           projectPhotosDraft = [];
           projectMaterialLinesDraft = [];
@@ -4215,6 +4354,130 @@
       return { passed, failed, results };
     }
     window.runLibraryBrowserFixtures = runLibraryBrowserFixtures;
+    function runProjectBrowserFixtures() {
+      const fixture = (name, pass, actual = '') => ({ name, pass: !!pass, actual });
+      const projects = [
+        { id: 'sale-slate', name: 'Slate sign', material: 'Slate', status: 'for-sale', dateCreated: '2026-07-01', materialCost: 10, materialLines: [], settings: { speed: 8000, minPower: 20, maxPower: 20, passes: 1 } },
+        { id: 'sold-slate', name: 'Sold slate', material: 'Slate', status: 'sold', dateCreated: '2026-07-05', quantity: 2, soldPrice: 50, materialCost: 10, materialLines: [] },
+        { id: 'gifted-blank', name: 'Gift', material: '', status: 'gifted', dateCreated: '2026-06-01', materialLines: [] },
+        { id: 'kept-cork', name: 'Cork sample', material: 'Cork', status: 'kept', dateCreated: '2026-05-01', soldPrice: 100, materialCost: 10, materialLines: [] },
+        { id: 'blank-status', name: 'Blank status', material: 'Basswood', status: '', dateCreated: '2026-04-01', materialLines: [] },
+        { id: 'other-status', name: 'Old archive', material: 'Acrylic', status: 'archived', dateCreated: '2026-03-01', materialLines: [] },
+        { id: 'slate-alt', name: 'No date slate', material: 'slate!', status: 'for-sale', dateCreated: 'not-a-date', materialLines: [] },
+        { id: 'project-1', name: 'Same label', material: 'Slate', status: 'sold', dateCreated: '2026-07-04', materialLines: [] },
+        { id: 'project 1', name: 'Same label', material: 'Slate', status: 'sold', dateCreated: '2026-07-03', materialLines: [] },
+        { id: 'primary-only', name: 'Primary walnut', material: 'Walnut', status: 'kept', dateCreated: '2026-02-01', sourceProfileId: 'slate-profile', sourceEntryId: 'entry-1', materialLines: [{ id: 'line-1', name: 'Slate', quantity: 1, unit: 'each', unitCost: 2, notes: '' }] }
+      ];
+      const profiles = [{ id: 'slate-profile', material: 'Slate', jobType: 'cut' }];
+      const entries = [{ id: 'entry-1', material: 'Walnut', date: '2026-01-01' }];
+      const suggestionProject = { id: 'inventory-suggestions', material: 'Slate', thicknessValue: '', thicknessUnit: 'mm' };
+      const inventory = [
+        { id: 'inv-exact', name: 'Slate', aliases: '', quantityOnHand: 2, unit: 'each' },
+        { id: 'inv-alias', name: 'Stone blank', aliases: 'Slate', quantityOnHand: 1, unit: 'each' },
+        { id: 'inv-similar-name', name: 'Black slate engraving blank', aliases: '', quantityOnHand: 3, unit: 'each' },
+        { id: 'inv-similar-alias', name: 'Stone serving board', aliases: 'Natural slate serving board', quantityOnHand: 1, unit: 'each' },
+        { id: 'inv-similar-coaster', name: 'Slate coaster blank', aliases: '', quantityOnHand: 6, unit: 'each' },
+        { id: 'inv-similar-board', name: 'Slate cheese board', aliases: '', quantityOnHand: 2, unit: 'each' },
+        { id: 'inv-other', name: 'Walnut', aliases: '', quantityOnHand: 4, unit: 'sheet' }
+      ];
+      const batches = [
+        { id: 'batch-b', itemName: 'Walnut box', projectId: 'primary-only', quantityMade: 4, quantitySold: 1, status: 'made' },
+        { id: 'batch-a', itemName: 'Small sign', projectId: 'primary-only', quantityMade: 2, quantitySold: 0, status: 'made' },
+        { id: 'batch-a', itemName: 'Small sign', projectId: 'primary-only', quantityMade: 2, quantitySold: 0, status: 'made' },
+        { id: 'batch-other', itemName: 'Other', projectId: 'sold-slate', quantityMade: 1, quantitySold: 0, status: 'made' }
+      ];
+      const photoZero = [], photoOne = [{ id: 'photo-0', dataUrl: 'data:image/jpeg;base64,AA', name: 'Photo zero' }];
+      const photoThree = [
+        { id: 'photo-0', dataUrl: 'data:image/jpeg;base64,AA', name: 'Photo zero' },
+        { id: 'photo-1', dataUrl: 'data:image/jpeg;base64,BB', name: 'Photo one' },
+        { id: 'photo-2', dataUrl: 'data:image/jpeg;base64,CC', name: 'Photo two' }
+      ];
+      const malformedPhotos = [null, {}, ...photoThree, { id: 'missing-data' }];
+      const beforeProjects = JSON.stringify(projects), beforeProfiles = JSON.stringify(profiles), beforeEntries = JSON.stringify(entries), beforeSuggestionProject = JSON.stringify(suggestionProject), beforeInventory = JSON.stringify(inventory), beforeBatches = JSON.stringify(batches), beforePhotos = JSON.stringify([photoZero, photoOne, photoThree, malformedPhotos]);
+      const tree = buildProjectBrowserTree(projects), reversedTree = buildProjectBrowserTree([...projects].reverse());
+      const flatten = nodes => (nodes || []).flatMap(node => [node, ...flatten(node.children)]);
+      const nodes = flatten(tree), leaves = nodes.filter(node => node.recordId);
+      const statusLabels = tree.map(node => node.label);
+      const saleSlate = findTreePathForRecord(tree, 'sale-slate'), slateAlt = findTreePathForRecord(tree, 'slate-alt');
+      const soldSlateNode = leaves.find(node => node.recordId === 'sold-slate'), saleNode = leaves.find(node => node.recordId === 'sale-slate'), keptNode = leaves.find(node => node.recordId === 'kept-cork');
+      const soldSlateMaterial = tree.find(node => node.label === 'Sold')?.children.find(node => materialMatchKey(node.label) === 'slate');
+      const selectedRecords = projects.slice(0, 2), visibleRecords = [projects[0]];
+      const editedTree = buildProjectBrowserTree(projects.map(project => project.id === 'sale-slate' ? { ...project, status: 'sold', material: 'Cork' } : project));
+      const suggestions = projectInventorySuggestions(suggestionProject, inventory), reversedSuggestions = projectInventorySuggestions(suggestionProject, [...inventory].reverse());
+      const relatedBatches = projectRelatedFinishedBatches(projects[9], batches), reversedBatches = projectRelatedFinishedBatches(projects[9], [...batches].reverse());
+      const onePhotoItems = projectBrowserPhotoItems(photoOne), threePhotoItems = projectBrowserPhotoItems(photoThree), malformedPhotoItems = projectBrowserPhotoItems(malformedPhotos);
+      const previousMode = state.projectViewMode;
+      state.projectViewMode = 'browse';
+      const backup = backupObject();
+      state.projectViewMode = previousMode;
+      const results = [
+        fixture('Deterministic tree sorting', JSON.stringify(tree) === JSON.stringify(reversedTree)),
+        fixture('Known and fallback statuses use required order', statusLabels.join('|') === 'For sale|Sold|Gifted|Kept|Other: archived', statusLabels.join('|')),
+        fixture('For-sale status branch retained', statusLabels.includes('For sale')),
+        fixture('Sold status branch retained', statusLabels.includes('Sold')),
+        fixture('Gifted status branch retained', statusLabels.includes('Gifted')),
+        fixture('Kept status branch retained', statusLabels.includes('Kept')),
+        fixture('Blank status is grouped under Kept', findTreePathForRecord(tree, 'blank-status')[0] === findTreePathForRecord(tree, 'kept-cork')[0]),
+        fixture('Blank status passes the Kept filter', projectMatchesStatusFilter(projects[4], 'kept')),
+        fixture('Unknown status remains visible without conversion', statusLabels.includes('Other: archived')),
+        fixture('Only primary material controls grouping', findTreePathForRecord(tree, 'primary-only')[1] !== saleSlate[1]),
+        fixture('Equivalent primary material names share a branch', saleSlate[1] === slateAlt[1]),
+        fixture('Different primary materials stay separate', findTreePathForRecord(tree, 'kept-cork')[1] !== findTreePathForRecord(tree, 'primary-only')[1]),
+        fixture('Blank primary material uses Unspecified material', nodes.some(node => node.nodeType === 'material' && node.label === 'Unspecified material')),
+        fixture('Duplicate Project labels remain separate', leaves.filter(node => node.label === 'Same label').length === 2),
+        fixture('Punctuation-distinct Project IDs produce distinct keys', leaves.find(node => node.recordId === 'project-1')?.key !== leaves.find(node => node.recordId === 'project 1')?.key),
+        fixture('Tree lookup finds each punctuation-distinct Project', findTreePathForRecord(tree, 'project-1').at(-1) !== findTreePathForRecord(tree, 'project 1').at(-1)),
+        fixture('Project tree paths contain status, material, and Project', saleSlate.length === 3),
+        fixture('Valid dates sort newest first within a material', soldSlateMaterial?.children.map(node => node.recordId).join('|') === 'sold-slate|project-1|project 1'),
+        fixture('Invalid dates sort after valid dates', tree.find(node => node.label === 'For sale')?.children.find(node => materialMatchKey(node.label) === 'slate')?.children.at(-1)?.recordId === 'slate-alt'),
+        fixture('Invalid date badge is honest', leaves.find(node => node.recordId === 'slate-alt')?.badge === 'No date'),
+        fixture('Sold Project badge shows derived profit', soldSlateNode?.badge.includes('$40.00 profit')),
+        fixture('Negative unsold result remains visible', saleNode?.badge.includes('-$10.00 profit')),
+        fixture('Positive unsold estimate is not labeled profit', !keptNode?.badge.includes('profit')),
+        fixture('Project without financial values has no profit badge', !leaves.find(node => node.recordId === 'gifted-blank')?.badge.includes('profit')),
+        fixture('Valid selected Project is retained', resolveBrowserSelection(selectedRecords, selectedRecords, 'sold-slate').selectedId === 'sold-slate'),
+        fixture('Filtered selected Project remains selected and hidden', resolveBrowserSelection(selectedRecords, visibleRecords, 'sold-slate').selectedId === 'sold-slate' && resolveBrowserSelection(selectedRecords, visibleRecords, 'sold-slate').hidden),
+        fixture('Deleted selected Project falls back to first visible', resolveBrowserSelection(visibleRecords, visibleRecords, 'sold-slate').selectedId === 'sale-slate'),
+        fixture('Deleting an unrelated Project preserves selection', resolveBrowserSelection([projects[0], projects[1]], [projects[0], projects[1]], 'sold-slate').selectedId === 'sold-slate'),
+        fixture('Empty Project list produces no selection', resolveBrowserSelection([], [], 'sold-slate').selectedId === ''),
+        fixture('Hidden Project notice uses exact wording', browserHiddenSelectionNotice(true, 'Project').includes('This Project is hidden by the current filters.')),
+        fixture('Edited status and material move the Project path', findTreePathForRecord(editedTree, 'sale-slate').slice(0, 2).join('|') !== saleSlate.slice(0, 2).join('|')),
+        fixture('Existing source Library profile resolves by ID', projectSourceProfile(projects[9], profiles)?.id === 'slate-profile'),
+        fixture('Dangling source Library profile resolves safely', projectSourceProfile({ sourceProfileId: 'missing' }, profiles) === null),
+        fixture('Existing source Log entry resolves by ID', projectSourceEntry(projects[9], entries)?.id === 'entry-1'),
+        fixture('Dangling source Log entry resolves safely', projectSourceEntry({ sourceEntryId: 'missing' }, entries) === null),
+        fixture('Exact Inventory-name suggestion is included', suggestions.some(match => match.item.id === 'inv-exact' && match.matchType === 'exact-name')),
+        fixture('Inventory alias suggestion is included', suggestions.some(match => match.item.id === 'inv-alias' && match.matchType === 'exact-alias')),
+        fixture('Similar Inventory-name suggestion is included', suggestions.some(match => match.item.id === 'inv-similar-name' && match.matchType === 'similar-name')),
+        fixture('Similar Inventory-alias suggestion is included', suggestions.some(match => match.item.id === 'inv-similar-alias' && match.matchType === 'similar-alias')),
+        fixture('Original similar Inventory alias is retained', suggestions.find(match => match.item.id === 'inv-similar-alias')?.matchedAlias === 'Natural slate serving board'),
+        fixture('Inventory suggestion reasons are human readable', libraryInventoryMatchReason(suggestions.find(match => match.item.id === 'inv-similar-name')) === 'Similar Inventory name' && libraryInventoryMatchReason(suggestions.find(match => match.item.id === 'inv-similar-alias')) === 'Similar alias'),
+        fixture('Exact Inventory suggestions rank ahead of similar matches', suggestions.slice(0, 2).map(match => match.matchType).join('|') === 'exact-name|exact-alias'),
+        fixture('Multiple Inventory suggestions remain separate', suggestions.length === 6 && new Set(suggestions.map(match => match.item.id)).size === 6),
+        fixture('Pure Project Inventory helper remains uncapped', suggestions.length > 5),
+        fixture('Inventory suggestion ordering is input-independent', suggestions.map(match => match.item.id).join('|') === reversedSuggestions.map(match => match.item.id).join('|')),
+        fixture('Related finished batches are linked by Project ID', relatedBatches.map(batch => batch.id).join('|') === 'batch-a|batch-b'),
+        fixture('Unrelated finished batch is excluded', !relatedBatches.some(batch => batch.id === 'batch-other')),
+        fixture('Duplicate finished batch IDs are deduplicated', relatedBatches.filter(batch => batch.id === 'batch-a').length === 1),
+        fixture('Finished batch ordering is input-independent', relatedBatches.map(batch => batch.id).join('|') === reversedBatches.map(batch => batch.id).join('|')),
+        fixture('Zero Project photos produce no Browse photo items', projectBrowserPhotoItems(photoZero).length === 0),
+        fixture('One Project photo keeps index zero', onePhotoItems.length === 1 && onePhotoItems[0].index === 0),
+        fixture('Three Project photos remain available', threePhotoItems.length === 3),
+        fixture('Malformed Project photos are filtered safely', malformedPhotoItems.length === 3),
+        fixture('Browse photo indexes remain zero, one, two', malformedPhotoItems.map(item => item.index).join('|') === '0|1|2'),
+        fixture('Project photo helpers do not mutate source arrays', JSON.stringify([photoZero, photoOne, photoThree, malformedPhotos]) === beforePhotos),
+        fixture('Legacy state defaults Projects to Manage', freshState().projectViewMode === 'manage'),
+        fixture('Browse preference survives backup object', backup.projectViewMode === 'browse'),
+        fixture('Invalid imported Project mode normalizes to Manage', normalizeProjectViewMode('sideways') === 'manage'),
+        fixture('Project selection and expansion are session-only', !('projectBrowserSelectedId' in backup) && !('projectBrowserExpanded' in backup)),
+        fixture('Project tree and accounting helpers do not mutate Projects', JSON.stringify(projects) === beforeProjects),
+        fixture('Relationship helpers do not mutate supporting records', JSON.stringify(profiles) === beforeProfiles && JSON.stringify(entries) === beforeEntries && JSON.stringify(suggestionProject) === beforeSuggestionProject && JSON.stringify(inventory) === beforeInventory && JSON.stringify(batches) === beforeBatches)
+      ];
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Project browser fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runProjectBrowserFixtures = runProjectBrowserFixtures;
     function normalizeFinishedBatch(f, existingId) {
       const made = Math.max(0, Math.round(num(f.quantityMade)));
       const sellable = Math.max(0, Math.round(num(f.quantitySellable)));
@@ -4643,6 +4906,7 @@
       if ('librarySort' in data) state.librarySort = data.librarySort || 'material-asc';
       if ('libraryViewMode' in data) state.libraryViewMode = normalizeLibraryViewMode(data.libraryViewMode);
       if ('projectSort' in data) state.projectSort = data.projectSort || 'date-desc';
+      if ('projectViewMode' in data) state.projectViewMode = normalizeProjectViewMode(data.projectViewMode);
       if ('inventoryRawSort' in data) state.inventoryRawSort = data.inventoryRawSort || 'low-stock';
       if ('inventoryBatchSort' in data) state.inventoryBatchSort = data.inventoryBatchSort || 'name-asc';
       if ('inventoryViewMode' in data) state.inventoryViewMode = normalizeInventoryViewMode(data.inventoryViewMode);
@@ -4658,6 +4922,7 @@
       state.librarySort = 'material-asc';
       state.libraryViewMode = 'manage';
       state.projectSort = 'date-desc';
+      state.projectViewMode = 'manage';
       state.inventoryRawSort = 'low-stock';
       state.inventoryBatchSort = 'name-asc';
       state.inventoryViewMode = 'manage';
@@ -4898,6 +5163,7 @@
     if (selftest === 'grid' || selftest === 'all') runGridPromotionFixtures();
     if (selftest === 'materials' || selftest === 'all') window.runMaterialBrowserFixtures();
     if (selftest === 'library-browser' || selftest === 'all') runLibraryBrowserFixtures();
+    if (selftest === 'project-browser' || selftest === 'all') runProjectBrowserFixtures();
     if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
     render();
