@@ -154,6 +154,10 @@
     .cell.done { background: #eef8f1; border-color: #78b38d; color: var(--green); }
     .cell.best { background: #fff4db; border-color: #d9982f; color: var(--amber); }
     .axis { font-size: 12px; font-weight: 800; color: var(--muted); text-align: center; }
+    .material-browser-layout { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.2fr); gap: 14px; }
+    .material-browser-layout > * { min-width: 0; }
+    .material-browser-layout .panel, .material-browser-layout .small, .material-browser-layout b { overflow-wrap: anywhere; }
+    .material-browser-layout .actions { flex-wrap: wrap; }
     .print-only { display: none; }
     @media (max-width: 700px) {
       .modal { padding: 10px 8px; }
@@ -163,6 +167,7 @@
       .metrics { grid-template-columns: 1fr; }
       .modal-actions { bottom: -14px; margin: 4px -14px -14px; padding: 10px 14px; }
       .modal-actions button { flex: 1; }
+      .material-browser-layout { grid-template-columns: minmax(0, 1fr); }
     }
     @media print {
       body { background: white; color: #111827; }
@@ -323,6 +328,9 @@
     let editingProfileId = null;
     let profileDraftTests = [];
     let pendingGridPromotion = null;
+    let inventoryBrowserSelectedId = '';
+    let inventoryBrowserInStockOnly = false;
+    let inventoryBrowserExpanded = new Set();
     let materialTestWizard = null;
     let editingProjectId = null;
     let projectPhotosDraft = [];
@@ -350,8 +358,9 @@
     function designDefaults() {
       return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12' };
     }
+    function normalizeInventoryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function freshState() {
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', inventoryViewMode: 'manage', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
     }
     function loadState() {
       const decoded = decodeStoredState(localStorage.getItem(STORAGE_KEY));
@@ -378,6 +387,7 @@
         projectSort: data.projectSort || 'date-desc',
         inventoryRawSort: data.inventoryRawSort || 'low-stock',
         inventoryBatchSort: data.inventoryBatchSort || 'name-asc',
+        inventoryViewMode: normalizeInventoryViewMode(data.inventoryViewMode),
         machineProfile: data.machineProfile || '20W',
         pricing: { ...pricingDefaults(), ...(data.pricing || {}) },
         pricingPrefs: { ...pricingPreferenceDefaults(), ...(data.pricingPrefs || {}) }
@@ -385,9 +395,9 @@
     }
     function persist(options = {}) {
       if (storageRecoveryIssue && !options.allowRecoveryOverwrite) return false;
-      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, inventoryRawSort, inventoryBatchSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
+      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, inventoryRawSort, inventoryBatchSort, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, projectSort, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
         return true;
       } catch (err) {
         showStorageWarning();
@@ -443,6 +453,7 @@
         projectSort: state.projectSort,
         inventoryRawSort: state.inventoryRawSort,
         inventoryBatchSort: state.inventoryBatchSort,
+        inventoryViewMode: state.inventoryViewMode,
         libraryMatchMaterial: state.libraryMatchMaterial,
         libraryMatchThickness: state.libraryMatchThickness,
         libraryMatchUnit: state.libraryMatchUnit,
@@ -640,6 +651,32 @@
         finishedBatches: Array.isArray(inventory?.finishedBatches) ? inventory.finishedBatches : []
       };
     }
+    function normalizeInventoryBrowserCategory(category) { return materialMatchKey(category || '') || 'uncategorized'; }
+    function categoryDisplayLabel(category) {
+      const labels = { sheet: 'Sheets & blanks', blank: 'Sheets & blanks', slate: 'Slate', hardware: 'Hardware', packaging: 'Packaging', other: 'Other', uncategorized: 'Uncategorized' };
+      const key = normalizeInventoryBrowserCategory(category);
+      if (labels[key]) return labels[key];
+      return String(category || 'Uncategorized').trim().replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+    function rawMaterialCategoryOptions(category) {
+      const current = String(category || '').trim();
+      return current && !rawMaterialCategories.includes(current) ? [current, ...rawMaterialCategories] : [...rawMaterialCategories];
+    }
+    function parseInventorySizeMetadata(item) {
+      const original = String(item?.name || ''); const text = `${original} ${item?.notes || ''}`;
+      const dual = text.match(/(\d+(?:\.\d+)?\s*mm)\s*\/\s*(\d+\s*\/\s*\d+\s*in)/i);
+      if (dual) return { displayLabel: `${dual[1].replace(/(\d)(mm)\b/i, '$1 $2').replace(/\s+/g, ' ').trim()} / ${dual[2].replace(/\s+/g, ' ').trim()}`, groupingKey: materialMatchKey(dual[0]), thicknessValue: Number(dual[1]), thicknessUnit: 'mm', thicknessConfidence: true };
+      const dimension = text.match(/\b(\d+(?:\.\d+)?\s*(?:mm|in)?\s*[x×]\s*\d+(?:\.\d+)?\s*(?:mm|in)?)(?:\s+sheets?)?\b/i);
+      if (dimension) return { displayLabel: dimension[1].replace(/\s*([x×])\s*/i, ' × ').replace(/(\d)(mm|in)\b/ig, '$1 $2'), groupingKey: materialMatchKey(dimension[1]), thicknessConfidence: false };
+      const single = original.match(/\b(\d+(?:\.\d+)?\s*mm|\d+\s*\/\s*\d+\s*in)\b/i);
+      if (single) { const value = single[1]; return { displayLabel: value.replace(/(\d)(mm|in)\b/i, '$1 $2'), groupingKey: materialMatchKey(value), thicknessValue: /mm/i.test(value) ? Number(value) : '', thicknessUnit: /mm/i.test(value) ? 'mm' : 'in', thicknessConfidence: true }; }
+      return { displayLabel: 'Unspecified size', groupingKey: 'unspecified', thicknessConfidence: false };
+    }
+    function browserMaterialBaseName(item) { return materialMatchKey(String(item?.name || '').replace(/\s+\d+(?:\.\d+)?\s*mm(?:\s*\/\s*\d+\s*\/\s*\d+\s*in)?\b|\s+\d+\s*\/\s*\d+\s*in\b|\s+\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?\s*(?:mm|in)?\b/ig, '')) || 'unnamed material'; }
+    function enrichInventoryBrowserItem(item) { const size = parseInventorySizeMetadata(item); const baseKey = browserMaterialBaseName(item); return { item, id: item.id, categoryKey: normalizeInventoryBrowserCategory(item.category), categoryLabel: categoryDisplayLabel(item.category), baseKey, baseLabel: baseKey === 'unnamed material' ? (item.name || 'Unnamed material') : baseKey.replace(/\b\w/g, c => c.toUpperCase()), size }; }
+    function filterInventoryBrowserItems(items, query, inStockOnly) { const q = materialMatchKey(query); return items.filter(x => (!inStockOnly || num(x.item.quantityOnHand) > 0) && (!q || materialMatchKey([x.item.name, x.item.notes, x.item.supplier, ...aliasesOf(x.item), ...tagsOf(x.item)].join(' ')).includes(q))); }
+    function buildMaterialBrowserTree(items) { const root = {}; [...items].sort((a,b) => compareText(a.categoryLabel,b.categoryLabel) || compareText(a.baseLabel,b.baseLabel) || compareText(a.size.displayLabel,b.size.displayLabel) || compareText(a.item.name,b.item.name) || compareText(a.id,b.id)).forEach(x => { const c=root[x.categoryKey] ||= { label:x.categoryLabel, bases:{} }; const b=c.bases[x.baseKey] ||= { label:x.baseLabel, sizes:{} }; const s=b.sizes[x.size.groupingKey] ||= { label:x.size.displayLabel, items:[] }; s.items.push(x); }); return root; }
+    function findInventoryBrowserItem(id) { return rawInventoryMaterials().map(enrichInventoryBrowserItem).find(x => x.id === id) || null; }
     function inventoryTags() {
       const inv = normalizeInventory(state.inventory);
       return [...new Set([...inv.rawMaterials, ...inv.finishedBatches].flatMap(tagsOf).filter(Boolean))].sort();
@@ -1255,6 +1292,107 @@
       bindInventoryResultActions(rawResults);
       bindInventoryResultActions(batchResults);
     }
+    function refreshInventoryBatchResults() {
+      const count = document.getElementById('inventoryBatchShownCount');
+      const results = document.getElementById('inventoryBatchResults');
+      if (!count || !results) return;
+      const inv = normalizeInventory(state.inventory), batches = filteredFinishedBatches();
+      count.textContent = `${batches.length}/${inv.finishedBatches.length} batches`;
+      results.innerHTML = finishedBatchResultsHtml(inv, batches);
+      bindInventoryResultActions(results);
+    }
+    function libraryProfilesForInventory(item, profiles = state.profiles) {
+      const invName=materialMatchKey(item?.name), aliases=aliasesOf(item), size=parseInventorySizeMetadata(item);
+      return (profiles||[]).map(profile=>{ const key=materialMatchKey(profile.material); let matchType='', materialScore=0, matchedAlias=''; if(invName&&key===invName){matchType='exact-name';materialScore=400;} else { const exact=aliases.find(a=>materialMatchKey(a)===key); if(exact){matchType='exact-alias';materialScore=300;matchedAlias=exact;} else if(invName.length>2&&(key.includes(invName)||invName.includes(key))){matchType='similar-name';materialScore=200;} else { const loose=aliases.find(a=>{const k=materialMatchKey(a);return k.length>2&&(key.includes(k)||k.includes(key));}); if(loose){matchType='similar-alias';materialScore=100;matchedAlias=loose;} } } if(!materialScore)return null; const profileMm=profile.thicknessUnit==='in'?num(profile.thicknessValue)*25.4:num(profile.thicknessValue); const thicknessDelta=size.thicknessConfidence&&profileMm>0?(size.thicknessUnit==='in'?num(size.thicknessValue)*25.4:num(size.thicknessValue))-profileMm:null; return {profile,matchType,matchedAlias,materialScore,thicknessDelta,score:materialScore-(thicknessDelta==null?99:Math.abs(thicknessDelta))}; }).filter(Boolean).sort((a,b)=>b.materialScore-a.materialScore||((a.thicknessDelta==null?Infinity:Math.abs(a.thicknessDelta))-(b.thicknessDelta==null?Infinity:Math.abs(b.thicknessDelta)))||compareText(a.profile.jobType,b.profile.jobType)||compareText(a.profile.material,b.profile.material)||compareText(a.profile.id,b.profile.id));
+    }
+    function validProjectDate(value) { return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) ? String(value) : ''; }
+    function projectsForInventory(item, projects = state.projects, libraryMatches = libraryProfilesForInventory(item)) {
+      const nameKey = materialMatchKey(item?.name);
+      const aliases = aliasesOf(item).map(value => ({ value, key: materialMatchKey(value) })).filter(alias => alias.key);
+      const profileIds = new Set((libraryMatches || []).map(match => match?.profile?.id || match?.id).filter(Boolean));
+      return (projects || []).map(project => {
+        const matchTypes = [], matchedAliases = [], matchedMaterialLines = [], matchedProfileIds = [];
+        const add = (type, value, list) => { if (!matchTypes.includes(type)) matchTypes.push(type); if (value && !list.includes(value)) list.push(value); };
+        const projectMaterialKey = materialMatchKey(project?.material);
+        if (nameKey && projectMaterialKey === nameKey) add('primary-material', '', []);
+        aliases.filter(alias => projectMaterialKey && alias.key === projectMaterialKey).forEach(alias => add('alias', alias.value, matchedAliases));
+        normalizeProjectMaterialLines(project?.materialLines).forEach(line => {
+          const lineKey = materialMatchKey(line.name);
+          if (nameKey && lineKey === nameKey) add('material-line', line.name, matchedMaterialLines);
+          aliases.filter(alias => lineKey && alias.key === lineKey).forEach(alias => { add('alias', alias.value, matchedAliases); add('material-line', line.name, matchedMaterialLines); });
+        });
+        if (project?.sourceProfileId && profileIds.has(project.sourceProfileId)) add('source-profile', project.sourceProfileId, matchedProfileIds);
+        return matchTypes.length ? { project, matchTypes, matchedAliases, matchedMaterialLines, matchedProfileIds } : null;
+      }).filter(Boolean).sort((a, b) => {
+        const ad = validProjectDate(a.project.dateCreated), bd = validProjectDate(b.project.dateCreated);
+        return compareText(bd, ad) || compareText(a.project.name, b.project.name) || compareText(a.project.id, b.project.id);
+      });
+    }
+    function projectMatchReason(match) {
+      const labels = [];
+      if (match.matchTypes.includes('primary-material')) labels.push('Primary material');
+      match.matchedAliases.forEach(alias => labels.push(`Alias: "${alias}"`));
+      match.matchedMaterialLines.forEach(line => labels.push(`Material line: "${line}"`));
+      if (match.matchedProfileIds.length) labels.push('Source Library profile');
+      return labels.join(' / ');
+    }
+    function resolveMaterialBrowserSelection(allItems, visibleItems, selectedId) {
+      const all = allItems || [], visible = visibleItems || [];
+      const selected = all.find(item => item.id === selectedId) || null;
+      const resolved = selected || visible[0] || null;
+      return { selectedId: resolved?.id || '', selected: resolved, hidden: !!resolved && !visible.some(item => item.id === resolved.id) };
+    }
+    function revealMaterialBrowserSelection(selected) {
+      if (!selected) return;
+      inventoryBrowserExpanded.add(`0:${selected.categoryKey}`);
+      inventoryBrowserExpanded.add(`1:${selected.baseKey}`);
+      inventoryBrowserExpanded.add(`2:${selected.size.groupingKey}`);
+    }
+    function materialBrowserSafetyWarning(item) { return materialSafetyWarning([item?.name, ...aliasesOf(item), item?.notes].filter(Boolean).join(' ')); }
+    function materialBrowserBlocksLaserActions(item) { return materialBrowserSafetyWarning(item)?.blocksLaserActions === true; }
+    function materialBrowserSafetyWarningHtml(item) {
+      const warning = materialBrowserSafetyWarning(item);
+      if (!warning) return '';
+      const verification = warning.blocksLaserActions ? ' Verify the material composition before enabling laser actions.' : '';
+      return `<div class="small" style="margin-top:6px"><span class="pill ${warning.tone}">${esc(warning.label)}</span> ${esc(warning.message + verification)}</div>`;
+    }
+    function materialBrowserTestSummary(matches) { const profiles=(Array.isArray(matches)?matches:[matches]).filter(Boolean).map(x=>x.profile||x); const tests=profiles.flatMap(p=>normalizeMaterialTests(p.tests)); const valid=tests.filter(t=>/^\d{4}-\d{2}-\d{2}$/.test(t.date)); const latest=[...valid].sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(a.id).localeCompare(String(b.id)))[0]||null; return {profileCount:profiles.length,profilesWithTests:profiles.filter(p=>normalizeMaterialTests(p.tests).length).length,totalTests:tests.length,recommendedCount:tests.filter(t=>t.status==='recommended').length,experimentalCount:tests.filter(t=>t.status==='experimental').length,latestTest:latest,latestTestDate:latest?.date||'',highestConfidence:tests.reduce((n,t)=>Math.max(n,num(t.confidence)),0),hasRecommendedTest:tests.some(t=>t.status==='recommended'),hasPrimaryWithoutTests:profiles.some(p=>!normalizeMaterialTests(p.tests).length&&(p.speed!==''||p.minPower!==''||p.maxPower!==''))}; }
+    function materialBrowserTreeHtml(tree) { const branch=(obj, level=0) => Object.entries(obj).map(([key,node]) => { const nodeKey=`${level}:${key}`; const open=inventoryBrowserExpanded.has(nodeKey); const children=level===0?node.bases:level===1?node.sizes:null; if(children) return `<details data-browser-node="${esc(nodeKey)}" ${open?'open':''}><summary>${esc(node.label)} <span class="small muted">(${Object.values(children).reduce((n,x)=>n+(x.items?x.items.length:Object.values(x.sizes).reduce((m,s)=>m+s.items.length,0)),0)})</span></summary>${branch(children,level+1)}</details>`; return `<details data-browser-node="${esc(nodeKey)}" ${open?'open':''}><summary>${esc(node.label)} <span class="small muted">(${node.items.length})</span></summary>${node.items.map(x=>`<button type="button" class="browser-leaf ${x.id===inventoryBrowserSelectedId?'primary':''}" data-browser-item="${esc(x.id)}">${esc(x.item.name)} <span class="small muted">${esc(rawStockStatus(x.item).text)}</span></button>`).join('')}</details>`; }).join(''); return branch(tree); }
+    function inventoryBrowseHtml(inv) { return `<div class="toolbar" style="margin-bottom:12px"><div class="row" style="flex:1"><input id="inventorySearch" placeholder="Search materials..." value="${esc(state.inventorySearch)}" style="min-width:230px;flex:1"><label class="row small"><input id="inventoryInStockOnly" type="checkbox" ${inventoryBrowserInStockOnly?'checked':''} style="width:auto"> In stock only</label></div><button class="primary" id="newRawMaterial">New raw material</button></div><div id="inventoryBrowserResults">${materialBrowserResultsHtml(inv)}</div>`; }
+    function inventoryManageHtml(inv,raw) { return `<div class="toolbar" style="margin-bottom:14px"><div class="row" style="flex:1"><input id="inventorySearch" placeholder="Search inventory, supplier, notes, tags..." value="${esc(state.inventorySearch)}" style="min-width:230px;flex:1"><select id="inventoryCategoryFilter"><option value="all">All material categories</option>${rawMaterialCategories.map(c=>`<option value="${esc(c)}" ${state.inventoryCategoryFilter===c?'selected':''}>${esc(c)}</option>`).join('')}</select><select id="inventoryRawSort">${['low-stock','name-asc','category-asc','quantity-asc','value-desc'].map(s=>`<option value="${s}" ${state.inventoryRawSort===s?'selected':''}>Raw: ${s}</option>`).join('')}</select></div><button class="primary" id="newRawMaterial">New raw material</button></div><div id="inventoryRawResults">${rawInventoryResultsHtml(inv,raw)}</div>`; }
+    function refreshMaterialBrowserResults() { const box=document.getElementById('inventoryBrowserResults'); if(!box) return render(); const inv=normalizeInventory(state.inventory), all=inv.rawMaterials.map(enrichInventoryBrowserItem), visible=filterInventoryBrowserItems(all,state.inventorySearch,inventoryBrowserInStockOnly), count=document.getElementById('inventoryRawShownCount'); if(count) count.textContent=`${visible.length}/${inv.rawMaterials.length} raw`; box.innerHTML=materialBrowserResultsHtml(inv); bindMaterialBrowserActions(box); }
+    function materialBrowserDetailHtml(selected, hidden) {
+      if (!selected) return `<div class="panel"><b>Select a material</b><div class="small muted">Select a material to see stock, settings, tests, and related projects.</div></div>`;
+      const item = selected.item, blocked = materialBrowserBlocksLaserActions(item), matches = libraryProfilesForInventory(item), summary = materialBrowserTestSummary(matches);
+      const related = projectsForInventory(item, state.projects, matches), shown = related.slice(0, 5);
+      const facts = [
+        ['Unit cost', item.unitCost === '' || item.unitCost == null ? '' : money(num(item.unitCost))],
+        ['Inventory value', money(inventoryValue(item))],
+        ['Supplier', item.supplier || ''],
+        ['Purchased', item.purchaseDate || '']
+      ].filter(([, value]) => value !== '').map(([label, value]) => metric(label, value)).join('');
+      const aliases = aliasesOf(item), tags = tagsOf(item);
+      const relatedHtml = related.length ? `<div class="small muted">${related.length > shown.length ? `Showing ${shown.length} of ${related.length} related projects` : `${related.length} related project${related.length === 1 ? '' : 's'}`}</div>${shown.map(match => { const p = match.project, s = p.settings || {}; const settings = [powerLabel(s), s.speed === '' || s.speed == null ? '' : `${s.speed} mm/min`, s.passes ? `${s.passes} pass${Number(s.passes) === 1 ? '' : 'es'}` : ''].filter(Boolean).join(' / '); return `<div class="small" style="margin-top:8px"><b>${esc(p.name || 'Untitled Project')}</b><br>${esc(p.dateCreated || 'No date')} / ${esc(p.status || 'kept')} / ${esc(p.material || 'No material')}${settings ? `<br>${esc(settings)}` : ''}<br><span class="muted">${esc(projectMatchReason(match))}</span><div class="actions"><button data-browser-related-project="${esc(p.id)}">Open Project</button></div></div>`; }).join('')}` : '<div class="small muted">No related Projects found.</div>';
+      return `<div class="panel"><b>${esc(item.name)}</b>${hidden ? '<div class="small muted">This material is hidden by the current filters.</div>' : ''}${materialBrowserSafetyWarningHtml(item)}<div class="small" style="margin-top:8px">${esc(categoryDisplayLabel(item.category))} / ${esc(selected.size.displayLabel)}<br>${esc(rawStockStatus(item).text)}</div>${facts ? `<div class="metrics" style="margin-top:9px">${facts}</div>` : ''}${aliases.length ? `<div class="small muted" style="margin-top:8px">Aliases: ${esc(tagString(aliases))}</div>` : ''}${tags.length ? `<div class="row" style="margin-top:8px">${tags.map(tag => `<span class="pill">${esc(tag)}</span>`).join('')}</div>` : ''}${item.notes ? `<p class="small">${esc(item.notes)}</p>` : ''}<div class="actions"><button data-browser-edit="${esc(item.id)}">Edit Inventory</button>${blocked ? '' : `<button data-browser-project="${esc(item.id)}">Start manual project</button>`}${!matches.length ? `<button data-browser-add-profile="${esc(item.id)}">Add Library setting</button>` : ''}<button data-browser-view-projects="${esc(item.id)}">View in Projects</button></div><hr><b>Library settings</b>${matches.length ? `<div class="small muted">${summary.profileCount} profiles / ${summary.totalTests} tests${summary.recommendedCount ? ` / ${summary.recommendedCount} recommended` : ''}${summary.highestConfidence ? ` / confidence ${summary.highestConfidence}` : ''}</div>${matches.slice(0, 6).map(m => { const s = materialBrowserTestSummary(m); return `<div class="small" style="margin-top:8px"><b>${esc(m.profile.material)}</b> - ${esc(m.matchType)}${m.matchedAlias ? `: ${esc(m.matchedAlias)}` : ''}<br>${esc(s.totalTests ? `${s.totalTests} tests, ${s.recommendedCount} recommended` : 'Primary setting saved - no Material Tests')}<div class="actions"><button data-browser-profile="${esc(m.profile.id)}">Open Library profile</button>${blocked ? '' : `<button data-browser-wizard="${esc(m.profile.id)}">Run Material Test</button>`}</div></div>`; }).join('')}` : '<div class="small muted">No matching Library setting.</div>'}<hr><b>Related Projects</b>${relatedHtml}</div>`;
+    }
+    function materialBrowserResultsHtml(inv) {
+      const all = inv.rawMaterials.map(enrichInventoryBrowserItem), visible = filterInventoryBrowserItems(all, state.inventorySearch, inventoryBrowserInStockOnly);
+      const selection = resolveMaterialBrowserSelection(all, visible, inventoryBrowserSelectedId);
+      inventoryBrowserSelectedId = selection.selectedId;
+      if (selection.selected) revealMaterialBrowserSelection(selection.selected);
+      return visible.length ? `<div class="material-browser-layout"><div class="panel">${materialBrowserTreeHtml(buildMaterialBrowserTree(visible))}</div>${materialBrowserDetailHtml(selection.selected, selection.hidden)}</div>` : `<div class="panel"><b>No materials match the current filters.</b></div>${materialBrowserDetailHtml(selection.selected, selection.hidden)}`;
+    }
+    function bindMaterialBrowserActions(root) {
+      root.querySelectorAll('[data-browser-item]').forEach(button => button.onclick = () => { inventoryBrowserSelectedId = button.dataset.browserItem; refreshMaterialBrowserResults(); });
+      root.querySelectorAll('[data-browser-node]').forEach(details => details.ontoggle = () => { details.open ? inventoryBrowserExpanded.add(details.dataset.browserNode) : inventoryBrowserExpanded.delete(details.dataset.browserNode); });
+      root.querySelectorAll('[data-browser-edit]').forEach(button => button.onclick = () => openRawMaterial(inventoryList('rawMaterials').find(item => item.id === button.dataset.browserEdit)));
+      root.querySelectorAll('[data-browser-profile]').forEach(button => button.onclick = () => openProfile(state.profiles.find(profile => profile.id === button.dataset.browserProfile)));
+      root.querySelectorAll('[data-browser-wizard]').forEach(button => button.onclick = () => openMaterialTestWizard(button.dataset.browserWizard));
+      root.querySelectorAll('[data-browser-add-profile]').forEach(button => button.onclick = () => { const selected = findInventoryBrowserItem(button.dataset.browserAddProfile); if (selected) openProfile({ ...formDefaults('profile'), material: selected.item.name, thicknessValue: selected.size.thicknessConfidence ? selected.size.thicknessValue : '', thicknessUnit: selected.size.thicknessUnit || state.unit, notes: 'Drafted from Inventory. Review before saving.' }); });
+      root.querySelectorAll('[data-browser-project]').forEach(button => button.onclick = () => { const selected = findInventoryBrowserItem(button.dataset.browserProject); if (selected) openProject({ ...formDefaults('project'), material: selected.item.name, thicknessValue: selected.size.thicknessConfidence ? selected.size.thicknessValue : '', thicknessUnit: selected.size.thicknessUnit || state.unit }); });
+      root.querySelectorAll('[data-browser-view-projects]').forEach(button => button.onclick = () => { const selected = findInventoryBrowserItem(button.dataset.browserViewProjects); if (selected) { state.activeTab = 'projects'; state.projectSearch = selected.item.name; render(); } });
+      root.querySelectorAll('[data-browser-related-project]').forEach(button => button.onclick = () => openProject(state.projects.find(project => project.id === button.dataset.browserRelatedProject)));
+    }
     function renderInventory() {
       const inv = normalizeInventory(state.inventory);
       const raw = filteredRawMaterials();
@@ -1280,23 +1418,13 @@
             <button id="exportBatchInventoryCsv" type="button">Export batches CSV</button>
           </div>
         </div>
-        <div class="toolbar" style="margin-bottom:14px">
+        <div class="toolbar" style="margin-bottom:14px"><div class="row"><button id="inventoryBrowseMode" class="${state.inventoryViewMode === 'browse' ? 'primary' : ''}">Browse</button><button id="inventoryManageMode" class="${state.inventoryViewMode === 'manage' ? 'primary' : ''}">Manage</button></div><div class="row"><span class="pill" id="inventoryRawShownCount">${raw.length}/${inv.rawMaterials.length} raw</span><span class="pill" id="inventoryBatchShownCount">${batches.length}/${inv.finishedBatches.length} batches</span></div></div>
+        ${state.inventoryViewMode === 'browse' ? inventoryBrowseHtml(inv) : inventoryManageHtml(inv, raw)}
+        <div class="toolbar" style="margin:18px 0 12px">
           <div class="row" style="flex:1">
-            <input id="inventorySearch" placeholder="Search inventory, supplier, notes, tags..." value="${esc(state.inventorySearch)}" style="min-width:230px; flex:1">
-            <select id="inventoryCategoryFilter" style="max-width:180px">
-              <option value="all" ${state.inventoryCategoryFilter === 'all' ? 'selected' : ''}>All material categories</option>
-              ${rawMaterialCategories.map(category => `<option value="${esc(category)}" ${state.inventoryCategoryFilter === category ? 'selected' : ''}>${esc(category)}</option>`).join('')}
-            </select>
             <select id="inventoryBatchStatusFilter" style="max-width:170px">
               <option value="all" ${state.inventoryBatchStatusFilter === 'all' ? 'selected' : ''}>All batch statuses</option>
               ${batchStatuses.map(status => `<option value="${esc(status)}" ${state.inventoryBatchStatusFilter === status ? 'selected' : ''}>${esc(status)}</option>`).join('')}
-            </select>
-            <select id="inventoryRawSort" style="max-width:170px">
-              <option value="low-stock" ${state.inventoryRawSort === 'low-stock' ? 'selected' : ''}>Raw: low stock first</option>
-              <option value="name-asc" ${state.inventoryRawSort === 'name-asc' ? 'selected' : ''}>Raw: name A-Z</option>
-              <option value="category-asc" ${state.inventoryRawSort === 'category-asc' ? 'selected' : ''}>Raw: category A-Z</option>
-              <option value="quantity-asc" ${state.inventoryRawSort === 'quantity-asc' ? 'selected' : ''}>Raw: quantity low-high</option>
-              <option value="value-desc" ${state.inventoryRawSort === 'value-desc' ? 'selected' : ''}>Raw: value high-low</option>
             </select>
             <select id="inventoryBatchSort" style="max-width:170px">
               <option value="name-asc" ${state.inventoryBatchSort === 'name-asc' ? 'selected' : ''}>Batches: name A-Z</option>
@@ -1305,14 +1433,6 @@
               <option value="sold-desc" ${state.inventoryBatchSort === 'sold-desc' ? 'selected' : ''}>Batches: sold high-low</option>
             </select>
           </div>
-          <div class="row"><span class="pill" id="inventoryRawShownCount">${raw.length}/${inv.rawMaterials.length} raw</span><span class="pill" id="inventoryBatchShownCount">${batches.length}/${inv.finishedBatches.length} batches</span></div>
-        </div>
-        <div class="toolbar" style="margin-bottom:12px">
-          <div><b>Raw materials</b><div class="small muted">Stock on hand, unit cost, supplier, and low-stock notes.</div></div>
-          <button class="primary" id="newRawMaterial">New raw material</button>
-        </div>
-        <div id="inventoryRawResults">${rawInventoryResultsHtml(inv, raw)}</div>
-        <div class="toolbar" style="margin:18px 0 12px">
           <div><b>Finished batches</b><div class="small muted">Manual count of made, sellable, rejected, sold, and remaining items.</div></div>
           <button class="primary" id="newFinishedBatch">New finished batch</button>
         </div>
@@ -1974,6 +2094,7 @@
       if (unsafeHit) {
         return {
           tone: 'softbad',
+          blocksLaserActions: true,
           label: `Safety: ${unsafeHit[1]}`,
           message: `Do not laser ${unsafeHit[1]} unless you have verified it is safe for laser use.`
         };
@@ -1982,6 +2103,7 @@
       if (cautionHit) {
         return {
           tone: 'warn',
+          blocksLaserActions: false,
           label: `Verify: ${cautionHit[1]}`,
           message: `Verify ${cautionHit[1]} composition and coatings before lasering.`
         };
@@ -3086,7 +3208,13 @@
       const projectSort = document.getElementById('projectSort');
       if (projectSort) projectSort.onchange = e => { state.projectSort = e.target.value; persist(); render(); };
       const inventorySearch = document.getElementById('inventorySearch');
-      if (inventorySearch) inventorySearch.oninput = e => { state.inventorySearch = e.target.value; refreshInventorySearchResults(); };
+      if (inventorySearch) inventorySearch.oninput = e => { state.inventorySearch = e.target.value; if (state.inventoryViewMode === 'browse') { refreshMaterialBrowserResults(); refreshInventoryBatchResults(); } else refreshInventorySearchResults(); };
+      const inventoryBrowseMode = document.getElementById('inventoryBrowseMode');
+      if (inventoryBrowseMode) inventoryBrowseMode.onclick = () => { state.inventoryViewMode = 'browse'; persist(); render(); };
+      const inventoryManageMode = document.getElementById('inventoryManageMode');
+      if (inventoryManageMode) inventoryManageMode.onclick = () => { state.inventoryViewMode = 'manage'; persist(); render(); };
+      const inventoryInStockOnly = document.getElementById('inventoryInStockOnly');
+      if (inventoryInStockOnly) inventoryInStockOnly.onchange = e => { inventoryBrowserInStockOnly = e.target.checked; refreshMaterialBrowserResults(); };
       const inventoryCategoryFilter = document.getElementById('inventoryCategoryFilter');
       if (inventoryCategoryFilter) inventoryCategoryFilter.onchange = e => { state.inventoryCategoryFilter = e.target.value; render(); };
       const inventoryBatchStatusFilter = document.getElementById('inventoryBatchStatusFilter');
@@ -3180,6 +3308,7 @@
       document.querySelectorAll('[data-wizard-profile]').forEach(b => b.onclick = () => openMaterialTestWizard(b.dataset.wizardProfile));
       bindProjectResultActions(document);
       bindInventoryResultActions(document);
+      bindMaterialBrowserActions(document);
       document.querySelectorAll('[data-open-grid]').forEach(c => c.onclick = () => { activeGridId = c.dataset.openGrid; render(); });
       document.querySelectorAll('[data-cell]').forEach(c => c.onclick = () => openCell(c.dataset.cell));
       document.querySelectorAll('[data-ref]').forEach(b => b.onclick = () => saveReference(b.dataset.ref));
@@ -3596,9 +3725,10 @@
     }
     function normalizeRawMaterial(f, existingId) {
       return {
+        ...(f || {}),
         id: existingId || uid(),
         name: (f.name || '').trim(),
-        category: rawMaterialCategories.includes(f.category) ? f.category : 'other',
+        category: String(f.category || '').trim() || 'other',
         quantityOnHand: f.quantityOnHand === '' ? '' : num(f.quantityOnHand),
         unit: inventoryUnits.includes(f.unit) ? f.unit : 'other',
         unitCost: f.unitCost === '' ? '' : num(f.unitCost),
@@ -3610,6 +3740,95 @@
         tags: tagArray(f.tags)
       };
     }
+    function runMaterialBrowserFixtures() { const fixture=(name,pass)=>({name,pass}); const a=normalizeRawMaterial({name:'Basswood plywood 3mm / 1/8 in',category:'wood stuff',customField:'kept'}); const b=normalizeRawMaterial(a,a.id); const tree=buildMaterialBrowserTree([enrichInventoryBrowserItem({...a,id:'a',name:'Basswood plywood 3 mm'}),enrichInventoryBrowserItem({...a,id:'b',name:'Basswood plywood 6 mm'})]); const results=[fixture('Known category label',categoryDisplayLabel('sheet')==='Sheets & blanks'),fixture('Imported category remains visible',categoryDisplayLabel('wood stuff')==='Wood Stuff'),fixture('Missing category uncategorized',categoryDisplayLabel('')==='Uncategorized'),fixture('Dual unit is one bucket',parseInventorySizeMetadata(a).displayLabel==='3 mm / 1/8 in'),fixture('Generic dimension stays complete',parseInventorySizeMetadata({name:'90mm x 3mm'}).displayLabel.includes('×')),fixture('No size fallback',parseInventorySizeMetadata({name:'Cork blank'}).displayLabel==='Unspecified size'),fixture('Two sizes create groups',Object.values(tree).some(group=>Object.values(group.bases).some(material=>Object.values(material.sizes).length===2))),fixture('In stock filter excludes zero',filterInventoryBrowserItems([enrichInventoryBrowserItem({...a,quantityOnHand:0}),enrichInventoryBrowserItem({...a,id:'yes',quantityOnHand:1})],'',true).length===1),fixture('Unknown fields survive normalization',b.customField==='kept'),fixture('Repeated normalization stable',JSON.stringify(normalizeRawMaterial(b,b.id))===JSON.stringify(b)),fixture('PVC unsafe',!!materialSafetyWarning('PVC sheet')),fixture('ID lookup remains ID based',findInventoryBrowserItem('missing')===null)]; const passed=results.filter(x=>x.pass).length,failed=results.length-passed; console.group('Material browser fixtures');console.table(results);console.log(`${passed} passed`);console.log(`${failed} failed`);console.groupEnd();return{passed,failed,results}; }
+    window.runMaterialBrowserFixtures = runMaterialBrowserFixtures;
+    function runMaterialBrowserMatchingFixtures() {
+      const item={name:'Baltic birch / basswood plywood 3mm',aliases:'basswood plywood'};
+      const profiles=[{id:'cut6',material:'Basswood plywood',jobType:'cut',thicknessValue:6,thicknessUnit:'mm',tests:[]},{id:'engrave3',material:'Baltic birch / basswood plywood 3mm',jobType:'engrave',thicknessValue:3,thicknessUnit:'mm',tests:[]},{id:'alias',material:'basswood plywood',jobType:'engrave',thicknessValue:3,thicknessUnit:'mm',tests:[]}];
+      const matches=libraryProfilesForInventory(item,profiles), summary=materialBrowserTestSummary([{profile:{id:'a',speed:1000,tests:[{id:'e',date:'2026-01-01',status:'experimental',confidence:2},{id:'r',date:'2026-02-01',status:'recommended',confidence:5}]}}]);
+      const results=[['Exact name first',matches[0]?.matchType==='exact-name'],['Alias provenance',matches.some(m=>m.matchType==='exact-alias'&&m.matchedAlias==='basswood plywood')],['Multiple profiles retained',matches.length===3],['Input order deterministic',matches.map(m=>m.profile.id).join('|')===libraryProfilesForInventory(item,[...profiles].reverse()).map(m=>m.profile.id).join('|')],['No loose short match',libraryProfilesForInventory({name:'ab',aliases:''},profiles).length===0],['No match empty',libraryProfilesForInventory({name:'walnut',aliases:''},profiles).length===0],['Summary counts recommended',summary.recommendedCount===1&&summary.experimentalCount===1],['Summary latest date',summary.latestTestDate==='2026-02-01'],['Summary confidence',summary.highestConfidence===5],['Primary without tests not proven',materialBrowserTestSummary([{profile:{id:'x',speed:1,tests:[]}}]).hasPrimaryWithoutTests],['Empty summary safe',materialBrowserTestSummary([]).totalTests===0&&materialBrowserTestSummary([]).highestConfidence===0]];
+      const all=runMaterialBrowserFixtures().results.concat(results.map(([name,pass])=>({name,pass}))); const passed=all.filter(x=>x.pass).length,failed=all.length-passed; console.group('Material browser fixtures');console.table(all);console.log(`${passed} passed`);console.log(`${failed} failed`);console.groupEnd();return{passed,failed,results:all};
+    }
+    window.runMaterialBrowserFixtures = runMaterialBrowserMatchingFixtures;
+    function runMaterialBrowserRelatedFixtures() {
+      const item = { id: 'inventory-birch', name: 'Baltic birch 3mm', aliases: 'basswood plywood' };
+      const libraryMatches = [{ profile: { id: 'profile-birch' } }];
+      const projects = [
+        { id: 'primary', name: 'Primary', material: 'Baltic birch 3mm', dateCreated: '2026-07-10', materialLines: [] },
+        { id: 'alias-primary', name: 'Alias primary', material: 'basswood plywood', dateCreated: '2026-07-09', materialLines: [] },
+        { id: 'line-primary', name: 'Line primary', material: 'Cork', dateCreated: '2026-07-08', materialLines: [{ id: 'line-a', name: 'Baltic birch 3mm' }] },
+        { id: 'line-alias', name: 'Line alias', material: 'Cork', dateCreated: '2026-07-07', materialLines: [{ id: 'line-b', name: 'basswood plywood' }] },
+        { id: 'source', name: 'Source profile', material: 'Cork', dateCreated: '2026-07-06', sourceProfileId: 'profile-birch', materialLines: [] },
+        { id: 'multi', name: 'Multi path', material: 'Baltic birch 3mm', dateCreated: '2026-07-05', materialLines: [{ id: 'line-c', name: 'basswood plywood' }], sourceProfileId: 'profile-birch' },
+        { id: 'unrelated', name: 'Unrelated', material: 'Walnut', dateCreated: '2026-07-11', materialLines: [] },
+        { id: 'invalid-b', name: 'Beta invalid', material: 'Baltic birch 3mm', dateCreated: 'not-a-date', materialLines: [] },
+        { id: 'invalid-a', name: 'Alpha invalid', material: 'Baltic birch 3mm', dateCreated: '', materialLines: [] },
+        { id: 'equal-z', name: 'Zulu equal', material: 'Baltic birch 3mm', dateCreated: '2026-07-01', materialLines: [] },
+        { id: 'equal-a', name: 'Alpha equal', material: 'Baltic birch 3mm', dateCreated: '2026-07-01', materialLines: [] },
+        { id: 'batch-shaped', itemName: 'Baltic birch 3mm', projectId: 'primary', dateCreated: '2026-07-12' }
+      ];
+      const itemBefore = JSON.stringify(item), projectsBefore = JSON.stringify(projects), matchesBefore = JSON.stringify(libraryMatches);
+      const related = projectsForInventory(item, projects, libraryMatches);
+      const byId = id => related.find(match => match.project.id === id);
+      const raw = [{ id: 'one', name: 'Same name', quantityOnHand: 1 }, { id: 'two', name: 'Same name', quantityOnHand: 0 }].map(enrichInventoryBrowserItem);
+      const firstOnly = [raw[0]], secondOnly = [raw[1]];
+      const results = [
+        ['Project primary material match', !!byId('primary')?.matchTypes.includes('primary-material')],
+        ['Project alias primary match', !!byId('alias-primary')?.matchTypes.includes('alias')],
+        ['Project material line match', !!byId('line-primary')?.matchTypes.includes('material-line')],
+        ['Project alias material line match', !!byId('line-alias')?.matchTypes.includes('material-line') && !!byId('line-alias')?.matchTypes.includes('alias')],
+        ['Project source profile match', !!byId('source')?.matchTypes.includes('source-profile')],
+        ['Unrelated Project excluded', !byId('unrelated')],
+        ['Multi-path Project returned once', related.filter(match => match.project.id === 'multi').length === 1],
+        ['Multi-path metadata retained', ['primary-material', 'alias', 'material-line', 'source-profile'].every(type => byId('multi')?.matchTypes.includes(type))],
+        ['Project matching alias retained', byId('alias-primary')?.matchedAliases.includes('basswood plywood')],
+        ['Project matching material line retained', byId('line-primary')?.matchedMaterialLines.includes('Baltic birch 3mm')],
+        ['Related Projects newest first', related[0]?.project.id === 'primary'],
+        ['Invalid and missing dates deterministic', related.filter(match => match.project.id.startsWith('invalid-')).map(match => match.project.id).join('|') === 'invalid-a|invalid-b'],
+        ['Equal Project dates deterministic', related.filter(match => match.project.id.startsWith('equal-')).map(match => match.project.id).join('|') === 'equal-a|equal-z'],
+        ['Reversed Project input deterministic', related.map(match => match.project.id).join('|') === projectsForInventory(item, [...projects].reverse(), libraryMatches).map(match => match.project.id).join('|')],
+        ['Finished Batch-shaped data excluded', !byId('batch-shaped')],
+        ['Related Project inputs not mutated', JSON.stringify(item) === itemBefore && JSON.stringify(projects) === projectsBefore && JSON.stringify(libraryMatches) === matchesBefore],
+        ['Existing selection remains selected', resolveMaterialBrowserSelection(raw, raw, 'two').selectedId === 'two'],
+        ['Missing selection uses first visible', resolveMaterialBrowserSelection(raw, raw, 'missing').selectedId === 'one'],
+        ['Filtered selection remains selected', resolveMaterialBrowserSelection(raw, firstOnly, 'two').selectedId === 'two'],
+        ['Filtered selection is marked hidden', resolveMaterialBrowserSelection(raw, firstOnly, 'two').hidden],
+        ['Clearing filters retains selection', resolveMaterialBrowserSelection(raw, raw, 'two').selectedId === 'two'],
+        ['Deleted selection falls back to visible', resolveMaterialBrowserSelection(firstOnly, firstOnly, 'two').selectedId === 'one'],
+        ['Deleted selection clears with no visible items', resolveMaterialBrowserSelection([], [], 'two').selectedId === ''],
+        ['Deleting unselected record preserves selection', resolveMaterialBrowserSelection(secondOnly, secondOnly, 'two').selectedId === 'two'],
+        ['Duplicate names remain ID selected', resolveMaterialBrowserSelection(raw, raw, 'two').selected?.id === 'two'],
+        ['Empty raw Inventory has no selection', !resolveMaterialBrowserSelection([], [], '').selected]
+      ];
+      const all = runMaterialBrowserMatchingFixtures().results.concat(results.map(([name, pass]) => ({ name, pass })));
+      const passed = all.filter(result => result.pass).length, failed = all.length - passed;
+      console.group('Material browser fixtures'); console.table(all); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results: all };
+    }
+    window.runMaterialBrowserFixtures = runMaterialBrowserRelatedFixtures;
+    function runMaterialBrowserCorrectionFixtures() {
+      const caution = materialBrowserSafetyWarning({ name: 'Fiberglass sheet' });
+      const previousMode = state.inventoryViewMode;
+      state.inventoryViewMode = 'browse';
+      const backupMode = backupObject().inventoryViewMode;
+      state.inventoryViewMode = previousMode;
+      const customCategory = normalizeRawMaterial({ name: 'Imported blank', category: 'wood stuff' }, 'custom-category');
+      const results = [
+        ['PVC name blocks browser laser actions', materialBrowserBlocksLaserActions({ name: 'PVC sheet' })],
+        ['Vinyl alias blocks browser laser actions', materialBrowserBlocksLaserActions({ name: 'Decorative sheet', aliases: 'vinyl blank' })],
+        ['Unknown plastic note blocks browser laser actions', materialBrowserBlocksLaserActions({ name: 'Mystery sheet', notes: 'Unknown plastic composition' })],
+        ['Ordinary basswood permits browser laser actions', !materialBrowserBlocksLaserActions({ name: 'Basswood plywood 3mm' })],
+        ['Caution warning remains distinct from blocked', caution?.tone === 'warn' && caution.blocksLaserActions === false && !materialBrowserBlocksLaserActions({ name: 'Fiberglass sheet' })],
+        ['Backup includes Browse mode', backupMode === 'browse'],
+        ['Invalid Inventory view mode normalizes to Manage', normalizeInventoryViewMode('invalid') === 'manage'],
+        ['Imported custom category survives edit options', customCategory.category === 'wood stuff' && rawMaterialCategoryOptions(customCategory.category)[0] === 'wood stuff']
+      ];
+      const all = runMaterialBrowserRelatedFixtures().results.concat(results.map(([name, pass]) => ({ name, pass })));
+      const passed = all.filter(result => result.pass).length, failed = all.length - passed;
+      console.group('Material browser fixtures'); console.table(all); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results: all };
+    }
+    window.runMaterialBrowserFixtures = runMaterialBrowserCorrectionFixtures;
     function normalizeFinishedBatch(f, existingId) {
       const made = Math.max(0, Math.round(num(f.quantityMade)));
       const sellable = Math.max(0, Math.round(num(f.quantitySellable)));
@@ -3635,7 +3854,7 @@
       openModal('inventoryModal', `<div class="dialog"><div class="spread"><h2>${editingId ? 'Edit raw material' : 'New raw material'}</h2><button data-close>&times;</button></div><form id="rawMaterialForm" class="formgrid">
         <label class="span2">${labelText('Name', 'Material, blank, hardware, or packaging name.')}<input name="name" value="${esc(data.name)}"></label>
         <label class="span2">${labelText('Aliases, comma-separated', 'Alternate listing names or shorthand used only for matching and search.')}<input name="aliases" value="${esc(tagString(aliasesOf(data)))}" placeholder="Amazon listing title, old shorthand"></label>
-        ${select('category','Category',data.category || 'sheet',rawMaterialCategories,'Simple category for filtering raw inventory.')}
+        ${select('category','Category',data.category || 'sheet',rawMaterialCategoryOptions(data.category),'Simple category for filtering raw inventory.')}
         ${field('quantityOnHand','Quantity on hand',data.quantityOnHand,'number','min="0" step="any"','Current manual count on hand.')}
         ${select('unit','Unit',data.unit || 'each',inventoryUnits,'Counting unit for this material.')}
         ${field('unitCost','Unit cost',data.unitCost,'number','min="0" step="0.01"','Approximate cost for one unit.')}
@@ -4039,6 +4258,7 @@
       if ('projectSort' in data) state.projectSort = data.projectSort || 'date-desc';
       if ('inventoryRawSort' in data) state.inventoryRawSort = data.inventoryRawSort || 'low-stock';
       if ('inventoryBatchSort' in data) state.inventoryBatchSort = data.inventoryBatchSort || 'name-asc';
+      if ('inventoryViewMode' in data) state.inventoryViewMode = normalizeInventoryViewMode(data.inventoryViewMode);
       if ('libraryMatchMaterial' in data) state.libraryMatchMaterial = data.libraryMatchMaterial || '';
       if ('libraryMatchThickness' in data) state.libraryMatchThickness = data.libraryMatchThickness || '';
       if ('libraryMatchUnit' in data) state.libraryMatchUnit = data.libraryMatchUnit || data.unit || state.unit;
@@ -4052,6 +4272,7 @@
       state.projectSort = 'date-desc';
       state.inventoryRawSort = 'low-stock';
       state.inventoryBatchSort = 'name-asc';
+      state.inventoryViewMode = 'manage';
       state.libraryMatchMaterial = '';
       state.libraryMatchThickness = '';
       state.libraryMatchUnit = state.unit || 'in';
@@ -4287,6 +4508,7 @@
     if (selftest === 'baseline' || selftest === 'all') runBaselineResolutionFixtures();
     if (selftest === 'normalization' || selftest === 'all') runMaterialTestNormalizationFixtures();
     if (selftest === 'grid' || selftest === 'all') runGridPromotionFixtures();
+    if (selftest === 'materials' || selftest === 'all') window.runMaterialBrowserFixtures();
     if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
     render();
