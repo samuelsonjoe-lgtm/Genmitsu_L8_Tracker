@@ -393,7 +393,7 @@
       return { status: 'ok', data };
     }
     function designDefaults() {
-      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12' };
+      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated' };
     }
     function normalizeInventoryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function normalizeLibraryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
@@ -1450,16 +1450,27 @@
       return `<label>${labelText(label, tip)}<select name="${name}">${options.map(([key, text]) => `<option value="${esc(key)}" ${key === value ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select></label>`;
     }
     function renderDesigns() {
-      const d = designDraft, box = d.template === 'finger-box', tray = d.template === 'dice-tray' || d.template === 'divider-tray', hanging = d.template === 'hanging-sign';
+      const d = designDraft, box = d.template === 'finger-box', sliding = d.template === 'sliding-lid-box', tray = d.template === 'dice-tray' || d.template === 'divider-tray', hanging = d.template === 'hanging-sign';
       const result = buildDesignResult(d);
-      const templateField = designSelect('template', 'Template', d.template, [['qr-stand','Freestanding QR / sign stand'],['hanging-sign','Hanging sign'],['dice-tray','Dice tray'],['divider-tray','Divider tray'],['finger-box','Finger-jointed box']]);
+      const templateField = designSelect('template', 'Template', d.template, [['qr-stand','Freestanding QR / sign stand'],['hanging-sign','Hanging sign'],['dice-tray','Dice tray'],['divider-tray','Divider tray'],['finger-box','Finger-jointed box'],['sliding-lid-box','Sliding-lid finger box']]);
       const boxFields = designSelect('boxDimensionMode', 'Dimension basis', d.boxDimensionMode, [['inside','Inside dimensions'],['outside','Outside body dimensions']], 'Outside height is underside of bottom to wall top; inside height starts at the inside face of the bottom.')
         + field('boxWidth', `${d.boxDimensionMode === 'outside' ? 'Outside body' : 'Inside'} width (mm)`, d.boxWidth, 'number', 'min="0.01" step="0.1"')
         + field('boxDepth', `${d.boxDimensionMode === 'outside' ? 'Outside body' : 'Inside'} depth (mm)`, d.boxDepth, 'number', 'min="0.01" step="0.1"')
         + field('boxHeight', `${d.boxDimensionMode === 'outside' ? 'Outside body' : 'Inside'} height (mm)`, d.boxHeight, 'number', 'min="0.01" step="0.1"')
         + field('jointClearance', 'Joint clearance (mm)', d.jointClearance, 'number', 'min="0" step="0.01"', '0.00 mm is nominal. Positive clearance loosens internal finger transitions without enlarging panel envelopes.')
-        + field('preferredFingerWidth', 'Preferred finger width (mm)', d.preferredFingerWidth, 'number', 'min="0.01" step="0.1"', 'A target only; the exact width is calculated from an odd segment count.')
-        + designSelect('boxLid', 'Top', d.boxLid, [['open','Open top'],['loose','Loose flat lid']]);
+          + field('preferredFingerWidth', 'Preferred finger width (mm)', d.preferredFingerWidth, 'number', 'min="0.01" step="0.1"', 'A target only; the exact width is calculated from an odd segment count.')
+          + designSelect('boxLid', 'Top', d.boxLid, [['open','Open top'],['loose','Loose flat lid']]);
+      const slidingFields = designSelect('slidingDimensionMode', 'Dimensions mean', d.slidingDimensionMode, [['usable','Usable cavity below lid'],['outside','Outside body']], 'Usable cavity is the unobstructed space below the lid, between the inner rail faces, and between the Front and Back walls.')
+        + field('slidingWidth', `${d.slidingDimensionMode === 'outside' ? 'Outside body' : 'Usable cavity'} width (mm)`, d.slidingWidth, 'number', 'min="0.01" step="0.1"')
+        + field('slidingDepth', `${d.slidingDimensionMode === 'outside' ? 'Outside body' : 'Usable cavity'} depth (mm)`, d.slidingDepth, 'number', 'min="0.01" step="0.1"')
+        + field('slidingHeight', `${d.slidingDimensionMode === 'outside' ? 'Outside body' : 'Usable cavity'} height (mm)`, d.slidingHeight, 'number', 'min="0.01" step="0.1"')
+        + field('slidingJointClearance', 'Finger-joint clearance (mm)', d.slidingJointClearance, 'number', 'min="0" step="0.01"', 'Adjusts only the body’s finger joints.')
+        + field('slidingPreferredFingerWidth', 'Preferred finger width (mm)', d.slidingPreferredFingerWidth, 'number', 'min="0.01" step="0.1"', 'A target only; exact widths use valid odd segment counts.')
+        + field('lidSideClearance', 'Lid side clearance, total (mm)', d.lidSideClearance, 'number', 'min="0" step="0.01"', 'Total width removed across both sides; each side receives half.')
+        + field('lidVerticalClearance', 'Lid vertical clearance (mm)', d.lidVerticalClearance, 'number', 'min="0" step="0.01"', 'Extra free space above the lid inside the rail channel.')
+        + field('frontInsertionClearance', 'Front insertion clearance (mm)', d.frontInsertionClearance, 'number', 'min="0" step="0.01"', 'Gap between the shortened Front wall and the lid underside.')
+        + designSelect('lidPull', 'Finger pull', d.lidPull, [['none','None'],['rectangular','Centered rectangular edge notch']])
+        + (d.lidPull === 'rectangular' ? field('lidPullWidth', 'Pull width (mm)', d.lidPullWidth, 'number', 'min="0.01" step="0.1"', 'The notch depth is the greater of material thickness or 6 mm.') : '');
       const legacyFields = tray
         ? field('trayWidth','Inside tray width (mm)',d.trayWidth,'number','min="20" step="1"')
           + field('trayDepth','Inside tray depth (mm)',d.trayDepth,'number','min="20" step="1"')
@@ -1473,23 +1484,26 @@
               + field('hangingInset','Hole inset (mm)',d.hangingInset,'number','min="3" step="0.1"')
             : field('baseDepth','Base depth (mm)',d.baseDepth,'number','min="20" step="1"')
               + field('slotDepth','Stand slot depth (mm)',d.slotDepth,'number','min="10" step="1"'));
-      const note = box
+      const note = sliding
+        ? 'Eight through-cut pieces form a Front-loading box: five body panels, one shouldered lid, and two identical glue-on inner channel rails. All fit values are experimental starting points; test the body joints and sliding fit on scrap.'
+        : box
         ? 'The open-top body uses complementary rectangular fingers at all four corners and all four bottom joints. A loose lid is a separate plain panel with no retention.'
         : tray ? `${d.jointStyle === 'finger' ? 'Finger-tab' : 'Tab-and-slot'} tray layout includes a slotted base and wall tabs. Corner glue is recommended after a dry fit.`
         : hanging ? 'Hanging sign exports a clean panel with two mounting holes.'
         : 'Freestanding sign exports a base and upright with matching centered slots. The upright is intentionally blank for your QR, logo, or text in LightBurn.';
       return `
-        <div class="toolbar" style="margin-bottom:14px"><div><b>Designs</b><div class="small muted">Session-only offline SVG layouts for LightBurn, including a true finger-jointed box. Designs are excluded from JSON backups.</div></div></div>
+        <div class="toolbar" style="margin-bottom:14px"><div><b>Designs</b><div class="small muted">Session-only offline SVG layouts for LightBurn, including true finger-jointed and sliding-lid boxes. Designs are excluded from JSON backups.</div></div></div>
         <form id="designForm" class="panel" onsubmit="return false">
           <div class="formgrid">
             ${templateField}
-            ${box ? '' : tray ? select('jointStyle','Tray joint style',d.jointStyle,['finger','tab-slot']) : '<div></div>'}
+            ${box || sliding ? '' : tray ? select('jointStyle','Tray joint style',d.jointStyle,['finger','tab-slot']) : '<div></div>'}
             ${field('materialThickness','Measured material thickness (mm)',d.materialThickness,'number','min="0.1" step="0.01"','Measure the actual sheet; nominal plywood thickness can differ.')}
-            ${box ? boxFields : field('fitClearance','Slot clearance (mm)',d.fitClearance,'number','min="0" step="0.01"','Added to legacy slot width. Start small and test on scrap.') + legacyFields}
+            ${sliding ? slidingFields : box ? boxFields : field('fitClearance','Slot clearance (mm)',d.fitClearance,'number','min="0" step="0.01"','Added to legacy slot width. Start small and test on scrap.') + legacyFields}
           </div>
           <div class="small muted" style="margin-top:10px">${note}</div>
-          <div class="small muted" style="margin-top:8px"><b>Kerf is separate:</b> SVG geometry is nominal centerline geometry. Joint clearance controls assembly fit; test material-specific kerf on scrap and apply it separately in LightBurn.</div>
+          <div class="small muted" style="margin-top:8px"><b>Kerf is separate:</b> SVG geometry is nominal centerline geometry. Joint clearance controls body assembly fit; lid side clearance controls lateral sliding fit; lid vertical clearance controls channel height; Front insertion clearance prevents sill scraping. Test material-specific kerf on scrap and apply it separately in LightBurn.</div>
           ${box ? '<div class="small muted" style="margin-top:8px">Outside body height runs from the underside of the bottom to the top of the walls. Inside height runs from the inside face of the bottom to the wall top. A loose lid adds one material thickness to overall closed height.</div>' : ''}
+          ${sliding ? '<div class="small muted" style="margin-top:8px"><b>Open end:</b> Front &nbsp; <b>Slide direction:</b> Front toward Back &nbsp; <b>Rails:</b> two laminated through-cut inner channels. Glue the rails top-flush and back-flush with both channels facing inward. Kerf is not included in generated geometry.</div>' : ''}
           <div class="actions" style="margin-top:12px"><button class="primary" id="downloadDesignSvg" type="button" ${result.valid ? '' : 'disabled'}>Download LightBurn SVG</button><button id="resetDesign" type="button">Reset defaults</button></div>
         </form>
         <div id="designResults">${designResultsHtml(result)}</div>
@@ -1571,12 +1585,30 @@
     }
     function normalizeDesignDraft(rawDraft = {}) {
       const draft = { ...rawDraft }, errors = [], warnings = [];
-      const templates = ['qr-stand','hanging-sign','dice-tray','divider-tray','finger-box'];
+      const templates = ['qr-stand','hanging-sign','dice-tray','divider-tray','finger-box','sliding-lid-box'];
       const template = String(draft.template || '');
       if (!templates.includes(template)) errors.push('Choose a recognized Designs template.');
       const values = { template };
       values.materialThickness = designRequiredNumber(draft, 'materialThickness', 'Material thickness', errors, .1, true);
-      if (template === 'finger-box') {
+      if (template === 'sliding-lid-box') {
+        values.dimensionMode = String(draft.slidingDimensionMode || '');
+        values.openEnd = String(draft.slidingOpenEnd || '');
+        values.railMode = String(draft.slidingRailMode || '');
+        values.pullMode = String(draft.lidPull || '');
+        if (!['usable','outside'].includes(values.dimensionMode)) errors.push('Choose Usable cavity below lid or Outside body dimensions.');
+        if (values.openEnd !== 'front') errors.push('Choose the supported Front open end.');
+        if (values.railMode !== 'laminated') errors.push('Choose the supported laminated inner rail construction.');
+        if (!['none','rectangular'].includes(values.pullMode)) errors.push('Choose a recognized finger-pull option.');
+        values.width = designRequiredNumber(draft, 'slidingWidth', 'Width', errors, 0);
+        values.depth = designRequiredNumber(draft, 'slidingDepth', 'Depth', errors, 0);
+        values.height = designRequiredNumber(draft, 'slidingHeight', 'Height', errors, 0);
+        values.clearance = designRequiredNumber(draft, 'slidingJointClearance', 'Finger-joint clearance', errors, 0, true);
+        values.preferredFingerWidth = designRequiredNumber(draft, 'slidingPreferredFingerWidth', 'Preferred finger width', errors, 0);
+        values.sideClearance = designRequiredNumber(draft, 'lidSideClearance', 'Lid side clearance', errors, 0, true);
+        values.verticalClearance = designRequiredNumber(draft, 'lidVerticalClearance', 'Lid vertical clearance', errors, 0, true);
+        values.insertionClearance = designRequiredNumber(draft, 'frontInsertionClearance', 'Front insertion clearance', errors, 0, true);
+        values.pullWidth = values.pullMode === 'rectangular' ? designRequiredNumber(draft, 'lidPullWidth', 'Pull width', errors, 0) : Number(draft.lidPullWidth);
+      } else if (template === 'finger-box') {
         values.dimensionMode = String(draft.boxDimensionMode || '');
         values.lid = String(draft.boxLid || '');
         if (!['inside','outside'].includes(values.dimensionMode)) errors.push('Choose Inside dimensions or Outside body dimensions.');
@@ -1714,24 +1746,212 @@
       if (panels.some(panel => !panel.path || panel.points.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y)))) errors.push('Generated panel geometry contains a non-finite or non-orthogonal coordinate.');
       return { valid: !errors.length, errors, warnings, dimensions, patterns, panels, metrics: { requestedFingerWidth: parameters.preferredFingerWidth, requiredWeb, clearance: parameters.clearance, closedHeight: dimensions.outsideHeight + (parameters.lid === 'loose' ? t : 0) } };
     }
+    function slidingLidBoxDimensions(parameters) {
+      const t = parameters.materialThickness, upperWeb = Math.max(t, 4), lowerWeb = Math.max(t, 4), stopLength = Math.max(t, 4);
+      let usableWidth, usableDepth, usableHeight, insideWidth, insideDepth, insideHeight, outsideWidth, outsideDepth, outsideHeight;
+      if (parameters.dimensionMode === 'usable') {
+        usableWidth = parameters.width; usableDepth = parameters.depth; usableHeight = parameters.height;
+        insideWidth = usableWidth + 2 * t; insideDepth = usableDepth; insideHeight = usableHeight + t + parameters.verticalClearance + upperWeb;
+        outsideWidth = insideWidth + 2 * t; outsideDepth = insideDepth + 2 * t; outsideHeight = insideHeight + t;
+      } else {
+        outsideWidth = parameters.width; outsideDepth = parameters.depth; outsideHeight = parameters.height;
+        insideWidth = outsideWidth - 2 * t; insideDepth = outsideDepth - 2 * t; insideHeight = outsideHeight - t;
+        usableWidth = insideWidth - 2 * t; usableDepth = insideDepth; usableHeight = insideHeight - upperWeb - t - parameters.verticalClearance;
+      }
+      const channelHeight = t + parameters.verticalClearance, railHeight = upperWeb + channelHeight + lowerWeb, railLength = insideDepth, channelLength = insideDepth - stopLength;
+      const railGap = insideWidth - 2 * t, lidWidth = insideWidth - parameters.sideClearance, engagement = (lidWidth - railGap) / 2, tongueWidth = railGap - parameters.sideClearance;
+      const lidLength = insideDepth + t, frontHeight = t + usableHeight - parameters.insertionClearance, railBottom = usableHeight - lowerWeb;
+      return {
+        usableWidth:designRound(usableWidth), usableDepth:designRound(usableDepth), usableHeight:designRound(usableHeight),
+        insideWidth:designRound(insideWidth), insideDepth:designRound(insideDepth), insideHeight:designRound(insideHeight),
+        outsideWidth:designRound(outsideWidth), outsideDepth:designRound(outsideDepth), outsideHeight:designRound(outsideHeight),
+        upperWeb:designRound(upperWeb), lowerWeb:designRound(lowerWeb), stopLength:designRound(stopLength), channelHeight:designRound(channelHeight),
+        railHeight:designRound(railHeight), railLength:designRound(railLength), channelLength:designRound(channelLength), railBottom:designRound(railBottom),
+        railGap:designRound(railGap), lidWidth:designRound(lidWidth), tongueWidth:designRound(tongueWidth), engagement:designRound(engagement),
+        lidLength:designRound(lidLength), shoulderStop:designRound(channelLength), tongueEnd:designRound(insideDepth), frontHeight:designRound(frontHeight)
+      };
+    }
+    function designPanelFromPoints(definition, points) {
+      const compact = designCompactPoints(points), path = designPointsPath(compact), finite = compact.length > 3 && compact.every(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+      const bounds = finite ? { minX:Math.min(...compact.map(point=>point.x)), minY:Math.min(...compact.map(point=>point.y)), maxX:Math.max(...compact.map(point=>point.x)), maxY:Math.max(...compact.map(point=>point.y)) } : { minX:0,minY:0,maxX:0,maxY:0 };
+      bounds.width = designRound(bounds.maxX - bounds.minX); bounds.height = designRound(bounds.maxY - bounds.minY);
+      return { name:definition.name, id:definition.id, width:definition.width, height:definition.height, path, points:compact, bounds, edges:definition.edges || [] };
+    }
+    function designEdgeTerminalOffset(edge, atStart) {
+      if (!edge?.pattern) return 0;
+      if (edge.composite && !atStart) return 0;
+      const index=atStart?0:edge.pattern.count-1,isFinger=(index%2===0)===edge.phase;
+      return isFinger?0:edge.depth;
+    }
+    function designSafePatternEdgePoints(start,end,inward,edge,startTrim,endTrim) {
+      const horizontal=start.y===end.y,direction=horizontal?Math.sign(end.x-start.x):Math.sign(end.y-start.y),pointAt=(distance,offset)=>horizontal?{x:start.x+direction*distance+inward.x*offset,y:start.y+inward.y*offset}:{x:start.x+inward.x*offset,y:start.y+direction*distance+inward.y*offset};
+      const isFinger=index=>(index%2===0)===edge.phase,points=[pointAt(startTrim,isFinger(0)?0:edge.depth)];
+      for(let index=0;index<edge.pattern.count-1;index++){
+        const currentFinger=isFinger(index),distance=edge.pattern.actualWidth*(index+1)+(currentFinger?-edge.clearance/2:edge.clearance/2);
+        if(distance<=startTrim+1e-9||distance>=endTrim-1e-9) continue;
+        points.push(pointAt(distance,currentFinger?0:edge.depth),pointAt(distance,isFinger(index+1)?0:edge.depth));
+      }
+      points.push(pointAt(endTrim,isFinger(edge.pattern.count-1)?0:edge.depth));
+      return designCompactPoints(points);
+    }
+    function buildSlidingLidBodyPanel(definition) {
+      const {width,height,edges}=definition,corners=[{x:0,y:0},{x:width,y:0},{x:width,y:height},{x:0,y:height}],inward=[{x:0,y:1},{x:-1,y:0},{x:0,y:-1},{x:1,y:0}],joins=corners.map((corner,index)=>{
+        const previous=(index+3)%4,previousOffset=designEdgeTerminalOffset(edges[previous],false),currentOffset=designEdgeTerminalOffset(edges[index],true);
+        return {x:designRound(corner.x+inward[previous].x*previousOffset+inward[index].x*currentOffset),y:designRound(corner.y+inward[previous].y*previousOffset+inward[index].y*currentOffset)};
+      });
+      let points=[joins[0]];
+      for(let index=0;index<4;index++){
+        const edge=edges[index],start=corners[index],end=corners[(index+1)%4],startJoin=joins[index],endJoin=joins[(index+1)%4],horizontal=start.y===end.y,direction=horizontal?Math.sign(end.x-start.x):Math.sign(end.y-start.y);
+        if(!edge?.pattern){ points.push(endJoin); continue; }
+        const startTrim=horizontal?(startJoin.x-start.x)*direction:(startJoin.y-start.y)*direction;
+        if(edge.composite){
+          const patternEnd=edge.compositeSpan,patternPoints=designSafePatternEdgePoints(start,end,inward[index],edge,startTrim,patternEnd);
+          points.push(...patternPoints.slice(1));
+          const outerEnd=horizontal?{x:start.x+direction*patternEnd,y:start.y}:{x:start.x,y:start.y+direction*patternEnd};
+          points.push(outerEnd,endJoin);
+        }else{
+          const endTrim=horizontal?(endJoin.x-start.x)*direction:(endJoin.y-start.y)*direction;
+          points.push(...designSafePatternEdgePoints(start,end,inward[index],edge,startTrim,endTrim).slice(1));
+        }
+      }
+      return designPanelFromPoints(definition,points);
+    }
+    function designPointSegments(points) {
+      return points.slice(1).map((point,index) => ({ a:points[index], b:point })).filter(segment => segment.a.x !== segment.b.x || segment.a.y !== segment.b.y);
+    }
+    function designSegmentKey(segment) {
+      const a = `${designNumberText(segment.a.x)},${designNumberText(segment.a.y)}`, b = `${designNumberText(segment.b.x)},${designNumberText(segment.b.y)}`;
+      return a < b ? `${a}|${b}` : `${b}|${a}`;
+    }
+    function designSegmentsIntersect(first, second) {
+      const epsilon = 1e-9, firstHorizontal = Math.abs(first.a.y - first.b.y) < epsilon, secondHorizontal = Math.abs(second.a.y - second.b.y) < epsilon;
+      const range = (a,b) => [Math.min(a,b),Math.max(a,b)], overlaps = (a,b) => Math.min(a[1],b[1]) >= Math.max(a[0],b[0]) - epsilon;
+      if (firstHorizontal && secondHorizontal) return Math.abs(first.a.y - second.a.y) < epsilon && overlaps(range(first.a.x,first.b.x),range(second.a.x,second.b.x));
+      if (!firstHorizontal && !secondHorizontal) return Math.abs(first.a.x - second.a.x) < epsilon && overlaps(range(first.a.y,first.b.y),range(second.a.y,second.b.y));
+      const horizontal = firstHorizontal ? first : second, vertical = firstHorizontal ? second : first;
+      return vertical.a.x >= Math.min(horizontal.a.x,horizontal.b.x) - epsilon && vertical.a.x <= Math.max(horizontal.a.x,horizontal.b.x) + epsilon && horizontal.a.y >= Math.min(vertical.a.y,vertical.b.y) - epsilon && horizontal.a.y <= Math.max(vertical.a.y,vertical.b.y) + epsilon;
+    }
+    function designPathSelfIntersects(points) {
+      const segments = designPointSegments(points);
+      for (let a = 0; a < segments.length; a++) for (let b = a + 1; b < segments.length; b++) {
+        const adjacent = b === a + 1 || a === 0 && b === segments.length - 1;
+        if (!adjacent && designSegmentsIntersect(segments[a],segments[b])) return true;
+      }
+      return false;
+    }
+    function designPanelGeometryErrors(panel) {
+      const errors = [], points = panel.points || [], segments = designPointSegments(points), keys = segments.map(designSegmentKey);
+      if (!panel.path || !points.length || points[0].x !== points[points.length-1].x || points[0].y !== points[points.length-1].y) errors.push(`${panel.name} path is not closed and orthogonal.`);
+      if (points.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y))) errors.push(`${panel.name} contains a non-finite coordinate.`);
+      if (points.slice(1).some((point,index) => point.x === points[index].x && point.y === points[index].y)) errors.push(`${panel.name} contains a zero-length segment.`);
+      if (designPathSelfIntersects(points)) errors.push(`${panel.name} path self-intersects.`);
+      if (new Set(keys).size !== keys.length) errors.push(`${panel.name} contains a duplicate cut segment.`);
+      if (panel.bounds.minX < -1e-6 || panel.bounds.minY < -1e-6 || panel.bounds.maxX > panel.width + 1e-6 || panel.bounds.maxY > panel.height + 1e-6) errors.push(`${panel.name} geometry leaves its panel bounds.`);
+      return errors;
+    }
+    function buildSlidingLidSidePanel(definition) {
+      const {backEdge,bottomEdge,frontEdge,frontHeight}=definition;
+      return buildSlidingLidBodyPanel({...definition,edges:[null,backEdge,bottomEdge,{...frontEdge,composite:true,compositeSpan:frontHeight}]});
+    }
+    function buildSlidingLidRail(dimensions, id, name) {
+      const width=dimensions.railLength,height=dimensions.railHeight,channelTop=dimensions.upperWeb,channelBottom=dimensions.upperWeb+dimensions.channelHeight,stopStart=dimensions.channelLength;
+      return designPanelFromPoints({id,name,width,height},[
+        {x:0,y:0},{x:width,y:0},{x:width,y:height},{x:0,y:height},{x:0,y:channelBottom},{x:stopStart,y:channelBottom},{x:stopStart,y:channelTop},{x:0,y:channelTop},{x:0,y:0}
+      ]);
+    }
+    function buildSlidingLidPanel(dimensions, parameters) {
+      const width=dimensions.lidWidth,height=dimensions.lidLength,shoulderEnd=parameters.materialThickness+dimensions.shoulderStop,tongueEnd=parameters.materialThickness+dimensions.tongueEnd;
+      const tongueLeft=(width-dimensions.tongueWidth)/2,tongueRight=tongueLeft+dimensions.tongueWidth,points=[{x:0,y:0}];
+      if (parameters.pullMode === 'rectangular') {
+        const notchDepth=Math.max(parameters.materialThickness,6),notchLeft=(width-parameters.pullWidth)/2,notchRight=notchLeft+parameters.pullWidth;
+        points.push({x:notchLeft,y:0},{x:notchLeft,y:notchDepth},{x:notchRight,y:notchDepth},{x:notchRight,y:0});
+      }
+      points.push({x:width,y:0},{x:width,y:shoulderEnd},{x:tongueRight,y:shoulderEnd},{x:tongueRight,y:tongueEnd},{x:tongueLeft,y:tongueEnd},{x:tongueLeft,y:shoulderEnd},{x:0,y:shoulderEnd},{x:0,y:0});
+      return designPanelFromPoints({id:'sliding-lid',name:'Sliding lid',width,height},points);
+    }
+    function slidingLidPullValidation(dimensions, parameters, minimumSideWeb) {
+      if (parameters.pullMode !== 'rectangular') return [];
+      const errors=[],depth=Math.max(parameters.materialThickness,6),sideMaterial=(dimensions.lidWidth-parameters.pullWidth)/2;
+      if (!Number.isFinite(parameters.pullWidth)||parameters.pullWidth<=0) errors.push('Pull width must be greater than zero.');
+      if (sideMaterial<minimumSideWeb-1e-9) errors.push(`Pull notch must leave at least ${designNumberText(minimumSideWeb)} mm on both sides.`);
+      if (depth>=parameters.materialThickness+dimensions.shoulderStop-1e-9) errors.push('Pull notch crosses the lid shoulder transition.');
+      return errors;
+    }
+    function buildSlidingLidBoxModel(parameters) {
+      const errors=[],warnings=[],t=parameters.materialThickness,dimensions=slidingLidBoxDimensions(parameters),minimumEngagement=Math.max(1,t/3),minimumRun=Math.max(3*t,12),minimumStructuralWeb=Math.max(t,4),pullSideWeb=Math.max(2*t,6);
+      if (!['usable','outside'].includes(parameters.dimensionMode)) errors.push('Choose a recognized sliding-lid dimension mode.');
+      if (parameters.openEnd !== 'front') errors.push('The supported sliding-lid open end is Front.');
+      if (parameters.railMode !== 'laminated') errors.push('The supported rail construction is laminated inner rails.');
+      if (!['none','rectangular'].includes(parameters.pullMode)) errors.push('Choose a recognized finger-pull option.');
+      if (parameters.dimensionMode === 'outside') {
+        if (parameters.width <= 4*t) errors.push('Outside body width must be greater than four times the material thickness.');
+        if (parameters.depth <= 2*t) errors.push('Outside body depth must be greater than twice the material thickness.');
+        if (parameters.height <= dimensions.upperWeb+2*t+parameters.verticalClearance) errors.push('Outside body height is too small for the usable cavity and upper rail stack.');
+      }
+      const positiveDimensions=['usableWidth','usableDepth','usableHeight','insideWidth','insideDepth','insideHeight','outsideWidth','outsideDepth','outsideHeight','railGap','lidWidth','tongueWidth'];
+      if (positiveDimensions.some(key => !Number.isFinite(dimensions[key]) || dimensions[key] <= 0)) errors.push('Calculated usable cavity, body, rail gap, and lid dimensions must all be positive.');
+      if (dimensions.engagement < minimumEngagement-1e-9) errors.push(`Lid engagement must be at least ${designNumberText(minimumEngagement)} mm per side.`);
+      if (dimensions.channelLength <= minimumRun+1e-9) errors.push(`Open rail-channel length must be greater than ${designNumberText(minimumRun)} mm.`);
+      if (dimensions.railHeight > dimensions.insideHeight+1e-9) errors.push('Rail height exceeds the available wall interior.');
+      if (dimensions.railBottom < minimumStructuralWeb-1e-9) errors.push(`Rail placement must leave at least ${designNumberText(minimumStructuralWeb)} mm above the inside floor before the lower web.`);
+      if (dimensions.usableHeight <= parameters.insertionClearance+1e-9 || dimensions.frontHeight <= 0) errors.push('Front insertion clearance collapses the shortened Front wall.');
+      const widthPattern=buildFingerPattern(dimensions.outsideWidth,parameters.preferredFingerWidth,t,errors,'Width'),depthPattern=buildFingerPattern(dimensions.outsideDepth,parameters.preferredFingerWidth,t,errors,'Depth'),verticalPattern=buildFingerPattern(dimensions.outsideHeight,parameters.preferredFingerWidth,t,errors,'Vertical'),frontPattern=buildFingerPattern(dimensions.frontHeight,parameters.preferredFingerWidth,t,errors,'Shortened Front vertical');
+      const patterns={width:widthPattern,depth:depthPattern,vertical:verticalPattern,frontVertical:frontPattern},requiredWeb=Math.max(.5,t*.25);
+      Object.entries(patterns).forEach(([name,pattern])=>{ if(pattern&&pattern.actualWidth-parameters.clearance<requiredWeb-1e-9) errors.push(`${name} fingers collapse below the ${designNumberText(requiredWeb)} mm required web at this clearance.`); });
+      const notchDepth=Math.max(t,6),notchSideMaterial=(dimensions.lidWidth-parameters.pullWidth)/2;
+      errors.push(...slidingLidPullValidation(dimensions,parameters,pullSideWeb));
+      if (parameters.clearance > t*.25) warnings.push('Body finger-joint clearance is unusually loose relative to material thickness; cut a scrap fit test first.');
+      if (parameters.preferredFingerWidth < 2*t) warnings.push('Preferred finger width is unusually small relative to material thickness.');
+      if (parameters.sideClearance === 0) warnings.push('Zero lid side clearance is unlikely to slide reliably after cutting.');
+      if (parameters.verticalClearance === 0) warnings.push('Zero lid vertical clearance is unlikely to slide reliably after cutting.');
+      if (parameters.insertionClearance === 0) warnings.push('Zero Front insertion clearance may scrape the shortened Front wall.');
+      if ([parameters.sideClearance,parameters.verticalClearance,parameters.insertionClearance].some(value=>value>t*.25)) warnings.push('One or more lid clearances are unusually large relative to material thickness.');
+      if (dimensions.engagement < minimumEngagement+.5) warnings.push('Lid engagement is close to the minimum capture depth.');
+      if (parameters.pullMode === 'rectangular' && notchSideMaterial < pullSideWeb+t) warnings.push('The pull notch is close to its minimum side web.');
+      if (Math.max(dimensions.outsideWidth,dimensions.outsideDepth)>300||dimensions.outsideHeight>200) warnings.push('This is a large box; verify sheet size, machine travel, and material flatness.');
+      if (2*t/dimensions.insideWidth>=.1) warnings.push('The laminated rails materially reduce usable cavity width relative to the wall-to-wall interior.');
+      warnings.push('Sliding fit is an experimental starting point; test the same sheet on scrap before production.');
+      warnings.push('Glue is required for both rails, and the previously tested standard body also assembled slightly loose; keep glue out of the channels.');
+      warnings.push('Clean or lightly sand charred sliding surfaces if needed, then re-check the fit.');
+      if (errors.length||!widthPattern||!depthPattern||!verticalPattern||!frontPattern) return {valid:false,errors,warnings,dimensions,patterns,panels:[],metrics:{}};
+      const edge=(pattern,phase)=>designPatternEdge(pattern,phase,t,parameters.clearance),plain=null;
+      const bottom=buildSlidingLidBodyPanel({name:'Bottom',id:'bottom',width:dimensions.outsideWidth,height:dimensions.outsideDepth,edges:[edge(widthPattern,true),edge(depthPattern,false),edge(widthPattern,true),edge(depthPattern,false)]});
+      const front=buildSlidingLidBodyPanel({name:'Front (open end)',id:'front-open',width:dimensions.outsideWidth,height:dimensions.frontHeight,edges:[plain,edge(frontPattern,true),edge(widthPattern,false),edge(frontPattern,true)]});
+      const back=buildSlidingLidBodyPanel({name:'Back (closed stop end)',id:'back',width:dimensions.outsideWidth,height:dimensions.outsideHeight,edges:[plain,edge(verticalPattern,true),edge(widthPattern,false),edge(verticalPattern,true)]});
+      const sideDefinition=(name,id)=>({name,id,width:dimensions.outsideDepth,height:dimensions.outsideHeight,backEdge:edge(verticalPattern,false),bottomEdge:edge(depthPattern,true),frontEdge:edge(frontPattern,false),frontHeight:dimensions.frontHeight});
+      const left=buildSlidingLidSidePanel(sideDefinition('Left','left')),right=buildSlidingLidSidePanel(sideDefinition('Right','right')),lid=buildSlidingLidPanel(dimensions,parameters),railLeft=buildSlidingLidRail(dimensions,'rail-left','Left rail'),railRight=buildSlidingLidRail(dimensions,'rail-right','Right rail');
+      const panels=[bottom,lid,front,back,left,right,railLeft,railRight];
+      panels.forEach(panel=>errors.push(...designPanelGeometryErrors(panel)));
+      const metrics={slidingLid:true,requestedFingerWidth:parameters.preferredFingerWidth,requiredWeb,clearance:parameters.clearance,sideClearance:parameters.sideClearance,verticalClearance:parameters.verticalClearance,insertionClearance:parameters.insertionClearance,minimumEngagement,minimumRun,minimumStructuralWeb,pullSideWeb,pullMode:parameters.pullMode,pullWidth:parameters.pullWidth,pullDepth:notchDepth};
+      return {valid:!errors.length,errors,warnings,dimensions,patterns,panels,metrics};
+    }
     function designBoxesOverlap(a, b) { return a.minX < b.maxX && a.maxX > b.minX && a.minY < b.maxY && a.maxY > b.minY; }
-    function layoutDesignPanels(panels, margin = 10, gap = 15) {
-      const byId = Object.fromEntries(panels.map(panel => [panel.id, panel])), rows = [['bottom','lid'],['front','back'],['left','right']].map(ids => ids.map(id => byId[id]).filter(Boolean));
+    function designBoxesSeparatedBy(a, b, gap) {
+      const horizontal = Math.max(b.minX-a.maxX,a.minX-b.maxX), vertical = Math.max(b.minY-a.maxY,a.minY-b.maxY);
+      return horizontal >= gap-1e-6 || vertical >= gap-1e-6;
+    }
+    function layoutDesignPanelRows(panels, rowIds, margin = 10, gap = 15) {
+      const byId = Object.fromEntries(panels.map(panel => [panel.id, panel])), rows = rowIds.map(ids => ids.map(id => byId[id]).filter(Boolean));
       const placed = []; let y = margin, documentWidth = 0;
       rows.filter(row => row.length).forEach((row, rowIndex, populatedRows) => {
         let x = margin, rowHeight = 0;
         row.forEach(panel => {
-          const placedPanel = { ...panel, x, y, translatedBounds: { minX:x, minY:y, maxX:x + panel.width, maxY:y + panel.height, width:panel.width, height:panel.height } };
-          placed.push(placedPanel); x += panel.width + gap; rowHeight = Math.max(rowHeight, panel.height);
+          x=designRound(x); const placedY=designRound(y);
+          const pathBounds=panel.bounds||{minX:0,minY:0,maxX:panel.width,maxY:panel.height,width:panel.width,height:panel.height};
+          const placedPanel = { ...panel, x, y:placedY, translatedBounds: { minX:x, minY:placedY, maxX:designRound(x + panel.width), maxY:designRound(placedY + panel.height), width:panel.width, height:panel.height }, translatedPathBounds:{minX:designRound(x+pathBounds.minX),minY:designRound(placedY+pathBounds.minY),maxX:designRound(x+pathBounds.maxX),maxY:designRound(placedY+pathBounds.maxY),width:pathBounds.width,height:pathBounds.height} };
+          placed.push(placedPanel); x=designRound(x+panel.width+gap); rowHeight = Math.max(rowHeight, panel.height);
         });
         documentWidth = Math.max(documentWidth, x - gap + margin);
-        y += rowHeight + (rowIndex < populatedRows.length - 1 ? gap : margin);
+        y=designRound(y+rowHeight+(rowIndex<populatedRows.length-1?gap:margin));
       });
       const widthMm = designRound(documentWidth), heightMm = designRound(y), errors = [];
       for (let a = 0; a < placed.length; a++) for (let b = a + 1; b < placed.length; b++) if (designBoxesOverlap(placed[a].translatedBounds, placed[b].translatedBounds)) errors.push(`${placed[a].name} overlaps ${placed[b].name} in the layout.`);
+      for (let a = 0; a < placed.length; a++) for (let b = a + 1; b < placed.length; b++) if (!designBoxesSeparatedBy(placed[a].translatedPathBounds,placed[b].translatedPathBounds,gap)) errors.push(`${placed[a].name} and ${placed[b].name} actual paths do not preserve the ${designNumberText(gap)} mm layout gap.`);
       placed.forEach(panel => { const bounds = panel.translatedBounds; if (bounds.minX < 0 || bounds.minY < 0 || bounds.maxX > widthMm + 1e-6 || bounds.maxY > heightMm + 1e-6) errors.push(`${panel.name} leaves the calculated document bounds.`); });
+      placed.forEach(panel => { const bounds = panel.translatedPathBounds; if (bounds.minX < -1e-6 || bounds.minY < -1e-6 || bounds.maxX > widthMm + 1e-6 || bounds.maxY > heightMm + 1e-6) errors.push(`${panel.name} actual path leaves the calculated document bounds.`); });
       return { panels: placed, widthMm, heightMm, margin, gap, errors };
     }
+    function layoutDesignPanels(panels, margin = 10, gap = 15) { return layoutDesignPanelRows(panels,[['bottom','lid'],['front','back'],['left','right']],margin,gap); }
     function serializeDesignSvg(result) {
       return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${designNumberText(result.widthMm)}mm" height="${designNumberText(result.heightMm)}mm" viewBox="0 0 ${designNumberText(result.widthMm)} ${designNumberText(result.heightMm)}">\n  <g id="cut" fill="none" stroke="#ff0000" stroke-width="0.1">\n${result.panels.map(panel => `    <g id="panel-${esc(panel.id)}" transform="translate(${designNumberText(panel.x)} ${designNumberText(panel.y)})">\n      <title>${esc(panel.name)}</title>\n      <path d="${panel.path}"/>\n    </g>`).join('\n')}\n  </g>\n</svg>\n`;
     }
@@ -1807,15 +2027,53 @@
       errors.push(...validation.errors);
       return { valid:!errors.length, errors:[...new Set(errors)], warnings:[...new Set(warnings)], svg:errors.length ? '' : svg, widthMm:layout.widthMm, heightMm:layout.heightMm, panels:layout.panels, metrics:{...model.metrics,dimensions:model.dimensions,patterns:model.patterns,margin:layout.margin,gap:layout.gap}, validation };
     }
+    function buildSlidingLidDesignResult(normalized) {
+      if (normalized.errors.length) return { valid:false, errors:[...new Set(normalized.errors)], warnings:normalized.warnings, svg:'', widthMm:0, heightMm:0, panels:[], metrics:{slidingLid:true} };
+      const model=buildSlidingLidBoxModel(normalized.values);
+      if (!model.valid) return {valid:false,errors:[...new Set(model.errors)],warnings:[...new Set([...normalized.warnings,...model.warnings])],svg:'',widthMm:0,heightMm:0,panels:model.panels,metrics:{...model.metrics,slidingLid:true,dimensions:model.dimensions,patterns:model.patterns}};
+      const rows=[['bottom','sliding-lid'],['front-open','back'],['left','right'],['rail-left','rail-right']],layout=layoutDesignPanelRows(model.panels,rows),errors=[...model.errors,...layout.errors],warnings=[...normalized.warnings,...model.warnings];
+      const translatedKeys=layout.panels.flatMap(panel=>designPointSegments(panel.points).map(segment=>designSegmentKey({a:{x:segment.a.x+panel.x,y:segment.a.y+panel.y},b:{x:segment.b.x+panel.x,y:segment.b.y+panel.y}})));
+      if (new Set(translatedKeys).size!==translatedKeys.length) errors.push('Generated layout contains a duplicate translated cut segment.');
+      if (layout.widthMm>400||layout.heightMm>400) warnings.push(`Generated layout is ${designNumberText(layout.widthMm)} × ${designNumberText(layout.heightMm)} mm; verify the available sheet and machine area.`);
+      const partial={widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels},svg=errors.length?'':serializeDesignSvg(partial),validation=svg?designSvgValidation(svg,layout.widthMm,layout.heightMm):{valid:false,errors:[]};
+      errors.push(...validation.errors);
+      return {valid:!errors.length,errors:[...new Set(errors)],warnings:[...new Set(warnings)],svg:errors.length?'':svg,widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,metrics:{...model.metrics,dimensions:model.dimensions,patterns:model.patterns,margin:layout.margin,gap:layout.gap,rows},validation};
+    }
     function buildDesignResult(rawDraft = designDraft) {
       const normalized = normalizeDesignDraft(rawDraft);
+      if (normalized.template === 'sliding-lid-box') return buildSlidingLidDesignResult(normalized);
       return normalized.template === 'finger-box' ? buildBoxDesignResult(normalized) : buildLegacyDesignResult(normalized);
     }
     function designSvg(d = designDraft) { return buildDesignResult(d).svg; }
     function designMetric(label, value) { return `<div class="metric"><span>${esc(label)}</span><b>${esc(value)}</b></div>`; }
     function designResultsHtml(result) {
       const dimensions = result.metrics?.dimensions, patterns = result.metrics?.patterns;
-      const metrics = dimensions
+      const sliding = result.metrics?.slidingLid && dimensions;
+      const metrics = sliding
+        ? designMetric('Usable cavity', `${designNumberText(dimensions.usableWidth)} × ${designNumberText(dimensions.usableDepth)} × ${designNumberText(dimensions.usableHeight)} mm`)
+          + designMetric('Wall-to-wall interior', `${designNumberText(dimensions.insideWidth)} × ${designNumberText(dimensions.insideDepth)} × ${designNumberText(dimensions.insideHeight)} mm`)
+          + designMetric('Outside body', `${designNumberText(dimensions.outsideWidth)} × ${designNumberText(dimensions.outsideDepth)} × ${designNumberText(dimensions.outsideHeight)} mm`)
+          + designMetric('Lid shoulder width', `${designNumberText(dimensions.lidWidth)} mm`)
+          + designMetric('Lid tongue width', `${designNumberText(dimensions.tongueWidth)} mm`)
+          + designMetric('Lid overall length', `${designNumberText(dimensions.lidLength)} mm`)
+          + designMetric('Side clearance', `${designNumberText(result.metrics.sideClearance)} mm total / ${designNumberText(result.metrics.sideClearance/2)} mm per side`)
+          + designMetric('Vertical clearance', `${designNumberText(result.metrics.verticalClearance)} mm`)
+          + designMetric('Front insertion clearance', `${designNumberText(result.metrics.insertionClearance)} mm`)
+          + designMetric('Rail channel height', `${designNumberText(dimensions.channelHeight)} mm`)
+          + designMetric('Lid engagement', `${designNumberText(dimensions.engagement)} mm per side`)
+          + designMetric('Rails', `2 × ${designNumberText(dimensions.railLength)} × ${designNumberText(dimensions.railHeight)} mm`)
+          + designMetric('Open channel / Back stop', `${designNumberText(dimensions.channelLength)} mm / ${designNumberText(dimensions.stopLength)} mm`)
+          + designMetric('Shortened Front height', `${designNumberText(dimensions.frontHeight)} mm`)
+          + designMetric('Open end / direction', 'Front / Front toward Back')
+          + designMetric('Required pieces', String(result.panels.length || 8))
+          + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable')
+          + designMetric('Body joint clearance', `${designNumberText(result.metrics.clearance)} mm`)
+          + designMetric('Requested finger width', `${designNumberText(result.metrics.requestedFingerWidth)} mm`)
+          + (patterns?.width ? designMetric('Width-edge fingers', `${patterns.width.count} segments × ${designNumberText(patterns.width.actualWidth)} mm`) : '')
+          + (patterns?.depth ? designMetric('Depth-edge fingers', `${patterns.depth.count} segments × ${designNumberText(patterns.depth.actualWidth)} mm`) : '')
+          + (patterns?.vertical ? designMetric('Full vertical fingers', `${patterns.vertical.count} segments × ${designNumberText(patterns.vertical.actualWidth)} mm`) : '')
+          + (patterns?.frontVertical ? designMetric('Front vertical fingers', `${patterns.frontVertical.count} segments × ${designNumberText(patterns.frontVertical.actualWidth)} mm`) : '')
+        : dimensions
         ? designMetric('Inside dimensions', `${designNumberText(dimensions.insideWidth)} × ${designNumberText(dimensions.insideDepth)} × ${designNumberText(dimensions.insideHeight)} mm`)
           + designMetric('Outside body', `${designNumberText(dimensions.outsideWidth)} × ${designNumberText(dimensions.outsideDepth)} × ${designNumberText(dimensions.outsideHeight)} mm`)
           + designMetric('Overall closed height', `${designNumberText(result.metrics.closedHeight)} mm`)
@@ -1828,7 +2086,8 @@
         : designMetric('Shapes', String(result.panels.length)) + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable');
       const messages = result.errors.map(message => `<div class="design-message error"><b>Error:</b> ${esc(message)}</div>`).join('') + result.warnings.map(message => `<div class="design-message warning"><b>Warning:</b> ${esc(message)}</div>`).join('');
       const preview = result.valid ? `<div class="design-svg-preview"><object type="image/svg+xml" aria-label="Exact exported SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`)}"></object></div>` : '<div class="design-svg-preview"><div class="empty"><b>Preview unavailable</b><div class="small muted">Correct the errors before previewing or downloading.</div></div></div>';
-      return `<div class="design-preview-layout"><div class="panel"><b>Design results</b><div class="metrics" style="margin-top:10px">${metrics}</div>${messages || '<div class="design-message"><b>Ready:</b> Preview and download use the same validated SVG.</div>'}</div>${preview}</div>`;
+      const assembly = sliding ? `<div class="design-message"><b>Assembly:</b> Assemble the five body panels. Glue the two identical rails inside the side walls, top-flush and back-flush, with both channels facing inward. Clamp with a thickness-plus-clearance spacer, keep glue out of the channels, and let it cure. Insert the lid from Front toward Back; the shoulders stop at Back while the tongue closes the center gap. <b>Kerf is not included.</b></div>` : '';
+      return `<div class="design-preview-layout"><div class="panel"><b>Design results</b><div class="metrics" style="margin-top:10px">${metrics}</div>${messages || '<div class="design-message"><b>Ready:</b> Preview and download use the same validated SVG.</div>'}${assembly}</div>${preview}</div>`;
     }
     function refreshDesignPreview() {
       const result = buildDesignResult(designDraft), results = document.getElementById('designResults'), download = document.getElementById('downloadDesignSvg');
@@ -1948,6 +2207,183 @@
       add('Large layout produces a warning', buildDesignResult({ ...inside, boxWidth:'500', boxDepth:'400', boxHeight:'250' }).warnings.some(message => /large|layout/i.test(message)));
       const immutableDraft = { ...inside }, before = JSON.stringify(immutableDraft); buildDesignResult(immutableDraft);
       add('Design generation does not mutate its draft', JSON.stringify(immutableDraft) === before);
+
+      const openSignature={length:2559,hash:'4e2a6f4b'},looseSignature={length:2691,hash:'c202cef2'};
+      add('Legacy open-top finger-box SVG remains byte-stable',insideResult.svg.length===openSignature.length&&designFixtureHash(insideResult.svg)===openSignature.hash,`${openSignature.length}/${openSignature.hash}`,`${insideResult.svg.length}/${designFixtureHash(insideResult.svg)}`);
+      add('Legacy loose-lid finger-box SVG remains byte-stable',lidResult.svg.length===looseSignature.length&&designFixtureHash(lidResult.svg)===looseSignature.hash,`${looseSignature.length}/${looseSignature.hash}`,`${lidResult.svg.length}/${designFixtureHash(lidResult.svg)}`);
+      add('Legacy buildBoxModel remains byte-stable through result output',buildDesignResult({...inside}).svg===insideResult.svg);
+
+      const slidingA=defaultsFor('sliding-lid-box',{slidingJointClearance:'0.10'}),slidingB=defaultsFor('sliding-lid-box',{slidingDimensionMode:'outside',slidingWidth:'132',slidingDepth:'102',slidingHeight:'63',slidingJointClearance:'0.10'});
+      const slidingAResult=buildDesignResult(slidingA),slidingBResult=buildDesignResult(slidingB),aDimensions=slidingAResult.metrics.dimensions,bDimensions=slidingBResult.metrics.dimensions;
+      const goldenA={usableWidth:100,usableDepth:80,usableHeight:40,insideWidth:106,insideDepth:80,insideHeight:47.2,outsideWidth:112,outsideDepth:86,outsideHeight:50.2,railGap:100,lidWidth:105.8,engagement:2.9,tongueWidth:99.8,channelHeight:3.2,railHeight:11.2,railLength:80,channelLength:76,lidLength:83,shoulderStop:76,tongueEnd:80,frontHeight:42.8};
+      const goldenB={usableWidth:120,usableDepth:96,usableHeight:52.8,insideWidth:126,insideDepth:96,insideHeight:60,outsideWidth:132,outsideDepth:102,outsideHeight:63,railGap:120,lidWidth:125.8,engagement:2.9,tongueWidth:119.8,channelHeight:3.2,railHeight:11.2,railLength:96,channelLength:92,lidLength:99,shoulderStop:92,tongueEnd:96,frontHeight:55.6};
+      Object.entries(goldenA).forEach(([key,expected])=>add(`Sliding golden A ${key}`,aDimensions[key]===expected,expected,aDimensions[key]));
+      Object.entries(goldenB).forEach(([key,expected])=>add(`Sliding golden B ${key}`,bDimensions[key]===expected,expected,bDimensions[key]));
+      add('Sliding golden A is valid',slidingAResult.valid,'valid',slidingAResult.errors.join('|'));
+      add('Sliding golden B is valid',slidingBResult.valid,'valid',slidingBResult.errors.join('|'));
+      add('Sliding golden A has eight physical pieces',slidingAResult.panels.length===8,8,slidingAResult.panels.length);
+      add('Sliding golden B has eight physical pieces',slidingBResult.panels.length===8,8,slidingBResult.panels.length);
+      const roundTrip=buildDesignResult({...slidingA,slidingDimensionMode:'outside',slidingWidth:'112',slidingDepth:'86',slidingHeight:'50.2'});
+      add('Sliding usable and outside conversion round-trips',Object.entries(goldenA).filter(([key])=>['usableWidth','usableDepth','usableHeight','insideWidth','insideDepth','insideHeight','outsideWidth','outsideDepth','outsideHeight'].includes(key)).every(([key,value])=>roundTrip.metrics.dimensions[key]===value));
+      add('Usable cavity excludes both rail thicknesses',aDimensions.insideWidth-aDimensions.usableWidth===6);
+      add('Full interior remains distinct from usable cavity',aDimensions.insideWidth!==aDimensions.usableWidth&&aDimensions.insideHeight!==aDimensions.usableHeight);
+      add('Lid length includes exactly one Front-wall thickness',aDimensions.lidLength===aDimensions.insideDepth+3);
+      add('Shoulder stop uses open channel length',aDimensions.shoulderStop===aDimensions.channelLength);
+      add('Tongue end uses inside Back plane',aDimensions.tongueEnd===aDimensions.insideDepth);
+
+      const zeroSide=buildDesignResult({...slidingA,lidSideClearance:'0'}),zeroVertical=buildDesignResult({...slidingA,lidVerticalClearance:'0'});
+      add('Zero side clearance keeps lid at interior width',zeroSide.metrics.dimensions.lidWidth===zeroSide.metrics.dimensions.insideWidth);
+      add('Zero side clearance gives one thickness engagement',zeroSide.metrics.dimensions.engagement===3);
+      add('Zero side clearance warns without blocking',zeroSide.valid&&zeroSide.warnings.some(message=>/zero lid side/i.test(message)));
+      add('Zero vertical clearance makes channel one thickness',zeroVertical.metrics.dimensions.channelHeight===3);
+      add('Zero vertical clearance warns without blocking',zeroVertical.valid&&zeroVertical.warnings.some(message=>/zero lid vertical/i.test(message)));
+      const changedJoint=buildDesignResult({...slidingA,slidingJointClearance:'0.20'}),changedSide=buildDesignResult({...slidingA,lidSideClearance:'0.40'}),changedVertical=buildDesignResult({...slidingA,lidVerticalClearance:'0.30'}),changedInsertion=buildDesignResult({...slidingA,frontInsertionClearance:'0.30'});
+      const aPanel=id=>slidingAResult.panels.find(panel=>panel.id===id),jointPanel=id=>changedJoint.panels.find(panel=>panel.id===id);
+      add('Body joint clearance changes body paths',aPanel('front-open').path!==jointPanel('front-open').path);
+      add('Body joint clearance does not change lid path',aPanel('sliding-lid').path===jointPanel('sliding-lid').path);
+      add('Body joint clearance does not change rail paths',aPanel('rail-left').path===jointPanel('rail-left').path);
+      add('Body joint clearance does not change sliding dimensions',JSON.stringify(aDimensions)===JSON.stringify(changedJoint.metrics.dimensions));
+      add('Side clearance removes exactly its total from lid width',designRound(aDimensions.insideWidth-aDimensions.lidWidth)===0.2);
+      add('Side clearance gives exactly half per side',designRound((aDimensions.railGap-aDimensions.tongueWidth)/2)===0.1);
+      add('Changing side clearance changes lid width by exact delta',designRound(aDimensions.lidWidth-changedSide.metrics.dimensions.lidWidth)===0.2);
+      add('Changing side clearance does not change rails',aPanel('rail-left').path===changedSide.panels.find(panel=>panel.id==='rail-left').path);
+      add('Changing vertical clearance changes channel once',designRound(changedVertical.metrics.dimensions.channelHeight-aDimensions.channelHeight)===0.1);
+      add('Changing vertical clearance changes body stack once',designRound(changedVertical.metrics.dimensions.insideHeight-aDimensions.insideHeight)===0.1);
+      const insertionChangedKeys=Object.keys(aDimensions).filter(key=>aDimensions[key]!==changedInsertion.metrics.dimensions[key]);
+      add('Changing Front insertion clearance changes only Hf',insertionChangedKeys.join('|')==='frontHeight','frontHeight',insertionChangedKeys.join('|'));
+      add('Excessive side clearance blocks minimum engagement',!buildDesignResult({...slidingA,lidSideClearance:'4.01'}).valid);
+      add('Kerf is absent from sliding draft and SVG',!JSON.stringify(slidingA).toLowerCase().includes('kerf')&&!slidingAResult.svg.toLowerCase().includes('kerf'));
+
+      const slidingIds=slidingAResult.panels.map(panel=>panel.id),railLeft=slidingAResult.panels.find(panel=>panel.id==='rail-left'),railRight=slidingAResult.panels.find(panel=>panel.id==='rail-right'),slidingLid=slidingAResult.panels.find(panel=>panel.id==='sliding-lid');
+      add('Sliding panel IDs and order are stable',slidingIds.join('|')==='bottom|sliding-lid|front-open|back|left|right|rail-left|rail-right');
+      add('Exactly two rail pieces are generated',slidingIds.filter(id=>id.startsWith('rail-')).length===2);
+      add('Rail IDs are stable',railLeft.id==='rail-left'&&railRight.id==='rail-right');
+      add('Rail titles are stable',railLeft.name==='Left rail'&&railRight.name==='Right rail');
+      add('Rail local paths are identical',railLeft.path===railRight.path);
+      add('Rail local dimensions are identical',railLeft.width===railRight.width&&railLeft.height===railRight.height);
+      add('Rails use exact length and height',railLeft.width===80&&railLeft.height===11.2);
+      add('Rail open channel ends at Rc',railLeft.points.some(point=>point.x===76&&point.y===4)&&railLeft.points.some(point=>point.x===76&&point.y===7.2));
+      add('Rail Back stop is exactly S',railLeft.width-aDimensions.channelLength===4);
+      add('Rail Front channel is open',railLeft.points.filter(point=>point.x===0).some(point=>point.y===4)&&railLeft.points.filter(point=>point.x===0).some(point=>point.y===7.2));
+      add('Rails have no registration tabs or slots',railLeft.points.length===9&&railRight.points.length===9);
+      add('Rail paths are finite closed and orthogonal',[railLeft,railRight].every(panel=>/ Z$/.test(panel.path)&&!/[LQCAST]/i.test(panel.path)&&panel.points.every(point=>Number.isFinite(point.x)&&Number.isFinite(point.y))));
+      add('Rail paths do not self-intersect',[railLeft,railRight].every(panel=>!designPathSelfIntersects(panel.points)));
+      add('Rail paths have no zero-length segments',[railLeft,railRight].every(panel=>panel.points.slice(1).every((point,index)=>point.x!==panel.points[index].x||point.y!==panel.points[index].y)));
+      add('Rail paths remain inside local bounds',[railLeft,railRight].every(panel=>!designPanelGeometryErrors(panel).length));
+
+      add('Sliding lid metadata is stable',slidingLid.id==='sliding-lid'&&slidingLid.name==='Sliding lid');
+      add('Sliding lid shoulder width equals Lw',slidingLid.width===105.8);
+      add('Sliding lid overall length equals Di plus t',slidingLid.height===83);
+      add('Sliding lid shoulder ends at t plus Rc',slidingLid.points.some(point=>point.y===79));
+      add('Sliding lid tongue reaches t plus Di',slidingLid.bounds.maxY===83);
+      const tongueXs=[...new Set(slidingLid.points.filter(point=>point.y===83).map(point=>point.x))].sort((a,b)=>a-b);
+      add('Sliding lid tongue width equals Tw',designRound(tongueXs[tongueXs.length-1]-tongueXs[0])===99.8,99.8,designRound(tongueXs[tongueXs.length-1]-tongueXs[0]));
+      add('Sliding lid engagement equals E',aDimensions.engagement===2.9);
+      add('Sliding lid tongue clearance is Cs over two per side',designRound((aDimensions.railGap-aDimensions.tongueWidth)/2)===0.1);
+      add('Sliding lid path is closed orthogonal and finite',/ Z$/.test(slidingLid.path)&&!/[LQCAST]/i.test(slidingLid.path)&&slidingLid.points.every(point=>Number.isFinite(point.x)&&Number.isFinite(point.y)));
+      add('Sliding lid has no self-intersection',!designPathSelfIntersects(slidingLid.points));
+      const notched=buildDesignResult({...slidingA,lidPull:'rectangular',lidPullWidth:'24'}),notchedLid=notched.panels.find(panel=>panel.id==='sliding-lid');
+      add('Rectangular pull remains valid',notched.valid,'valid',notched.errors.join('|'));
+      add('Rectangular pull adds an inward Front-edge notch',notchedLid.points.some(point=>point.y===6&&point.x===40.9)&&notchedLid.points.some(point=>point.y===6&&point.x===64.9));
+      add('Rectangular pull stays centered',designRound((40.9+64.9)/2)===designRound(notchedLid.width/2));
+      add('Rectangular pull uses derived depth',notched.metrics.pullDepth===6);
+      add('Rectangular pull adds no arc commands',!/[AQC]/i.test(notchedLid.path));
+      add('Notch-disabled SVG is deterministic',slidingAResult.svg===buildDesignResult({...slidingA}).svg);
+      add('Notch-enabled SVG is deterministic',notched.svg===buildDesignResult({...slidingA,lidPull:'rectangular',lidPullWidth:'24'}).svg);
+
+      const slidingBottom=aPanel('bottom'),slidingFront=aPanel('front-open'),slidingBack=aPanel('back'),slidingLeft=aPanel('left'),slidingRight=aPanel('right');
+      const slidingMates=[
+        [slidingBottom.edges[0],slidingBack.edges[2]],[slidingBottom.edges[1],slidingRight.edges[2]],[slidingBottom.edges[2],slidingFront.edges[2]],[slidingBottom.edges[3],slidingLeft.edges[2]],
+        [slidingFront.edges[1],slidingRight.edges[3]],[slidingFront.edges[3],slidingLeft.edges[3]],[slidingBack.edges[1],slidingLeft.edges[1]],[slidingBack.edges[3],slidingRight.edges[1]]
+      ];
+      ['Bottom to Back','Bottom to Right','Bottom to shortened Front','Bottom to Left','shortened Front to Right lower field','shortened Front to Left lower field','Back to Left','Back to Right'].forEach((name,index)=>{
+        const [first,second]=slidingMates[index]; add(`${name} boundaries and phases mate`,first.phase!==second.phase&&first.pattern.length===second.pattern.length&&JSON.stringify(first.pattern.boundaries)===JSON.stringify(second.pattern.boundaries));
+      });
+      add('Shortened Front uses its own pattern',slidingFront.edges[1].pattern===slidingAResult.metrics.patterns.frontVertical&&slidingFront.edges[1].pattern!==slidingAResult.metrics.patterns.vertical);
+      add('Side Front lower fields are composite',slidingLeft.edges[3].composite===true&&slidingRight.edges[3].composite===true);
+      add('Side Front lower fields use exact Hf span',slidingLeft.edges[3].compositeSpan===42.8&&slidingRight.edges[3].compositeSpan===42.8);
+      add('Side upper Front runs remain plain',slidingLeft.points.some((point,index)=>index&&point.x===0&&point.y===0&&slidingLeft.points[index-1].x===0&&slidingLeft.points[index-1].y===7.4));
+      add('No body panel path self-intersects',[slidingBottom,slidingFront,slidingBack,slidingLeft,slidingRight].every(panel=>!designPathSelfIntersects(panel.points)));
+      add('No body panel has duplicate local segments',[slidingBottom,slidingFront,slidingBack,slidingLeft,slidingRight].every(panel=>{const keys=designPointSegments(panel.points).map(designSegmentKey);return new Set(keys).size===keys.length;}));
+      add('Sliding body patterns use deterministic odd parity',Object.values(slidingAResult.metrics.patterns).every(pattern=>pattern.count>=3&&pattern.count%2===1));
+      add('Sliding body uses no cropped final finger',Object.values(slidingAResult.metrics.patterns).every(pattern=>pattern.boundaries[pattern.boundaries.length-1]===pattern.length));
+      const belowTransition=buildDesignResult({...slidingA,slidingHeight:'42.1'}),aboveTransition=buildDesignResult({...slidingA,slidingHeight:'42.3'});
+      add('Hf below hand-derived finger transition uses three segments',belowTransition.metrics.patterns.frontVertical.count===3,3,belowTransition.metrics.patterns.frontVertical.count);
+      add('Hf above hand-derived finger transition uses five segments',aboveTransition.metrics.patterns.frontVertical.count===5,5,aboveTransition.metrics.patterns.frontVertical.count);
+
+      add('Lid shoulders overlap both capture regions',aDimensions.engagement>=slidingAResult.metrics.minimumEngagement);
+      add('Upper rails retain shoulders vertically',aDimensions.upperWeb>=4&&aDimensions.channelHeight===3.2);
+      add('Lower rails support lid at usable height',aDimensions.railBottom+aDimensions.lowerWeb===aDimensions.usableHeight);
+      add('Shoulders contact Back stops at closure',aDimensions.shoulderStop+aDimensions.stopLength===aDimensions.insideDepth);
+      add('Tongue passes between Back stop webs',aDimensions.tongueWidth<aDimensions.railGap);
+      add('Tongue reaches inside Back plane',aDimensions.tongueEnd===aDimensions.insideDepth);
+      add('Closed lid reaches intended outside Front plane',aDimensions.lidLength-aDimensions.insideDepth===3);
+      add('Front insertion path is unobstructed',aDimensions.frontHeight-3===aDimensions.usableHeight-slidingAResult.metrics.insertionClearance);
+      add('Rail top is flush with inside wall top',aDimensions.railBottom+aDimensions.railHeight===aDimensions.insideHeight);
+
+      const expectedRows=[['bottom','sliding-lid'],['front-open','back'],['left','right'],['rail-left','rail-right']];
+      add('Sliding layout uses four exact rows',JSON.stringify(slidingAResult.metrics.rows)===JSON.stringify(expectedRows));
+      const slidingPositions=slidingAResult.panels.map(panel=>`${panel.id}@${panel.x},${panel.y}`).join('|'),expectedSlidingPositions='bottom@10,10|sliding-lid@137,10|front-open@10,111|back@137,111|left@10,176.2|right@111,176.2|rail-left@10,241.4|rail-right@105,241.4';
+      add('Sliding layout uses exact piece positions',slidingPositions===expectedSlidingPositions,expectedSlidingPositions,slidingPositions);
+      add('Sliding layout dimensions are hand-derived',slidingAResult.widthMm===259&&slidingAResult.heightMm===262.6,'259 × 262.6',`${slidingAResult.widthMm} × ${slidingAResult.heightMm}`);
+      add('Sliding layout margin and gap are stable',slidingAResult.metrics.margin===10&&slidingAResult.metrics.gap===15);
+      const pathBounds=slidingAResult.panels.map(panel=>panel.translatedPathBounds);
+      add('Sliding actual path AABBs do not overlap',pathBounds.every((box,index)=>pathBounds.slice(index+1).every(other=>!designBoxesOverlap(box,other))));
+      add('Sliding actual path AABBs preserve fifteen millimeters',pathBounds.every((box,index)=>pathBounds.slice(index+1).every(other=>designBoxesSeparatedBy(box,other,15))));
+      add('Sliding actual paths remain nonnegative',pathBounds.every(bounds=>bounds.minX>=0&&bounds.minY>=0));
+      add('Sliding actual paths remain inside viewBox',pathBounds.every(bounds=>bounds.maxX<=slidingAResult.widthMm&&bounds.maxY<=slidingAResult.heightMm));
+      const slidingSegments=slidingAResult.panels.flatMap(panel=>designPointSegments(panel.points).map(segment=>designSegmentKey({a:{x:segment.a.x+panel.x,y:segment.a.y+panel.y},b:{x:segment.b.x+panel.x,y:segment.b.y+panel.y}})));
+      add('Sliding translated cuts have no duplicate segments',new Set(slidingSegments).size===slidingSegments.length);
+      add('Sliding repeated SVG is byte-stable',slidingAResult.svg===buildDesignResult(slidingA).svg);
+      add('Sliding compatibility SVG equals result SVG',designSvg(slidingA)===slidingAResult.svg);
+      const slidingParsed=designSvgValidation(slidingAResult.svg,slidingAResult.widthMm,slidingAResult.heightMm),slidingRoot=slidingParsed.documentNode.documentElement;
+      add('Sliding SVG parses without parsererror',slidingParsed.valid&&!slidingParsed.documentNode.querySelector('parsererror'));
+      add('Sliding SVG uses one red cut group',slidingRoot.querySelectorAll('g#cut').length===1&&slidingRoot.querySelector('g#cut').getAttribute('stroke')==='#ff0000');
+      add('Sliding SVG contains eight piece groups',slidingRoot.querySelectorAll('g#cut > g[id^="panel-"]').length===8);
+      add('Sliding SVG has no cut-layer text',!slidingAResult.svg.includes('<text'));
+      add('Sliding SVG has no fit coupon or fifth row',!slidingAResult.svg.toLowerCase().includes('coupon')&&slidingAResult.metrics.rows.length===4);
+
+      const invalidSliding=(overrides={})=>buildDesignResult({...slidingA,...overrides});
+      add('Sliding blank width blocks',!invalidSliding({slidingWidth:''}).valid);
+      add('Sliding text width blocks',!invalidSliding({slidingWidth:'wide'}).valid);
+      add('Sliding NaN width blocks',!invalidSliding({slidingWidth:'NaN'}).valid);
+      add('Sliding Infinity width blocks',!invalidSliding({slidingWidth:'Infinity'}).valid);
+      add('Sliding zero thickness blocks',!invalidSliding({materialThickness:'0'}).valid);
+      add('Sliding negative joint clearance blocks',!invalidSliding({slidingJointClearance:'-0.01'}).valid);
+      add('Sliding negative side clearance blocks',!invalidSliding({lidSideClearance:'-0.01'}).valid);
+      add('Sliding negative vertical clearance blocks',!invalidSliding({lidVerticalClearance:'-0.01'}).valid);
+      add('Sliding negative insertion clearance blocks',!invalidSliding({frontInsertionClearance:'-0.01'}).valid);
+      add('Sliding outside width at four thicknesses blocks',!invalidSliding({slidingDimensionMode:'outside',slidingWidth:'12',slidingDepth:'80',slidingHeight:'50'}).valid);
+      add('Sliding outside depth at two thicknesses blocks',!invalidSliding({slidingDimensionMode:'outside',slidingWidth:'100',slidingDepth:'6',slidingHeight:'50'}).valid);
+      add('Sliding outside height at upper stack threshold blocks',!invalidSliding({slidingDimensionMode:'outside',slidingWidth:'100',slidingDepth:'80',slidingHeight:'10.2'}).valid);
+      add('Sliding nonpositive usable cavity blocks',!invalidSliding({slidingHeight:'0'}).valid);
+      add('Sliding short rail channel blocks',!invalidSliding({slidingDepth:'16'}).valid);
+      add('Sliding rail too tall and floor web too small blocks',!invalidSliding({slidingHeight:'3'}).valid);
+      add('Sliding Front insertion collapse blocks',!invalidSliding({frontInsertionClearance:'40'}).valid);
+      add('Sliding shortened Front below three segments blocks',!invalidSliding({slidingHeight:'1.1'}).valid);
+      add('Sliding oversized notch blocks',!invalidSliding({lidPull:'rectangular',lidPullWidth:'100'}).valid);
+      add('Synthetic notch crossing shoulder transition is detected',slidingLidPullValidation({...aDimensions,shoulderStop:2},{materialThickness:3,pullMode:'rectangular',pullWidth:24},6).some(message=>/shoulder transition/i.test(message)));
+      add('Sliding unknown dimension mode blocks',!invalidSliding({slidingDimensionMode:'mystery'}).valid);
+      add('Sliding unknown pull mode blocks',!invalidSliding({lidPull:'round'}).valid);
+      add('Sliding unknown open-end mode blocks',!invalidSliding({slidingOpenEnd:'back'}).valid);
+      add('Sliding unknown rail mode blocks',!invalidSliding({slidingRailMode:'groove'}).valid);
+      const invalidPath=designPanelFromPoints({id:'invalid',name:'Invalid',width:10,height:10},[{x:0,y:0},{x:10,y:0},{x:10,y:10},{x:5,y:10},{x:5,y:-1},{x:0,y:-1},{x:0,y:0}]);
+      add('Invalid self-intersecting path is detected',designPanelGeometryErrors(invalidPath).some(message=>/self-intersects|bounds/i.test(message)));
+      const overlapA={id:'a',name:'A',width:10,height:10,path:'M 0 0 H 40 V 10 H 0 Z',points:[{x:0,y:0},{x:40,y:0},{x:40,y:10},{x:0,y:10},{x:0,y:0}],bounds:{minX:0,minY:0,maxX:40,maxY:10,width:40,height:10}},overlapB={id:'b',name:'B',width:10,height:10,path:'M 0 0 H 10 V 10 H 0 Z',points:[{x:0,y:0},{x:10,y:0},{x:10,y:10},{x:0,y:10},{x:0,y:0}],bounds:{minX:0,minY:0,maxX:10,maxY:10,width:10,height:10}};
+      add('Actual path-bound overlap is detected',layoutDesignPanelRows([overlapA,overlapB],[['a','b']]).errors.some(message=>/actual paths/i.test(message)));
+
+      add('Zero insertion clearance warns',invalidSliding({frontInsertionClearance:'0'}).warnings.some(message=>/zero Front insertion/i.test(message)));
+      add('Large body joint clearance warns',invalidSliding({slidingJointClearance:'1'}).warnings.some(message=>/unusually loose/i.test(message)));
+      add('Large lid clearance warns',invalidSliding({lidVerticalClearance:'1'}).warnings.some(message=>/unusually large/i.test(message)));
+      add('Small preferred finger width warns',invalidSliding({slidingPreferredFingerWidth:'4'}).warnings.some(message=>/unusually small/i.test(message)));
+      add('Large sliding layout warns',invalidSliding({slidingWidth:'500',slidingDepth:'400',slidingHeight:'250'}).warnings.some(message=>/large|layout/i.test(message)));
+      add('Sliding fit remains explicitly experimental',slidingAResult.warnings.some(message=>/experimental starting point/i.test(message)));
+      add('Sliding rail glue warning is present',slidingAResult.warnings.some(message=>/Glue is required/i.test(message)));
+      add('Sliding char cleanup warning is present',slidingAResult.warnings.some(message=>/charred sliding surfaces/i.test(message)));
+      const immutableSliding={...slidingA},immutableSlidingBefore=JSON.stringify(immutableSliding);buildDesignResult(immutableSliding);
+      add('Sliding generation does not mutate its draft',JSON.stringify(immutableSliding)===immutableSlidingBefore);
+      const normalizedSliding=normalizeDesignDraft(slidingA),normalizedBefore=JSON.stringify(normalizedSliding.values);buildSlidingLidBoxModel(normalizedSliding.values);
+      add('Sliding model does not mutate normalized inputs',JSON.stringify(normalizedSliding.values)===normalizedBefore);
 
       const passed = results.filter(result => result.pass).length, failed = results.length - passed;
       console.group('Design geometry fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
@@ -4944,7 +5380,7 @@
         };
         designForm.onchange = e => {
           updateDesignDraft(designForm);
-          if (e.target.name === 'template' || e.target.name === 'boxDimensionMode') render();
+          if (['template','boxDimensionMode','slidingDimensionMode','lidPull'].includes(e.target.name)) render();
           else refreshDesignPreview();
         };
       }
