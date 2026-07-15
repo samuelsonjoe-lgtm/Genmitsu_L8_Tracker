@@ -393,7 +393,7 @@
       return { status: 'ok', data };
     }
     function designDefaults() {
-      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated' };
+      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated', slidingGuideMarks: false, slidingFitCoupon: false };
     }
     function normalizeInventoryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function normalizeLibraryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
@@ -1470,7 +1470,11 @@
         + field('lidVerticalClearance', 'Lid vertical clearance (mm)', d.lidVerticalClearance, 'number', 'min="0" step="0.01"', 'Extra free space above the lid inside the rail channel.')
         + field('frontInsertionClearance', 'Front insertion clearance (mm)', d.frontInsertionClearance, 'number', 'min="0" step="0.01"', 'Gap between the shortened Front wall and the lid underside.')
         + designSelect('lidPull', 'Finger pull', d.lidPull, [['none','None'],['rectangular','Centered rectangular edge notch']])
-        + (d.lidPull === 'rectangular' ? field('lidPullWidth', 'Pull width (mm)', d.lidPullWidth, 'number', 'min="0.01" step="0.1"', 'The notch depth is the greater of material thickness or 6 mm.') : '');
+        + (d.lidPull === 'rectangular' ? field('lidPullWidth', 'Pull width (mm)', d.lidPullWidth, 'number', 'min="0.01" step="0.1"', 'The notch depth is the greater of material thickness or 6 mm.') : '')
+        + '<label class="row"><input name="slidingGuideMarks" type="checkbox" style="width:auto" ' + (d.slidingGuideMarks ? 'checked' : '') + '> Add rail-placement guide marks (blue score layer)</label>'
+        + '<div class="small muted" style="grid-column:1/-1">Adds four concealed corner marks beneath each rail footprint. Run the blue score layer before cutting. Rails install top-flush and Back-flush; both marked faces assemble inward.</div>'
+        + '<label class="row"><input name="slidingFitCoupon" type="checkbox" style="width:auto" ' + (d.slidingFitCoupon ? 'checked' : '') + '> Include six-piece sliding-fit coupon</label>'
+        + '<div class="small muted" style="grid-column:1/-1">Adds a six-piece glue-up test for the current lid side and vertical clearances. Allow the glue to cure before judging the fit.</div>';
       const legacyFields = tray
         ? field('trayWidth','Inside tray width (mm)',d.trayWidth,'number','min="20" step="1"')
           + field('trayDepth','Inside tray depth (mm)',d.trayDepth,'number','min="20" step="1"')
@@ -1485,7 +1489,7 @@
             : field('baseDepth','Base depth (mm)',d.baseDepth,'number','min="20" step="1"')
               + field('slotDepth','Stand slot depth (mm)',d.slotDepth,'number','min="10" step="1"'));
       const note = sliding
-        ? 'Eight through-cut pieces form a Front-loading box: five body panels, one shouldered lid, and two identical glue-on inner channel rails. All fit values are experimental starting points; test the body joints and sliding fit on scrap.'
+        ? 'Eight through-cut pieces form a Front-loading box: five body panels, one shouldered lid, and two identical glue-on inner channel rails. Optional guide marks are blue score geometry; the complete Right side panel is mirrored with its guides. The optional coupon adds six non-interlocking fit-test pieces. All fit values are experimental starting points; test the body joints and sliding fit on scrap.'
         : box
         ? 'The open-top body uses complementary rectangular fingers at all four corners and all four bottom joints. A loose lid is a separate plain panel with no retention.'
         : tray ? `${d.jointStyle === 'finger' ? 'Finger-tab' : 'Tab-and-slot'} tray layout includes a slotted base and wall tabs. Corner glue is recommended after a dry fit.`
@@ -1595,6 +1599,8 @@
         values.openEnd = String(draft.slidingOpenEnd || '');
         values.railMode = String(draft.slidingRailMode || '');
         values.pullMode = String(draft.lidPull || '');
+        values.guideMarks = draft.slidingGuideMarks === true || draft.slidingGuideMarks === 'true' || draft.slidingGuideMarks === 'on';
+        values.fitCoupon = draft.slidingFitCoupon === true || draft.slidingFitCoupon === 'true' || draft.slidingFitCoupon === 'on';
         if (!['usable','outside'].includes(values.dimensionMode)) errors.push('Choose Usable cavity below lid or Outside body dimensions.');
         if (values.openEnd !== 'front') errors.push('Choose the supported Front open end.');
         if (values.railMode !== 'laminated') errors.push('Choose the supported laminated inner rail construction.');
@@ -1869,6 +1875,41 @@
       points.push({x:width,y:0},{x:width,y:shoulderEnd},{x:tongueRight,y:shoulderEnd},{x:tongueRight,y:tongueEnd},{x:tongueLeft,y:tongueEnd},{x:tongueLeft,y:shoulderEnd},{x:0,y:shoulderEnd},{x:0,y:0});
       return designPanelFromPoints({id:'sliding-lid',name:'Sliding lid',width,height},points);
     }
+    function mirrorDesignPanel(panel) {
+      const points = (panel.points || []).map(point => ({x:designRound(panel.width - point.x), y:point.y}));
+      return designPanelFromPoints({...panel, width:panel.width, height:panel.height}, points);
+    }
+    function designScoreSegmentsPath(segments) {
+      return segments.map(segment => segment.a.y === segment.b.y
+        ? `M${designNumberText(segment.a.x)} ${designNumberText(segment.a.y)} H${designNumberText(segment.b.x)}`
+        : `M${designNumberText(segment.a.x)} ${designNumberText(segment.a.y)} V${designNumberText(segment.b.y)}`).join('');
+    }
+    function slidingRailGuideSegments(dimensions, thickness, panelWidth = dimensions.railLength) {
+      const inset = Math.max(1, thickness / 2), leg = Math.min(6, Math.max(3, thickness)), railOffsetX = panelWidth - dimensions.railLength, width = panelWidth, height = dimensions.railHeight;
+      if (railOffsetX < -1e-9 || 2 * inset + leg >= dimensions.railLength || 2 * inset + leg >= height) return {valid:false, errors:['Rail-placement guide marks do not fit within the side-panel envelope.'], segments:[], inset, leg, railOffsetX};
+      const xFront = designRound(railOffsetX + inset), xBack = designRound(width - inset), yTop = designRound(inset), yBottom = designRound(height - inset);
+      return {valid:true, errors:[], inset, leg, segments:[
+        [{x:xFront,y:yTop},{x:xFront+leg,y:yTop}], [{x:xFront,y:yTop},{x:xFront,y:yTop+leg}],
+        [{x:xBack,y:yTop},{x:xBack-leg,y:yTop}], [{x:xBack,y:yTop},{x:xBack,y:yTop+leg}],
+        [{x:xFront,y:yBottom},{x:xFront+leg,y:yBottom}], [{x:xFront,y:yBottom},{x:xFront,y:yBottom-leg}],
+        [{x:xBack,y:yBottom},{x:xBack-leg,y:yBottom}], [{x:xBack,y:yBottom},{x:xBack,y:yBottom-leg}]
+      ].map(([a,b]) => ({a:{x:designRound(a.x),y:designRound(a.y)},b:{x:designRound(b.x),y:designRound(b.y)}}))};
+    }
+    function buildSlidingCouponModel(parameters, boxDimensions) {
+      const t=parameters.materialThickness, cs=parameters.sideClearance, cv=parameters.verticalClearance, upperWeb=Math.max(t,4), lowerWeb=Math.max(t,4), stopLength=Math.max(t,4), gap=32, depth=Math.max(40,stopLength+Math.max(3*t,12)+5), base= Math.max(6,2*t), insideWidth=gap+2*t, baseWidth=insideWidth+2*t, channelHeight=t+cv, railHeight=upperWeb+channelHeight+lowerWeb, railLength=depth, channelLength=depth-stopLength, lidWidth=insideWidth-cs, tongueWidth=gap-cs, engagement=(lidWidth-gap)/2, lidLength=depth+t, shoulderStop=channelLength, tongueEnd=depth, lidHeight=lidLength, wallHeight=base+railHeight;
+      const dimensions={gap,depth,base,insideWidth,baseWidth,channelHeight,railHeight,railLength,channelLength,lidWidth,tongueWidth,engagement,lidLength,lidHeight,wallHeight,shoulderStop,tongueEnd,upperWeb,lowerWeb,stopLength};
+      const errors=[], warnings=[];
+      if (engagement < Math.max(1,t/3)-1e-9) errors.push(`Coupon lid engagement must be at least ${designNumberText(Math.max(1,t/3))} mm per side.`);
+      if (channelLength <= Math.max(3*t,12)+1e-9) errors.push(`Coupon rail-channel length must be greater than ${designNumberText(Math.max(3*t,12))} mm.`);
+      const basePanel=designPanelFromPoints({id:'coupon-base',name:'Coupon base / spacer',width:baseWidth,height:depth},[{x:0,y:0},{x:baseWidth,y:0},{x:baseWidth,y:depth},{x:0,y:depth},{x:0,y:0}]);
+      const wall=(id,name)=>designPanelFromPoints({id,name,width:depth,height:wallHeight},[{x:0,y:0},{x:depth,y:0},{x:depth,y:wallHeight},{x:0,y:wallHeight},{x:0,y:0}]);
+      const railDimensions={railLength,railHeight,upperWeb,channelHeight,channelLength};
+      const railLeft=buildSlidingLidRail(railDimensions,'coupon-rail-left','Coupon left rail'), railRight=buildSlidingLidRail(railDimensions,'coupon-rail-right','Coupon right rail');
+      const lid=buildSlidingLidPanel({lidWidth,lidLength,shoulderStop,tongueEnd,tongueWidth},{...parameters,pullMode:'none'}); lid.id='coupon-lid'; lid.name='Coupon sliding lid';
+      const panels=[basePanel,wall('coupon-wall-left','Coupon left wall'),wall('coupon-wall-right','Coupon right wall'),railLeft,railRight,lid];
+      panels.forEach(panel=>errors.push(...designPanelGeometryErrors(panel)));
+      return {valid:!errors.length,errors,warnings,dimensions,panels,metrics:{slidingCoupon:true,couponThickness:t,sideClearance:cs,verticalClearance:cv,boxDimensions}};
+    }
     function slidingLidPullValidation(dimensions, parameters, minimumSideWeb) {
       if (parameters.pullMode !== 'rectangular') return [];
       const errors=[],depth=Math.max(parameters.materialThickness,6),sideMaterial=(dimensions.lidWidth-parameters.pullWidth)/2;
@@ -1953,7 +1994,8 @@
     }
     function layoutDesignPanels(panels, margin = 10, gap = 15) { return layoutDesignPanelRows(panels,[['bottom','lid'],['front','back'],['left','right']],margin,gap); }
     function serializeDesignSvg(result) {
-      return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${designNumberText(result.widthMm)}mm" height="${designNumberText(result.heightMm)}mm" viewBox="0 0 ${designNumberText(result.widthMm)} ${designNumberText(result.heightMm)}">\n  <g id="cut" fill="none" stroke="#ff0000" stroke-width="0.1">\n${result.panels.map(panel => `    <g id="panel-${esc(panel.id)}" transform="translate(${designNumberText(panel.x)} ${designNumberText(panel.y)})">\n      <title>${esc(panel.name)}</title>\n      <path d="${panel.path}"/>\n    </g>`).join('\n')}\n  </g>\n</svg>\n`;
+      const score = result.scorePaths?.length ? `  <g id="score" fill="none" stroke="#0000ff" stroke-width="0.1">\n${result.scorePaths.map(path => `    <g id="${esc(path.id)}" transform="translate(${designNumberText(path.x)} ${designNumberText(path.y)})">\n      <title>${esc(path.name)}</title>\n      <path d="${path.path}"/>\n    </g>`).join('\n')}\n  </g>\n` : '';
+      return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${designNumberText(result.widthMm)}mm" height="${designNumberText(result.heightMm)}mm" viewBox="0 0 ${designNumberText(result.widthMm)} ${designNumberText(result.heightMm)}">\n${score}  <g id="cut" fill="none" stroke="#ff0000" stroke-width="0.1">\n${result.panels.map(panel => `    <g id="panel-${esc(panel.id)}" transform="translate(${designNumberText(panel.x)} ${designNumberText(panel.y)})">\n      <title>${esc(panel.name)}</title>\n      <path d="${panel.path}"/>\n    </g>`).join('\n')}\n  </g>\n</svg>\n`;
     }
     function designPathPoints(path) {
       const tokens = String(path || '').match(/[MHVZ]|[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi) || [], points = [];
@@ -2031,13 +2073,31 @@
       if (normalized.errors.length) return { valid:false, errors:[...new Set(normalized.errors)], warnings:normalized.warnings, svg:'', widthMm:0, heightMm:0, panels:[], metrics:{slidingLid:true} };
       const model=buildSlidingLidBoxModel(normalized.values);
       if (!model.valid) return {valid:false,errors:[...new Set(model.errors)],warnings:[...new Set([...normalized.warnings,...model.warnings])],svg:'',widthMm:0,heightMm:0,panels:model.panels,metrics:{...model.metrics,slidingLid:true,dimensions:model.dimensions,patterns:model.patterns}};
-      const rows=[['bottom','sliding-lid'],['front-open','back'],['left','right'],['rail-left','rail-right']],layout=layoutDesignPanelRows(model.panels,rows),errors=[...model.errors,...layout.errors],warnings=[...normalized.warnings,...model.warnings];
+      let panels = model.panels.map(panel => panel.id === 'right' && normalized.values.guideMarks ? mirrorDesignPanel(panel) : panel);
+      const scorePaths=[];
+      if (normalized.values.guideMarks) {
+        const leftPanel=panels.find(panel=>panel.id==='left'), guides=slidingRailGuideSegments(model.dimensions,normalized.values.materialThickness,leftPanel.width);
+        if (!guides.valid) model.errors.push(...guides.errors);
+        else {
+          const leftSegments=guides.segments, rightPanel=panels.find(panel=>panel.id==='right'), rightSegments=leftSegments.map(segment=>({a:{x:designRound(rightPanel.width-segment.a.x),y:segment.a.y},b:{x:designRound(rightPanel.width-segment.b.x),y:segment.b.y}}));
+          scorePaths.push({id:'guide-rail-left',name:'Left rail placement guides',panelId:'left',path:designScoreSegmentsPath(leftSegments),segments:leftSegments});
+          scorePaths.push({id:'guide-rail-right',name:'Right rail placement guides',panelId:'right',path:designScoreSegmentsPath(rightSegments),segments:rightSegments});
+        }
+      }
+      let couponMetrics={};
+      if (normalized.values.fitCoupon) {
+        const coupon=buildSlidingCouponModel(normalized.values,model.dimensions);
+        model.errors.push(...coupon.errors); model.warnings.push(...coupon.warnings); panels.push(...coupon.panels); couponMetrics={couponDimensions:coupon.dimensions,couponMetrics:coupon.metrics};
+      }
+      const rows=[['bottom','sliding-lid'],['front-open','back'],['left','right'],['rail-left','rail-right'],...(normalized.values.fitCoupon ? [['coupon-base','coupon-wall-left','coupon-wall-right','coupon-rail-left','coupon-rail-right','coupon-lid']] : [])],layout=layoutDesignPanelRows(panels,rows),errors=[...model.errors,...layout.errors],warnings=[...normalized.warnings,...model.warnings];
       const translatedKeys=layout.panels.flatMap(panel=>designPointSegments(panel.points).map(segment=>designSegmentKey({a:{x:segment.a.x+panel.x,y:segment.a.y+panel.y},b:{x:segment.b.x+panel.x,y:segment.b.y+panel.y}})));
       if (new Set(translatedKeys).size!==translatedKeys.length) errors.push('Generated layout contains a duplicate translated cut segment.');
       if (layout.widthMm>400||layout.heightMm>400) warnings.push(`Generated layout is ${designNumberText(layout.widthMm)} × ${designNumberText(layout.heightMm)} mm; verify the available sheet and machine area.`);
-      const partial={widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels},svg=errors.length?'':serializeDesignSvg(partial),validation=svg?designSvgValidation(svg,layout.widthMm,layout.heightMm):{valid:false,errors:[]};
+      const placedById=Object.fromEntries(layout.panels.map(panel=>[panel.id,panel]));
+      const placedScorePaths=scorePaths.map(score=>({...score,x:placedById[score.panelId]?.x || 0,y:placedById[score.panelId]?.y || 0}));
+      const partial={widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,scorePaths:placedScorePaths},svg=errors.length?'':serializeDesignSvg(partial),validation=svg?designSvgValidation(svg,layout.widthMm,layout.heightMm):{valid:false,errors:[]};
       errors.push(...validation.errors);
-      return {valid:!errors.length,errors:[...new Set(errors)],warnings:[...new Set(warnings)],svg:errors.length?'':svg,widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,metrics:{...model.metrics,dimensions:model.dimensions,patterns:model.patterns,margin:layout.margin,gap:layout.gap,rows},validation};
+      return {valid:!errors.length,errors:[...new Set(errors)],warnings:[...new Set(warnings)],svg:errors.length?'':svg,widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,scorePaths:placedScorePaths,metrics:{...model.metrics,...couponMetrics,dimensions:model.dimensions,patterns:model.patterns,guideMarks:normalized.values.guideMarks,fitCoupon:normalized.values.fitCoupon,margin:layout.margin,gap:layout.gap,rows},validation};
     }
     function buildDesignResult(rawDraft = designDraft) {
       const normalized = normalizeDesignDraft(rawDraft);
@@ -2065,6 +2125,8 @@
           + designMetric('Open channel / Back stop', `${designNumberText(dimensions.channelLength)} mm / ${designNumberText(dimensions.stopLength)} mm`)
           + designMetric('Shortened Front height', `${designNumberText(dimensions.frontHeight)} mm`)
           + designMetric('Open end / direction', 'Front / Front toward Back')
+          + designMetric('Rail guide marks', result.metrics.guideMarks ? 'Enabled — blue score layer; Right panel mirrored with guides' : 'Disabled')
+          + designMetric('Sliding-fit coupon', result.metrics.fitCoupon ? 'Enabled — six pieces' : 'Disabled')
           + designMetric('Required pieces', String(result.panels.length || 8))
           + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable')
           + designMetric('Body joint clearance', `${designNumberText(result.metrics.clearance)} mm`)
@@ -2086,7 +2148,7 @@
         : designMetric('Shapes', String(result.panels.length)) + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable');
       const messages = result.errors.map(message => `<div class="design-message error"><b>Error:</b> ${esc(message)}</div>`).join('') + result.warnings.map(message => `<div class="design-message warning"><b>Warning:</b> ${esc(message)}</div>`).join('');
       const preview = result.valid ? `<div class="design-svg-preview"><object type="image/svg+xml" aria-label="Exact exported SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`)}"></object></div>` : '<div class="design-svg-preview"><div class="empty"><b>Preview unavailable</b><div class="small muted">Correct the errors before previewing or downloading.</div></div></div>';
-      const assembly = sliding ? `<div class="design-message"><b>Assembly:</b> Assemble the five body panels. Glue the two identical rails inside the side walls, top-flush and back-flush, with both channels facing inward. Clamp with a thickness-plus-clearance spacer, keep glue out of the channels, and let it cure. Insert the lid from Front toward Back; the shoulders stop at Back while the tongue closes the center gap. <b>Kerf is not included.</b></div>` : '';
+      const assembly = sliding ? `<div class="design-message"><b>Assembly:</b> Assemble the five body panels. Glue the two identical rails inside the side walls, top-flush and Back-flush, with both channels facing inward. Clamp with a thickness-plus-clearance spacer, keep glue out of the channels, and let it cure. Insert the lid from Front toward Back; the shortened edges face Front and the stop ends face Back while the tongue closes the center gap. ${result.metrics.guideMarks ? 'Run the blue guide score before the red cuts; install both marked faces inward. The visible Front gap is intentional and equals the Front plus Back wall allowance represented by panel width minus rail length.' : ''} <b>Kerf is not included.</b></div>` : '';
       return `<div class="design-preview-layout"><div class="panel"><b>Design results</b><div class="metrics" style="margin-top:10px">${metrics}</div>${messages || '<div class="design-message"><b>Ready:</b> Preview and download use the same validated SVG.</div>'}${assembly}</div>${preview}</div>`;
     }
     function refreshDesignPreview() {
@@ -2096,7 +2158,7 @@
       return result;
     }
     function updateDesignDraft(form) {
-      [...form.elements].forEach(element => { if (element.name) designDraft[element.name] = element.value; });
+      [...form.elements].forEach(element => { if (element.name) designDraft[element.name] = element.type === 'checkbox' ? element.checked : element.value; });
     }
     function designFixtureHash(text) {
       let hash = 2166136261;
@@ -2384,6 +2446,64 @@
       add('Sliding generation does not mutate its draft',JSON.stringify(immutableSliding)===immutableSlidingBefore);
       const normalizedSliding=normalizeDesignDraft(slidingA),normalizedBefore=JSON.stringify(normalizedSliding.values);buildSlidingLidBoxModel(normalizedSliding.values);
       add('Sliding model does not mutate normalized inputs',JSON.stringify(normalizedSliding.values)===normalizedBefore);
+
+      const slidingDraftBefore=JSON.stringify(slidingA), guidedSliding=buildDesignResult({...slidingA,slidingGuideMarks:true}), guidedRight=guidedSliding.panels.find(panel=>panel.id==='right'), unmirroredRight=slidingAResult.panels.find(panel=>panel.id==='right');
+      add('Rail guide option remains valid',guidedSliding.valid);
+      add('Guide marks create two score paths',guidedSliding.scorePaths?.length===2);
+      add('Each side receives four guide corners',guidedSliding.scorePaths?.every(score=>score.segments.length===8));
+      add('Guides are excluded from cut panels',guidedSliding.panels.length===8&&guidedSliding.panels.every(panel=>!panel.id.startsWith('guide-')));
+      add('Guide SVG has a blue score group',guidedSliding.svg.includes('<g id="score"')&&guidedSliding.svg.includes('stroke="#0000ff"'));
+      add('Guided Right panel mirrors the complete local geometry',JSON.stringify(guidedRight.points)===JSON.stringify(unmirroredRight.points.map(point=>({x:designRound(unmirroredRight.width-point.x),y:point.y}))));
+      add('Right guide coordinates mirror with the Right panel',guidedSliding.scorePaths.find(score=>score.id==='guide-rail-right').segments.every((segment,index)=>{const source=guidedSliding.scorePaths.find(score=>score.id==='guide-rail-left').segments[index];return segment.a.x===designRound(guidedRight.width-source.a.x)&&segment.b.x===designRound(guidedRight.width-source.b.x)&&segment.a.y===source.a.y&&segment.b.y===source.b.y;}));
+      const leftGuide=guidedSliding.scorePaths.find(score=>score.id==='guide-rail-left'), rightGuide=guidedSliding.scorePaths.find(score=>score.id==='guide-rail-right'), guideInset=1.5, guideLeg=3, guideOffset=slidingLeft.width-aDimensions.railLength;
+      const expectedLeftGuide=[[[7.5,1.5],[10.5,1.5]],[[7.5,1.5],[7.5,4.5]],[[84.5,1.5],[81.5,1.5]],[[84.5,1.5],[84.5,4.5]],[[7.5,9.7],[10.5,9.7]],[[7.5,9.7],[7.5,6.7]],[[84.5,9.7],[81.5,9.7]],[[84.5,9.7],[84.5,6.7]]].map(([a,b])=>({a:{x:a[0],y:a[1]},b:{x:b[0],y:b[1]}}));
+      const expectedRightGuide=expectedLeftGuide.map(segment=>({a:{x:designRound(guidedRight.width-segment.a.x),y:segment.a.y},b:{x:designRound(guidedRight.width-segment.b.x),y:segment.b.y}}));
+      const guideCoordinates=score=>score.segments.map(segment=>[segment.a.x,segment.a.y,segment.b.x,segment.b.y]);
+      add('Guide rail offset equals panel width minus rail length',guideOffset===6,6,guideOffset);
+      add('Left guide endpoints use corrected Back-flush footprint',JSON.stringify(guideCoordinates(leftGuide))===JSON.stringify(guideCoordinates({segments:expectedLeftGuide})),JSON.stringify(guideCoordinates({segments:expectedLeftGuide})),JSON.stringify(guideCoordinates(leftGuide)));
+      add('Right guide endpoints use independently mirrored corrected footprint',JSON.stringify(guideCoordinates(rightGuide))===JSON.stringify(guideCoordinates({segments:expectedRightGuide})),JSON.stringify(guideCoordinates({segments:expectedRightGuide})),JSON.stringify(guideCoordinates(rightGuide)));
+      add('Back guide reference uses panel width minus inset',leftGuide.segments[2].a.x===designRound(slidingLeft.width-guideInset)&&rightGuide.segments[2].a.x===designRound(guidedRight.width-(slidingLeft.width-guideInset)),'86-1.5 / mirrored 1.5',`${leftGuide.segments[2].a.x}/${rightGuide.segments[2].a.x}`);
+      add('Front guide reference includes rail offset',leftGuide.segments[0].a.x===designRound(guideOffset+guideInset));
+      add('Guide marks remain within the corrected rail footprint',leftGuide.segments.every(segment=>[segment.a,segment.b].every(point=>point.x>=guideOffset&&point.x<=slidingLeft.width&&point.y>=0&&point.y<=aDimensions.railHeight)));
+      add('Guide marks stay off all side-panel cut edges',leftGuide.segments.every(segment=>[segment.a,segment.b].every(point=>point.x>guideOffset&&point.x<slidingLeft.width&&point.y>0&&point.y<aDimensions.railHeight)));
+      add('Front guide gap equals the Back-flush rail offset',leftGuide.segments[0].a.x-guideInset===guideOffset);
+      add('Corrected guide output keeps the document viewBox',guidedSliding.widthMm===slidingAResult.widthMm&&guidedSliding.heightMm===slidingAResult.heightMm);
+      add('Guided Right preserves Bottom to Right mating metadata',guidedRight.edges[2].phase!==slidingBottom.edges[1].phase&&JSON.stringify(guidedRight.edges[2].pattern.boundaries)===JSON.stringify(slidingBottom.edges[1].pattern.boundaries));
+      add('Guided Right preserves Back to Right mating metadata',guidedRight.edges[1].phase!==slidingBack.edges[3].phase&&JSON.stringify(guidedRight.edges[1].pattern.boundaries)===JSON.stringify(slidingBack.edges[3].pattern.boundaries));
+      add('Guided Right preserves shortened Front lower-field metadata',guidedRight.edges[3].composite===true&&guidedRight.edges[3].compositeSpan===slidingRight.edges[3].compositeSpan);
+      add('Guide inputs do not mutate the draft',JSON.stringify(slidingA)===slidingDraftBefore);
+
+      const couponSliding=buildDesignResult({...slidingA,slidingFitCoupon:true}), couponIds='bottom|sliding-lid|front-open|back|left|right|rail-left|rail-right|coupon-base|coupon-wall-left|coupon-wall-right|coupon-rail-left|coupon-rail-right|coupon-lid';
+      add('Six-piece sliding coupon remains valid',couponSliding.valid);
+      add('Coupon appends six stable piece IDs',couponSliding.panels.map(panel=>panel.id).join('|')===couponIds);
+      add('Coupon uses a fifth layout row',couponSliding.metrics.rows.length===5&&couponSliding.metrics.rows[4].join('|')==='coupon-base|coupon-wall-left|coupon-wall-right|coupon-rail-left|coupon-rail-right|coupon-lid');
+      add('Coupon dimensions use bounded starter formulas',couponSliding.metrics.dimensions && couponSliding.panels.find(panel=>panel.id==='coupon-base')?.width===44&&couponSliding.panels.find(panel=>panel.id==='coupon-base')?.height===40);
+      add('Coupon SVG keeps red cuts and no score layer by default',couponSliding.svg.includes('id="cut"')&&!couponSliding.svg.includes('id="score"'));
+      add('Coupon layout stays inside its viewBox',couponSliding.panels.every(panel=>panel.translatedBounds.maxX<=couponSliding.widthMm&&panel.translatedBounds.maxY<=couponSliding.heightMm));
+      const cd=couponSliding.metrics.couponDimensions, couponPositions=couponSliding.panels.slice(0,8).map(panel=>`${panel.id}@${panel.x},${panel.y}`).join('|');
+      add('Coupon Golden A numeric table is complete',cd.gap===32&&cd.depth===40&&cd.base===6&&cd.insideWidth===38&&cd.baseWidth===44&&cd.channelHeight===3.2&&cd.railHeight===11.2&&cd.channelLength===36&&cd.lidWidth===37.8&&cd.tongueWidth===31.8&&designRound(cd.engagement)===2.9&&cd.lidLength===43&&cd.shoulderStop===36&&cd.tongueEnd===40&&cd.wallHeight===17.2,'expected Golden A',JSON.stringify(cd));
+      add('Coupon lateral clearance is Cs over two per side',designRound(cd.insideWidth-cd.lidWidth)===0.2&&designRound((cd.gap-cd.tongueWidth)/2)===0.1,'0.2/0.1',`${cd.insideWidth-cd.lidWidth}/${designRound((cd.gap-cd.tongueWidth)/2)}`);
+      add('Coupon vertical clearance is added once',cd.channelHeight===3.2&&cd.railHeight===11.2);
+      add('Coupon Cj does not alter coupon geometry',JSON.stringify(cd)===JSON.stringify(buildDesignResult({...slidingA,slidingFitCoupon:true,slidingJointClearance:'0.20'}).metrics.couponDimensions));
+      add('Coupon preserves the first eight positions',couponPositions===slidingPositions);
+      add('Coupon positions and final viewBox are stable',couponSliding.panels.slice(8).map(panel=>`${panel.id}@${panel.x},${panel.y}`).join('|')==='coupon-base@10,267.6|coupon-wall-left@69,267.6|coupon-wall-right@124,267.6|coupon-rail-left@179,267.6|coupon-rail-right@234,267.6|coupon-lid@289,267.6'&&couponSliding.widthMm===336.8&&couponSliding.heightMm===320.6);
+      add('Coupon lid insertion, capture, and stop relationships hold',cd.lidLength===cd.tongueEnd+3&&cd.shoulderStop+cd.stopLength===cd.tongueEnd&&cd.engagement>=Math.max(1,slidingAResult.metrics.minimumEngagement));
+      add('Coupon generation does not mutate the draft',JSON.stringify(slidingA)===slidingDraftBefore);
+
+      const optionCombinations=[['guides off / coupon off',{}],['guides on / coupon off',{slidingGuideMarks:true}],['guides off / coupon on',{slidingFitCoupon:true}],['guides on / coupon on',{slidingGuideMarks:true,slidingFitCoupon:true}]];
+      optionCombinations.forEach(([label,overrides])=>{
+        const combo=buildDesignResult({...slidingA,...overrides}), repeat=buildDesignResult({...slidingA,...overrides}), parsedCombo=designSvgValidation(combo.svg,combo.widthMm,combo.heightMm), scoreCount=parsedCombo.documentNode?.querySelectorAll('g#score').length||0, firstEight=combo.panels.slice(0,8).map(panel=>`${panel.id}@${panel.x},${panel.y}`).join('|');
+        add(`${label} is valid`,combo.valid);
+        add(`${label} is deterministic`,combo.svg===repeat.svg);
+        add(`${label} has expected cut and score counts`,combo.panels.length===(overrides.slidingFitCoupon?14:8)&&scoreCount===(overrides.slidingGuideMarks?1:0));
+        add(`${label} preserves first eight layout positions`,firstEight===slidingPositions);
+        add(`${label} preview and download use identical SVG`,designSvg({...slidingA,...overrides})===combo.svg);
+      });
+      const disabledHash=designFixtureHash(slidingAResult.svg);
+      add('Disabled sliding output retains dedicated signature',slidingAResult.svg.length===2800&&disabledHash==='4a7ab718','2800/4a7ab718',`${slidingAResult.svg.length}/${disabledHash}`);
+      add('Disabled sliding output has no score or coupon',!slidingAResult.svg.includes('id="score"')&&!slidingAResult.svg.includes('coupon-')&&slidingAResult.panels.length===8);
+      const invalidGuide=slidingRailGuideSegments({railLength:10,railHeight:5},3,10);
+      add('Guide geometry rejects an envelope that cannot contain the marks',!invalidGuide.valid,'invalid','valid');
 
       const passed = results.filter(result => result.pass).length, failed = results.length - passed;
       console.group('Design geometry fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
@@ -5380,7 +5500,7 @@
         };
         designForm.onchange = e => {
           updateDesignDraft(designForm);
-          if (['template','boxDimensionMode','slidingDimensionMode','lidPull'].includes(e.target.name)) render();
+          if (['template','boxDimensionMode','slidingDimensionMode','lidPull','slidingGuideMarks','slidingFitCoupon'].includes(e.target.name)) render();
           else refreshDesignPreview();
         };
       }
