@@ -174,6 +174,13 @@
     .nested-browser-leaf { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: calc(100% - 12px); margin: 4px 0 4px 12px; text-align: left; font-weight: 700; }
     .nested-browser-leaf.nested-browser-selected { border-color: var(--blue); box-shadow: inset 3px 0 0 var(--blue); background: #eef6fb; }
     .nested-browser-detail hr { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
+    .design-preview-layout { display: grid; grid-template-columns: minmax(280px, .85fr) minmax(360px, 1.15fr); gap: 14px; margin-top: 14px; }
+    .design-preview-layout > * { min-width: 0; }
+    .design-svg-preview { min-height: 280px; display: grid; place-items: center; background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: auto; padding: 8px; }
+    .design-svg-preview object { display: block; width: 100%; min-height: 360px; border: 0; }
+    .design-message { border-left: 4px solid var(--line); padding: 8px 10px; margin-top: 8px; background: var(--soft); border-radius: 4px; }
+    .design-message.error { border-left-color: var(--red); }
+    .design-message.warning { border-left-color: var(--amber); }
     .print-only { display: none; }
     @media (max-width: 700px) {
       .modal { padding: 10px 8px; }
@@ -184,6 +191,8 @@
       .modal-actions { bottom: -14px; margin: 4px -14px -14px; padding: 10px 14px; }
       .modal-actions button { flex: 1; }
       .nested-browser-layout, .material-browser-layout { grid-template-columns: minmax(0, 1fr); }
+      .design-preview-layout { grid-template-columns: minmax(0, 1fr); }
+      .design-svg-preview object { min-height: 280px; }
     }
     @media print {
       body { background: white; color: #111827; }
@@ -384,7 +393,7 @@
       return { status: 'ok', data };
     }
     function designDefaults() {
-      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12' };
+      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12' };
     }
     function normalizeInventoryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function normalizeLibraryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
@@ -1437,11 +1446,21 @@
         <div id="gridViewResults">${state.gridViewMode === 'browse' ? gridBrowserResultsHtml(filtered) : gridManageResultsHtml(filtered)}</div>
       `;
     }
+    function designSelect(name, label, value, options, tip = '') {
+      return `<label>${labelText(label, tip)}<select name="${name}">${options.map(([key, text]) => `<option value="${esc(key)}" ${key === value ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select></label>`;
+    }
     function renderDesigns() {
-      const d = designDraft;
-      const tray = d.template === 'dice-tray' || d.template === 'divider-tray';
-      const hanging = d.template === 'hanging-sign';
-      const specificFields = tray
+      const d = designDraft, box = d.template === 'finger-box', tray = d.template === 'dice-tray' || d.template === 'divider-tray', hanging = d.template === 'hanging-sign';
+      const result = buildDesignResult(d);
+      const templateField = designSelect('template', 'Template', d.template, [['qr-stand','Freestanding QR / sign stand'],['hanging-sign','Hanging sign'],['dice-tray','Dice tray'],['divider-tray','Divider tray'],['finger-box','Finger-jointed box']]);
+      const boxFields = designSelect('boxDimensionMode', 'Dimension basis', d.boxDimensionMode, [['inside','Inside dimensions'],['outside','Outside body dimensions']], 'Outside height is underside of bottom to wall top; inside height starts at the inside face of the bottom.')
+        + field('boxWidth', `${d.boxDimensionMode === 'outside' ? 'Outside body' : 'Inside'} width (mm)`, d.boxWidth, 'number', 'min="0.01" step="0.1"')
+        + field('boxDepth', `${d.boxDimensionMode === 'outside' ? 'Outside body' : 'Inside'} depth (mm)`, d.boxDepth, 'number', 'min="0.01" step="0.1"')
+        + field('boxHeight', `${d.boxDimensionMode === 'outside' ? 'Outside body' : 'Inside'} height (mm)`, d.boxHeight, 'number', 'min="0.01" step="0.1"')
+        + field('jointClearance', 'Joint clearance (mm)', d.jointClearance, 'number', 'min="0" step="0.01"', '0.00 mm is nominal. Positive clearance loosens internal finger transitions without enlarging panel envelopes.')
+        + field('preferredFingerWidth', 'Preferred finger width (mm)', d.preferredFingerWidth, 'number', 'min="0.01" step="0.1"', 'A target only; the exact width is calculated from an odd segment count.')
+        + designSelect('boxLid', 'Top', d.boxLid, [['open','Open top'],['loose','Loose flat lid']]);
+      const legacyFields = tray
         ? field('trayWidth','Inside tray width (mm)',d.trayWidth,'number','min="20" step="1"')
           + field('trayDepth','Inside tray depth (mm)',d.trayDepth,'number','min="20" step="1"')
           + field('trayHeight','Wall height (mm)',d.trayHeight,'number','min="10" step="1"')
@@ -1454,19 +1473,26 @@
               + field('hangingInset','Hole inset (mm)',d.hangingInset,'number','min="3" step="0.1"')
             : field('baseDepth','Base depth (mm)',d.baseDepth,'number','min="20" step="1"')
               + field('slotDepth','Stand slot depth (mm)',d.slotDepth,'number','min="10" step="1"'));
+      const note = box
+        ? 'The open-top body uses complementary rectangular fingers at all four corners and all four bottom joints. A loose lid is a separate plain panel with no retention.'
+        : tray ? `${d.jointStyle === 'finger' ? 'Finger-tab' : 'Tab-and-slot'} tray layout includes a slotted base and wall tabs. Corner glue is recommended after a dry fit.`
+        : hanging ? 'Hanging sign exports a clean panel with two mounting holes.'
+        : 'Freestanding sign exports a base and upright with matching centered slots. The upright is intentionally blank for your QR, logo, or text in LightBurn.';
       return `
-        <div class="toolbar" style="margin-bottom:14px"><div><b>Designs</b><div class="small muted">Offline SVG cut layouts for LightBurn. Dimensions are in mm; test fit on scrap before production.</div></div></div>
+        <div class="toolbar" style="margin-bottom:14px"><div><b>Designs</b><div class="small muted">Session-only offline SVG layouts for LightBurn, including a true finger-jointed box. Designs are excluded from JSON backups.</div></div></div>
         <form id="designForm" class="panel" onsubmit="return false">
           <div class="formgrid">
-            ${select('template','Template',d.template,['qr-stand','hanging-sign','dice-tray','divider-tray'])}
-            ${select('jointStyle','Tray joint style',d.jointStyle,['finger','tab-slot'])}
-            ${field('materialThickness','Material thickness (mm)',d.materialThickness,'number','min="0.1" step="0.01"','Use your actual measured plywood thickness.')}
-            ${field('fitClearance','Slot clearance (mm)',d.fitClearance,'number','min="0" step="0.01"','Added to slot width. Start small and test on scrap.')}
-            ${specificFields}
+            ${templateField}
+            ${box ? '' : tray ? select('jointStyle','Tray joint style',d.jointStyle,['finger','tab-slot']) : '<div></div>'}
+            ${field('materialThickness','Measured material thickness (mm)',d.materialThickness,'number','min="0.1" step="0.01"','Measure the actual sheet; nominal plywood thickness can differ.')}
+            ${box ? boxFields : field('fitClearance','Slot clearance (mm)',d.fitClearance,'number','min="0" step="0.01"','Added to legacy slot width. Start small and test on scrap.') + legacyFields}
           </div>
-          <div class="small muted" style="margin-top:10px">${tray ? `${d.jointStyle === 'finger' ? 'Finger-tab' : 'Tab-and-slot'} tray layout includes a slotted base and wall tabs. Corner glue is recommended after a dry fit.` : hanging ? 'Hanging sign exports a clean panel with two mounting holes.' : 'Freestanding sign exports a base and upright with matching centered slots. The upright is intentionally blank for your QR, logo, or text in LightBurn.'}</div>
-          <div class="actions" style="margin-top:12px"><button class="primary" id="downloadDesignSvg" type="button">Download LightBurn SVG</button><button id="resetDesign" type="button">Reset defaults</button></div>
+          <div class="small muted" style="margin-top:10px">${note}</div>
+          <div class="small muted" style="margin-top:8px"><b>Kerf is separate:</b> SVG geometry is nominal centerline geometry. Joint clearance controls assembly fit; test material-specific kerf on scrap and apply it separately in LightBurn.</div>
+          ${box ? '<div class="small muted" style="margin-top:8px">Outside body height runs from the underside of the bottom to the top of the walls. Inside height runs from the inside face of the bottom to the wall top. A loose lid adds one material thickness to overall closed height.</div>' : ''}
+          <div class="actions" style="margin-top:12px"><button class="primary" id="downloadDesignSvg" type="button" ${result.valid ? '' : 'disabled'}>Download LightBurn SVG</button><button id="resetDesign" type="button">Reset defaults</button></div>
         </form>
+        <div id="designResults">${designResultsHtml(result)}</div>
       `;
     }
     function designNumber(value, fallback, minimum = 0) {
@@ -1530,14 +1556,404 @@
       const dividerWidth = d.template === 'divider-tray' ? insideWidth + gap : 0;
       return designSvgDocument(Math.max(sideX + insideDepth + dividerWidth + margin, outerWidth + margin * 2), wallY + (wallHeight + thickness + gap) * Math.max(2, d.template === 'divider-tray' ? Math.max(2, Number(d.dividerCount) || 2) : 2) + margin, shapes);
     }
-    function designSvg(d = designDraft) {
+    function legacyDesignSvg(d) {
       if (d.template === 'hanging-sign') return designHangingSignSvg(d);
       if (d.template === 'dice-tray' || d.template === 'divider-tray') return designTraySvg(d);
       return designStandSvg(d);
     }
+    function designRequiredNumber(draft, key, label, errors, minimum, inclusive = false) {
+      const raw = draft?.[key];
+      if (raw === '' || raw === null || raw === undefined) { errors.push(`${label} is required.`); return NaN; }
+      const value = Number(raw);
+      if (!Number.isFinite(value)) { errors.push(`${label} must be a finite number.`); return NaN; }
+      if (inclusive ? value < minimum : value <= minimum) errors.push(`${label} must be ${inclusive ? 'at least' : 'greater than'} ${minimum} mm.`);
+      return value;
+    }
+    function normalizeDesignDraft(rawDraft = {}) {
+      const draft = { ...rawDraft }, errors = [], warnings = [];
+      const templates = ['qr-stand','hanging-sign','dice-tray','divider-tray','finger-box'];
+      const template = String(draft.template || '');
+      if (!templates.includes(template)) errors.push('Choose a recognized Designs template.');
+      const values = { template };
+      values.materialThickness = designRequiredNumber(draft, 'materialThickness', 'Material thickness', errors, .1, true);
+      if (template === 'finger-box') {
+        values.dimensionMode = String(draft.boxDimensionMode || '');
+        values.lid = String(draft.boxLid || '');
+        if (!['inside','outside'].includes(values.dimensionMode)) errors.push('Choose Inside dimensions or Outside body dimensions.');
+        if (!['open','loose'].includes(values.lid)) errors.push('Choose Open top or Loose flat lid.');
+        values.width = designRequiredNumber(draft, 'boxWidth', 'Width', errors, 0);
+        values.depth = designRequiredNumber(draft, 'boxDepth', 'Depth', errors, 0);
+        values.height = designRequiredNumber(draft, 'boxHeight', 'Height', errors, 0);
+        values.clearance = designRequiredNumber(draft, 'jointClearance', 'Joint clearance', errors, 0, true);
+        values.preferredFingerWidth = designRequiredNumber(draft, 'preferredFingerWidth', 'Preferred finger width', errors, 0);
+      } else if (templates.includes(template)) {
+        values.fitClearance = designRequiredNumber(draft, 'fitClearance', 'Slot clearance', errors, 0, true);
+        if (template === 'dice-tray' || template === 'divider-tray') {
+          values.trayWidth = designRequiredNumber(draft, 'trayWidth', 'Inside tray width', errors, 20, true);
+          values.trayDepth = designRequiredNumber(draft, 'trayDepth', 'Inside tray depth', errors, 20, true);
+          values.trayHeight = designRequiredNumber(draft, 'trayHeight', 'Wall height', errors, 10, true);
+          if (!['finger','tab-slot'].includes(draft.jointStyle)) errors.push('Choose a recognized tray joint style.');
+          if (template === 'divider-tray') {
+            values.dividerCount = designRequiredNumber(draft, 'dividerCount', 'Divider count', errors, 1, true);
+            if (Number.isFinite(values.dividerCount) && (!Number.isInteger(values.dividerCount) || values.dividerCount > 6)) errors.push('Divider count must be a whole number from 1 to 6.');
+          }
+        } else {
+          values.signWidth = designRequiredNumber(draft, 'signWidth', 'Panel width', errors, 20, true);
+          values.signHeight = designRequiredNumber(draft, 'signHeight', 'Panel height', errors, 20, true);
+          if (template === 'hanging-sign') {
+            values.cornerRadius = designRequiredNumber(draft, 'cornerRadius', 'Corner radius', errors, 0, true);
+            values.hangingHole = designRequiredNumber(draft, 'hangingHole', 'Hanging hole diameter', errors, 1, true);
+            values.hangingInset = designRequiredNumber(draft, 'hangingInset', 'Hanging-hole inset', errors, 3, true);
+          } else {
+            values.baseDepth = designRequiredNumber(draft, 'baseDepth', 'Base depth', errors, 20, true);
+            values.slotDepth = designRequiredNumber(draft, 'slotDepth', 'Stand slot depth', errors, 10, true);
+          }
+        }
+      }
+      return { draft, template, values, errors, warnings };
+    }
+    function designRound(value) { return Math.round((value + Number.EPSILON) * 1e6) / 1e6; }
+    function designNumberText(value) { const rounded = designRound(value); return Object.is(rounded, -0) ? '0' : String(rounded); }
+    function designBoxDimensions(mode, width, depth, height, thickness) {
+      if (mode === 'inside') return { insideWidth: width, insideDepth: depth, insideHeight: height, outsideWidth: width + 2 * thickness, outsideDepth: depth + 2 * thickness, outsideHeight: height + thickness };
+      return { insideWidth: width - 2 * thickness, insideDepth: depth - 2 * thickness, insideHeight: height - thickness, outsideWidth: width, outsideDepth: depth, outsideHeight: height };
+    }
+    function buildFingerPattern(length, preferredWidth, thickness, errors, label) {
+      const minimumWidth = Math.max(2 * thickness, 4), maxCount = Math.floor(length / minimumWidth), maxOdd = maxCount % 2 ? maxCount : maxCount - 1;
+      if (maxOdd < 3) { errors.push(`${label} edge is too short for three fingers at the ${designNumberText(minimumWidth)} mm minimum segment width.`); return null; }
+      let count = 3, difference = Infinity;
+      for (let candidate = 3; candidate <= maxOdd; candidate += 2) {
+        const candidateDifference = Math.abs(length / candidate - preferredWidth);
+        if (candidateDifference < difference - 1e-9) { count = candidate; difference = candidateDifference; }
+      }
+      const actualWidth = length / count;
+      return { length, count, actualWidth, minimumWidth, boundaries: Array.from({ length: count + 1 }, (_, index) => designRound(actualWidth * index)) };
+    }
+    function designPatternEdge(pattern, phase, depth, clearance) { return { pattern, phase, depth, clearance }; }
+    function designEdgePoints(start, end, inward, edge) {
+      if (!edge?.pattern) return [start, end];
+      const { pattern, phase, depth, clearance } = edge, horizontal = start.y === end.y, direction = horizontal ? Math.sign(end.x - start.x) : Math.sign(end.y - start.y);
+      const pointAt = (distance, offset) => horizontal
+        ? { x: start.x + direction * distance + inward.x * offset, y: start.y + inward.y * offset }
+        : { x: start.x + inward.x * offset, y: start.y + direction * distance + inward.y * offset };
+      const isFinger = index => (index % 2 === 0) === phase;
+      const points = [{ ...start }], firstOffset = isFinger(0) ? 0 : depth;
+      if (firstOffset) points.push(pointAt(0, firstOffset));
+      for (let index = 0; index < pattern.count; index++) {
+        const currentFinger = isFinger(index), currentOffset = currentFinger ? 0 : depth;
+        let distance = pattern.length;
+        if (index < pattern.count - 1) {
+          const nominal = pattern.actualWidth * (index + 1);
+          distance = nominal + (currentFinger ? -clearance / 2 : clearance / 2);
+        }
+        points.push(pointAt(distance, currentOffset));
+        if (index < pattern.count - 1) points.push(pointAt(distance, isFinger(index + 1) ? 0 : depth));
+      }
+      if (!isFinger(pattern.count - 1)) points.push({ ...end });
+      return points;
+    }
+    function designCompactPoints(points) {
+      const compact = [];
+      points.forEach(point => {
+        const p = { x: designRound(point.x), y: designRound(point.y) }, last = compact[compact.length - 1];
+        if (!last || last.x !== p.x || last.y !== p.y) compact.push(p);
+      });
+      return compact;
+    }
+    function designPointsPath(points) {
+      const compact = designCompactPoints(points);
+      if (!compact.length) return '';
+      let path = `M ${designNumberText(compact[0].x)} ${designNumberText(compact[0].y)}`;
+      for (let index = 1; index < compact.length; index++) {
+        const previous = compact[index - 1], point = compact[index];
+        if (previous.y === point.y) path += ` H ${designNumberText(point.x)}`;
+        else if (previous.x === point.x) path += ` V ${designNumberText(point.y)}`;
+        else return '';
+      }
+      return `${path} Z`;
+    }
+    function buildFingerPanel(definition) {
+      const { width, height, edges } = definition, corners = [{x:0,y:0},{x:width,y:0},{x:width,y:height},{x:0,y:height}], inward = [{x:0,y:1},{x:-1,y:0},{x:0,y:-1},{x:1,y:0}];
+      let points = [{ ...corners[0] }];
+      for (let index = 0; index < 4; index++) points.push(...designEdgePoints(corners[index], corners[(index + 1) % 4], inward[index], edges[index]).slice(1));
+      const path = designPointsPath(points);
+      return { name: definition.name, id: definition.id, width, height, path, points: designCompactPoints(points), bounds: { minX: 0, minY: 0, maxX: width, maxY: height, width, height }, edges };
+    }
+    function buildBoxModel(parameters) {
+      const errors = [], warnings = [], t = parameters.materialThickness;
+      const dimensions = designBoxDimensions(parameters.dimensionMode, parameters.width, parameters.depth, parameters.height, t);
+      if (parameters.dimensionMode === 'outside') {
+        if (parameters.width <= 2 * t) errors.push('Outside body width must be greater than twice the material thickness.');
+        if (parameters.depth <= 2 * t) errors.push('Outside body depth must be greater than twice the material thickness.');
+        if (parameters.height <= t) errors.push('Outside body height must be greater than the material thickness.');
+      }
+      if ([dimensions.insideWidth, dimensions.insideDepth, dimensions.insideHeight].some(value => !Number.isFinite(value) || value <= 0)) errors.push('Calculated inside dimensions must all be positive.');
+      const widthPattern = buildFingerPattern(dimensions.outsideWidth, parameters.preferredFingerWidth, t, errors, 'Width');
+      const depthPattern = buildFingerPattern(dimensions.outsideDepth, parameters.preferredFingerWidth, t, errors, 'Depth');
+      const verticalPattern = buildFingerPattern(dimensions.outsideHeight, parameters.preferredFingerWidth, t, errors, 'Vertical');
+      const patterns = { width: widthPattern, depth: depthPattern, vertical: verticalPattern };
+      const requiredWeb = Math.max(.5, t * .25);
+      Object.entries(patterns).forEach(([name, pattern]) => {
+        if (pattern && pattern.actualWidth - parameters.clearance < requiredWeb - 1e-9) errors.push(`${name[0].toUpperCase() + name.slice(1)} fingers collapse below the ${designNumberText(requiredWeb)} mm required web at this clearance.`);
+      });
+      if (parameters.clearance > t * .25) warnings.push('Joint clearance is unusually loose relative to material thickness; cut a scrap fit test first.');
+      if (parameters.preferredFingerWidth < 2 * t) warnings.push('Preferred finger width is unusually small relative to material thickness.');
+      if (Math.max(dimensions.outsideWidth, dimensions.outsideDepth) > 300 || dimensions.outsideHeight > 200) warnings.push('This is a large box; verify sheet size, machine travel, and material flatness.');
+      if (parameters.lid === 'loose') warnings.push('The loose flat lid has no retention, hinge, rail, magnet, or locating feature.');
+      if (errors.length || !widthPattern || !depthPattern || !verticalPattern) return { valid: false, errors, warnings, dimensions, patterns, panels: [], metrics: {} };
+      const edge = (pattern, phase) => designPatternEdge(pattern, phase, t, parameters.clearance), plain = null;
+      const definitions = [
+        { name:'Bottom', id:'bottom', width:dimensions.outsideWidth, height:dimensions.outsideDepth, edges:[edge(widthPattern,true),edge(depthPattern,false),edge(widthPattern,true),edge(depthPattern,false)] },
+        { name:'Front', id:'front', width:dimensions.outsideWidth, height:dimensions.outsideHeight, edges:[plain,edge(verticalPattern,true),edge(widthPattern,false),edge(verticalPattern,true)] },
+        { name:'Back', id:'back', width:dimensions.outsideWidth, height:dimensions.outsideHeight, edges:[plain,edge(verticalPattern,true),edge(widthPattern,false),edge(verticalPattern,true)] },
+        { name:'Left', id:'left', width:dimensions.outsideDepth, height:dimensions.outsideHeight, edges:[plain,edge(verticalPattern,false),edge(depthPattern,true),edge(verticalPattern,false)] },
+        { name:'Right', id:'right', width:dimensions.outsideDepth, height:dimensions.outsideHeight, edges:[plain,edge(verticalPattern,false),edge(depthPattern,true),edge(verticalPattern,false)] }
+      ];
+      if (parameters.lid === 'loose') definitions.push({ name:'Lid', id:'lid', width:dimensions.outsideWidth, height:dimensions.outsideDepth, edges:[plain,plain,plain,plain] });
+      const panels = definitions.map(buildFingerPanel);
+      if (panels.some(panel => !panel.path || panel.points.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y)))) errors.push('Generated panel geometry contains a non-finite or non-orthogonal coordinate.');
+      return { valid: !errors.length, errors, warnings, dimensions, patterns, panels, metrics: { requestedFingerWidth: parameters.preferredFingerWidth, requiredWeb, clearance: parameters.clearance, closedHeight: dimensions.outsideHeight + (parameters.lid === 'loose' ? t : 0) } };
+    }
+    function designBoxesOverlap(a, b) { return a.minX < b.maxX && a.maxX > b.minX && a.minY < b.maxY && a.maxY > b.minY; }
+    function layoutDesignPanels(panels, margin = 10, gap = 15) {
+      const byId = Object.fromEntries(panels.map(panel => [panel.id, panel])), rows = [['bottom','lid'],['front','back'],['left','right']].map(ids => ids.map(id => byId[id]).filter(Boolean));
+      const placed = []; let y = margin, documentWidth = 0;
+      rows.filter(row => row.length).forEach((row, rowIndex, populatedRows) => {
+        let x = margin, rowHeight = 0;
+        row.forEach(panel => {
+          const placedPanel = { ...panel, x, y, translatedBounds: { minX:x, minY:y, maxX:x + panel.width, maxY:y + panel.height, width:panel.width, height:panel.height } };
+          placed.push(placedPanel); x += panel.width + gap; rowHeight = Math.max(rowHeight, panel.height);
+        });
+        documentWidth = Math.max(documentWidth, x - gap + margin);
+        y += rowHeight + (rowIndex < populatedRows.length - 1 ? gap : margin);
+      });
+      const widthMm = designRound(documentWidth), heightMm = designRound(y), errors = [];
+      for (let a = 0; a < placed.length; a++) for (let b = a + 1; b < placed.length; b++) if (designBoxesOverlap(placed[a].translatedBounds, placed[b].translatedBounds)) errors.push(`${placed[a].name} overlaps ${placed[b].name} in the layout.`);
+      placed.forEach(panel => { const bounds = panel.translatedBounds; if (bounds.minX < 0 || bounds.minY < 0 || bounds.maxX > widthMm + 1e-6 || bounds.maxY > heightMm + 1e-6) errors.push(`${panel.name} leaves the calculated document bounds.`); });
+      return { panels: placed, widthMm, heightMm, margin, gap, errors };
+    }
+    function serializeDesignSvg(result) {
+      return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${designNumberText(result.widthMm)}mm" height="${designNumberText(result.heightMm)}mm" viewBox="0 0 ${designNumberText(result.widthMm)} ${designNumberText(result.heightMm)}">\n  <g id="cut" fill="none" stroke="#ff0000" stroke-width="0.1">\n${result.panels.map(panel => `    <g id="panel-${esc(panel.id)}" transform="translate(${designNumberText(panel.x)} ${designNumberText(panel.y)})">\n      <title>${esc(panel.name)}</title>\n      <path d="${panel.path}"/>\n    </g>`).join('\n')}\n  </g>\n</svg>\n`;
+    }
+    function designPathPoints(path) {
+      const tokens = String(path || '').match(/[MHVZ]|[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi) || [], points = [];
+      let index = 0, x = 0, y = 0, start = null;
+      while (index < tokens.length) {
+        const command = tokens[index++].toUpperCase();
+        if (command === 'M') { x = Number(tokens[index++]); y = Number(tokens[index++]); start = {x,y}; points.push({x,y}); }
+        else if (command === 'H') { x = Number(tokens[index++]); points.push({x,y}); }
+        else if (command === 'V') { y = Number(tokens[index++]); points.push({x,y}); }
+        else if (command === 'Z' && start) { x = start.x; y = start.y; points.push({x,y}); }
+        else return [];
+      }
+      return points;
+    }
+    function designSvgValidation(svg, expectedWidth, expectedHeight) {
+      const errors = [], parser = new DOMParser(), documentNode = parser.parseFromString(String(svg || ''), 'image/svg+xml'), parserError = documentNode.querySelector('parsererror'), root = documentNode.documentElement;
+      if (parserError || root?.localName !== 'svg') return { valid:false, errors:['SVG parsing reported an error.'], widthMm:0, heightMm:0, elements:[], documentNode };
+      const widthMatch = root.getAttribute('width')?.match(/^([-+]?\d+(?:\.\d+)?)mm$/), heightMatch = root.getAttribute('height')?.match(/^([-+]?\d+(?:\.\d+)?)mm$/), viewBox = (root.getAttribute('viewBox') || '').trim().split(/\s+/).map(Number);
+      const widthMm = widthMatch ? Number(widthMatch[1]) : NaN, heightMm = heightMatch ? Number(heightMatch[1]) : NaN;
+      if (!Number.isFinite(widthMm) || widthMm <= 0 || !Number.isFinite(heightMm) || heightMm <= 0) errors.push('SVG width and height must be positive millimeter values.');
+      if (viewBox.length !== 4 || viewBox.some(value => !Number.isFinite(value)) || viewBox[0] !== 0 || viewBox[1] !== 0 || Math.abs(viewBox[2] - widthMm) > 1e-6 || Math.abs(viewBox[3] - heightMm) > 1e-6) errors.push('SVG viewBox must match the millimeter document dimensions.');
+      if (Number.isFinite(expectedWidth) && Math.abs(widthMm - expectedWidth) > 1e-6 || Number.isFinite(expectedHeight) && Math.abs(heightMm - expectedHeight) > 1e-6) errors.push('Serialized SVG dimensions do not match the calculated layout.');
+      if (/NaN|Infinity|undefined/.test(svg)) errors.push('SVG contains a non-finite or undefined value.');
+      const elements = [...root.querySelectorAll('path,rect,circle')].map(element => {
+        const transform = element.closest('[transform]')?.getAttribute('transform') || '', translate = transform.match(/^translate\(([-+\d.eE]+)[ ,]+([-+\d.eE]+)\)$/), tx = translate ? Number(translate[1]) : 0, ty = translate ? Number(translate[2]) : 0;
+        let points = [];
+        if (element.localName === 'path') points = designPathPoints(element.getAttribute('d'));
+        if (element.localName === 'rect') { const x=Number(element.getAttribute('x')),y=Number(element.getAttribute('y')),w=Number(element.getAttribute('width')),h=Number(element.getAttribute('height')); points=[{x,y},{x:x+w,y},{x:x+w,y:y+h},{x,y:y+h}]; }
+        if (element.localName === 'circle') { const x=Number(element.getAttribute('cx')),y=Number(element.getAttribute('cy')),r=Number(element.getAttribute('r')); points=[{x:x-r,y:y-r},{x:x+r,y:y+r}]; }
+        points = points.map(point => ({x:point.x + tx,y:point.y + ty}));
+        const finite = points.length && points.every(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+        const bounds = finite ? {minX:Math.min(...points.map(p=>p.x)),minY:Math.min(...points.map(p=>p.y)),maxX:Math.max(...points.map(p=>p.x)),maxY:Math.max(...points.map(p=>p.y))} : null;
+        return { element, points, bounds, finite };
+      });
+      if (elements.some(item => !item.finite)) errors.push('SVG contains unsupported or non-finite geometry.');
+      if (elements.some(item => item.bounds && (item.bounds.minX < -1e-6 || item.bounds.minY < -1e-6 || item.bounds.maxX > widthMm + 1e-6 || item.bounds.maxY > heightMm + 1e-6))) errors.push('SVG geometry leaves the viewBox.');
+      return { valid:!errors.length, errors, widthMm, heightMm, viewBox, elements, documentNode };
+    }
+    function validateLegacyDesign(normalized) {
+      const { draft, template, values, errors } = normalized;
+      if (errors.length) return;
+      if (template === 'qr-stand') {
+        const slotWidth = values.materialThickness + values.fitClearance;
+        if (slotWidth >= values.signWidth) errors.push('Stand slot width must be smaller than the panel width.');
+        if (values.slotDepth > values.baseDepth - 5 || values.slotDepth > values.signHeight - 5) errors.push('Stand slot depth must leave at least 5 mm of panel web.');
+      }
+      if (template === 'hanging-sign') {
+        if (values.cornerRadius > Math.min(values.signWidth, values.signHeight) / 2) errors.push('Corner radius cannot exceed half the smaller panel dimension.');
+        const maximumInset = Math.min(values.signWidth / 2 - values.hangingHole, values.signHeight / 2 - values.hangingHole);
+        if (values.hangingInset > maximumInset || maximumInset < values.hangingHole / 2) errors.push('Hanging holes must fit inside the panel with a positive edge web.');
+      }
+      if (template === 'dice-tray' || template === 'divider-tray') {
+        const count = draft.jointStyle === 'finger' ? 4 : 2, tabWidth = Math.max(8, Math.min(16, values.trayWidth / (count * 2))), sideTab = Math.max(8, Math.min(16, values.trayDepth / (count * 2)));
+        if (values.trayWidth + 2 * values.materialThickness < tabWidth * (count + 2) || values.trayDepth < sideTab * (count + 2)) errors.push('Tray edges are too short for non-overlapping wall tabs.');
+      }
+    }
+    function buildLegacyDesignResult(normalized) {
+      validateLegacyDesign(normalized);
+      if (normalized.errors.length) return { valid:false, errors:[...new Set(normalized.errors)], warnings:normalized.warnings, svg:'', widthMm:0, heightMm:0, panels:[], metrics:{} };
+      const svg = legacyDesignSvg(normalized.draft), validation = designSvgValidation(svg);
+      const errors = [...new Set([...normalized.errors, ...validation.errors])];
+      return { valid:!errors.length, errors, warnings:normalized.warnings, svg:errors.length ? '' : svg, widthMm:validation.widthMm, heightMm:validation.heightMm, panels:validation.elements.map((item,index)=>({name:`Shape ${index+1}`,bounds:item.bounds})), metrics:{template:normalized.template}, validation };
+    }
+    function buildBoxDesignResult(normalized) {
+      if (normalized.errors.length) return { valid:false, errors:[...new Set(normalized.errors)], warnings:normalized.warnings, svg:'', widthMm:0, heightMm:0, panels:[], metrics:{} };
+      const model = buildBoxModel(normalized.values);
+      if (!model.valid) return { valid:false, errors:[...new Set(model.errors)], warnings:[...new Set([...normalized.warnings,...model.warnings])], svg:'', widthMm:0, heightMm:0, panels:model.panels, metrics:{...model.metrics,dimensions:model.dimensions,patterns:model.patterns} };
+      const layout = layoutDesignPanels(model.panels), errors = [...model.errors,...layout.errors], warnings = [...normalized.warnings,...model.warnings];
+      if (layout.widthMm > 400 || layout.heightMm > 400) warnings.push(`Generated layout is ${designNumberText(layout.widthMm)} × ${designNumberText(layout.heightMm)} mm; verify the available sheet and machine area.`);
+      const partial = { widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels }, svg = errors.length ? '' : serializeDesignSvg(partial), validation = svg ? designSvgValidation(svg,layout.widthMm,layout.heightMm) : {valid:false,errors:[]};
+      errors.push(...validation.errors);
+      return { valid:!errors.length, errors:[...new Set(errors)], warnings:[...new Set(warnings)], svg:errors.length ? '' : svg, widthMm:layout.widthMm, heightMm:layout.heightMm, panels:layout.panels, metrics:{...model.metrics,dimensions:model.dimensions,patterns:model.patterns,margin:layout.margin,gap:layout.gap}, validation };
+    }
+    function buildDesignResult(rawDraft = designDraft) {
+      const normalized = normalizeDesignDraft(rawDraft);
+      return normalized.template === 'finger-box' ? buildBoxDesignResult(normalized) : buildLegacyDesignResult(normalized);
+    }
+    function designSvg(d = designDraft) { return buildDesignResult(d).svg; }
+    function designMetric(label, value) { return `<div class="metric"><span>${esc(label)}</span><b>${esc(value)}</b></div>`; }
+    function designResultsHtml(result) {
+      const dimensions = result.metrics?.dimensions, patterns = result.metrics?.patterns;
+      const metrics = dimensions
+        ? designMetric('Inside dimensions', `${designNumberText(dimensions.insideWidth)} × ${designNumberText(dimensions.insideDepth)} × ${designNumberText(dimensions.insideHeight)} mm`)
+          + designMetric('Outside body', `${designNumberText(dimensions.outsideWidth)} × ${designNumberText(dimensions.outsideDepth)} × ${designNumberText(dimensions.outsideHeight)} mm`)
+          + designMetric('Overall closed height', `${designNumberText(result.metrics.closedHeight)} mm`)
+          + designMetric('Panels', String(result.panels.length))
+          + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable')
+          + designMetric('Requested finger width', `${designNumberText(result.metrics.requestedFingerWidth)} mm`)
+          + (patterns?.width ? designMetric('Width-edge fingers', `${patterns.width.count} segments × ${designNumberText(patterns.width.actualWidth)} mm`) : '')
+          + (patterns?.depth ? designMetric('Depth-edge fingers', `${patterns.depth.count} segments × ${designNumberText(patterns.depth.actualWidth)} mm`) : '')
+          + (patterns?.vertical ? designMetric('Vertical fingers', `${patterns.vertical.count} segments × ${designNumberText(patterns.vertical.actualWidth)} mm`) : '')
+        : designMetric('Shapes', String(result.panels.length)) + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable');
+      const messages = result.errors.map(message => `<div class="design-message error"><b>Error:</b> ${esc(message)}</div>`).join('') + result.warnings.map(message => `<div class="design-message warning"><b>Warning:</b> ${esc(message)}</div>`).join('');
+      const preview = result.valid ? `<div class="design-svg-preview"><object type="image/svg+xml" aria-label="Exact exported SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`)}"></object></div>` : '<div class="design-svg-preview"><div class="empty"><b>Preview unavailable</b><div class="small muted">Correct the errors before previewing or downloading.</div></div></div>';
+      return `<div class="design-preview-layout"><div class="panel"><b>Design results</b><div class="metrics" style="margin-top:10px">${metrics}</div>${messages || '<div class="design-message"><b>Ready:</b> Preview and download use the same validated SVG.</div>'}</div>${preview}</div>`;
+    }
+    function refreshDesignPreview() {
+      const result = buildDesignResult(designDraft), results = document.getElementById('designResults'), download = document.getElementById('downloadDesignSvg');
+      if (results) results.innerHTML = designResultsHtml(result);
+      if (download) download.disabled = !result.valid;
+      return result;
+    }
     function updateDesignDraft(form) {
       [...form.elements].forEach(element => { if (element.name) designDraft[element.name] = element.value; });
     }
+    function designFixtureHash(text) {
+      let hash = 2166136261;
+      for (let index = 0; index < text.length; index++) { hash ^= text.charCodeAt(index); hash = Math.imul(hash, 16777619); }
+      return (hash >>> 0).toString(16).padStart(8, '0');
+    }
+    function runDesignGeometryFixtures() {
+      const fixture = (name, pass, expected = '', actual = '') => ({ name, pass: !!pass, expected, actual });
+      const results = [], add = (name, pass, expected = '', actual = '') => results.push(fixture(name, pass, expected, actual));
+      const defaultsFor = (template, overrides = {}) => ({ ...designDefaults(), template, ...overrides });
+      const baselines = {
+        'qr-stand': { length:359, hash:'fe737a09' },
+        'hanging-sign': { length:341, hash:'656e633d' },
+        'dice-tray': { length:1726, hash:'51a55721' },
+        'divider-tray': { length:1965, hash:'a55dda6e' }
+      };
+      Object.entries(baselines).forEach(([template, baseline]) => {
+        const draft = defaultsFor(template), result = buildDesignResult(draft), validation = designSvgValidation(result.svg);
+        add(`${template} default SVG parses`, result.valid && validation.valid);
+        add(`${template} default dimensions are positive`, result.widthMm > 0 && result.heightMm > 0);
+        add(`${template} default has no invalid numeric token`, !/NaN|Infinity|undefined/.test(result.svg));
+        add(`${template} default geometry stays in viewBox`, validation.elements.length > 0 && !validation.errors.includes('SVG geometry leaves the viewBox.'));
+        add(`${template} default SVG remains byte-stable`, result.svg.length === baseline.length && designFixtureHash(result.svg) === baseline.hash, `${baseline.length}/${baseline.hash}`, `${result.svg.length}/${designFixtureHash(result.svg)}`);
+      });
+
+      const inside = defaultsFor('finger-box'), outside = defaultsFor('finger-box', { boxDimensionMode:'outside', boxWidth:'126', boxDepth:'96', boxHeight:'53' });
+      const insideResult = buildDesignResult(inside), outsideResult = buildDesignResult(outside), dimensions = insideResult.metrics.dimensions;
+      add('Inside dimensions convert to outside formulas', dimensions.outsideWidth === 126 && dimensions.outsideDepth === 96 && dimensions.outsideHeight === 53);
+      add('Outside dimensions convert to inside formulas', outsideResult.metrics.dimensions.insideWidth === 120 && outsideResult.metrics.dimensions.insideDepth === 90 && outsideResult.metrics.dimensions.insideHeight === 50);
+      add('Inside/outside round trip is stable', Math.abs(outsideResult.metrics.dimensions.insideWidth - dimensions.insideWidth) < 1e-9 && Math.abs(outsideResult.metrics.dimensions.insideDepth - dimensions.insideDepth) < 1e-9 && Math.abs(outsideResult.metrics.dimensions.insideHeight - dimensions.insideHeight) < 1e-9);
+      const lidResult = buildDesignResult(defaultsFor('finger-box', { boxLid:'loose' }));
+      add('Loose lid adds one thickness to closed height', lidResult.metrics.closedHeight === dimensions.outsideHeight + 3);
+
+      const patterns = insideResult.metrics.patterns;
+      add('Width segment count is odd', patterns.width.count % 2 === 1);
+      add('Depth segment count is odd', patterns.depth.count % 2 === 1);
+      add('Vertical segment count is odd', patterns.vertical.count % 2 === 1);
+      add('All patterns have at least three segments', Object.values(patterns).every(pattern => pattern.count >= 3));
+      add('All actual segment widths are positive', Object.values(patterns).every(pattern => pattern.actualWidth > 0));
+      const bottom = insideResult.panels.find(panel => panel.id === 'bottom'), front = insideResult.panels.find(panel => panel.id === 'front'), back = insideResult.panels.find(panel => panel.id === 'back'), left = insideResult.panels.find(panel => panel.id === 'left'), right = insideResult.panels.find(panel => panel.id === 'right');
+      add('Bottom and back width boundaries match', JSON.stringify(bottom.edges[0].pattern.boundaries) === JSON.stringify(back.edges[2].pattern.boundaries));
+      add('Bottom and back width phases oppose', bottom.edges[0].phase !== back.edges[2].phase);
+      add('Front and left vertical phases oppose', front.edges[1].phase !== left.edges[3].phase);
+      add('Back and right vertical phases oppose', back.edges[1].phase !== right.edges[3].phase);
+      const matingPairs = [[bottom.edges[0],back.edges[2]],[bottom.edges[1],right.edges[2]],[bottom.edges[2],front.edges[2]],[bottom.edges[3],left.edges[2]],[front.edges[1],right.edges[3]],[front.edges[3],left.edges[1]],[back.edges[1],left.edges[3]],[back.edges[3],right.edges[1]]];
+      add('All eight body joints use matching boundaries and opposite phases', matingPairs.every(([a,b]) => a.phase !== b.phase && JSON.stringify(a.pattern.boundaries) === JSON.stringify(b.pattern.boundaries)));
+      add('Corner parity is deterministic', insideResult.svg === buildDesignResult({ ...inside }).svg);
+      const nominal = buildDesignResult({ ...inside, jointClearance:'0' }), cleared = buildDesignResult({ ...inside, jointClearance:'0.2' });
+      add('Clearance changes internal fit transitions', nominal.panels.find(panel=>panel.id==='front').path !== cleared.panels.find(panel=>panel.id==='front').path);
+      add('Clearance preserves panel envelopes', nominal.panels.every((panel,index) => panel.width === cleared.panels[index].width && panel.height === cleared.panels[index].height));
+      add('Excessive clearance is rejected', !buildDesignResult({ ...inside, jointClearance:'20' }).valid);
+
+      add('Open-top box returns five panels', insideResult.panels.length === 5);
+      add('Open-top panel names are complete', insideResult.panels.map(panel=>panel.name).join('|') === 'Bottom|Front|Back|Left|Right');
+      add('Loose-lid box returns six panels', lidResult.panels.length === 6);
+      add('Loose-lid panel names are complete', lidResult.panels.map(panel=>panel.name).join('|') === 'Bottom|Lid|Front|Back|Left|Right');
+      add('All box paths are closed', insideResult.panels.every(panel => / Z$/.test(panel.path)));
+      add('All box paths use orthogonal commands only', insideResult.panels.every(panel => !/[LQCAST]/i.test(panel.path) && designPathPoints(panel.path).length > 3));
+      add('All panel coordinates are finite', insideResult.panels.every(panel => panel.points.every(point => Number.isFinite(point.x) && Number.isFinite(point.y))));
+      add('Bottom envelope matches outside footprint', bottom.width === dimensions.outsideWidth && bottom.height === dimensions.outsideDepth);
+      add('Front and back envelopes match outside width and height', [front,back].every(panel => panel.width === dimensions.outsideWidth && panel.height === dimensions.outsideHeight));
+      add('Left and right envelopes match outside depth and height', [left,right].every(panel => panel.width === dimensions.outsideDepth && panel.height === dimensions.outsideHeight));
+      add('All four bottom joints are patterned', bottom.edges.every(edge => !!edge?.pattern));
+      add('All eight wall corner edges are patterned', [front,back,left,right].every(panel => !!panel.edges[1]?.pattern && !!panel.edges[3]?.pattern));
+
+      const boxes = insideResult.panels.map(panel => panel.translatedBounds);
+      add('Panel layout has no overlaps', boxes.every((box,index) => boxes.slice(index+1).every(other => !designBoxesOverlap(box,other))));
+      add('Layout margin is respected', Math.min(...boxes.map(box=>box.minX)) === 10 && Math.min(...boxes.map(box=>box.minY)) === 10);
+      add('Layout panel gaps are respected', insideResult.metrics.gap === 15);
+      add('Translated coordinates are nonnegative', boxes.every(box => box.minX >= 0 && box.minY >= 0));
+      add('Every panel is inside document bounds', boxes.every(box => box.maxX <= insideResult.widthMm && box.maxY <= insideResult.heightMm));
+      add('Repeated layout serialization is byte-stable', insideResult.svg === buildDesignResult(inside).svg);
+      add('Panel layout order is stable', insideResult.panels.map(panel=>panel.id).join('|') === 'bottom|front|back|left|right');
+      const cutSegments = insideResult.panels.flatMap(panel => {
+        const points = designPathPoints(panel.path).map(point => ({ x:designRound(point.x + panel.x), y:designRound(point.y + panel.y) }));
+        return points.slice(1).map((point,index) => {
+          const previous = points[index], a = `${previous.x},${previous.y}`, b = `${point.x},${point.y}`;
+          return a < b ? `${a}|${b}` : `${b}|${a}`;
+        }).filter(segment => segment.split('|')[0] !== segment.split('|')[1]);
+      });
+      add('No translated cut segment is duplicated', new Set(cutSegments).size === cutSegments.length);
+
+      add('Blank required width blocks export', !buildDesignResult({ ...inside, boxWidth:'' }).valid);
+      add('Nonnumeric required width blocks export', !buildDesignResult({ ...inside, boxWidth:'wide' }).valid);
+      add('Zero required dimension blocks export', !buildDesignResult({ ...inside, boxDepth:'0' }).valid);
+      add('Negative material thickness blocks export', !buildDesignResult({ ...inside, materialThickness:'-3' }).valid);
+      add('Negative clearance blocks export', !buildDesignResult({ ...inside, jointClearance:'-0.1' }).valid);
+      add('Outside width at twice thickness blocks export', !buildDesignResult({ ...outside, boxWidth:'6' }).valid);
+      add('Outside depth at twice thickness blocks export', !buildDesignResult({ ...outside, boxDepth:'6' }).valid);
+      add('Outside height at thickness blocks export', !buildDesignResult({ ...outside, boxHeight:'3' }).valid);
+      add('Nonpositive calculated inside dimensions block export', !buildDesignResult({ ...outside, boxWidth:'5' }).valid);
+      add('Edges too short for three segments block export', !buildDesignResult({ ...inside, boxWidth:'1', boxDepth:'1', boxHeight:'1' }).valid);
+      add('Unknown dimension mode is handled safely', !buildDesignResult({ ...inside, boxDimensionMode:'mystery' }).valid);
+      add('Unknown lid mode is handled safely', !buildDesignResult({ ...inside, boxLid:'hinged' }).valid);
+
+      const parsed = designSvgValidation(insideResult.svg, insideResult.widthMm, insideResult.heightMm), root = parsed.documentNode.documentElement;
+      add('Box SVG parses without parsererror', parsed.valid && !parsed.documentNode.querySelector('parsererror'));
+      add('Box SVG dimensions use millimeters', /mm$/.test(root.getAttribute('width')) && /mm$/.test(root.getAttribute('height')));
+      add('Box SVG viewBox matches layout', root.getAttribute('viewBox') === `0 0 ${designNumberText(insideResult.widthMm)} ${designNumberText(insideResult.heightMm)}`);
+      add('Box SVG has one predictable cut group', root.querySelectorAll('g#cut').length === 1);
+      add('Box SVG contains one group per panel', root.querySelectorAll('g#cut > g[id^="panel-"]').length === 5);
+      add('Preview labels do not enter cut geometry', !insideResult.svg.includes('<text'));
+      add('Compatibility designSvg uses the result SVG', designSvg(inside) === insideResult.svg);
+
+      add('Loose lid produces a retention warning', lidResult.warnings.some(message => /no retention/i.test(message)));
+      add('Loose clearance produces a warning', buildDesignResult({ ...inside, jointClearance:'1' }).warnings.some(message => /unusually loose/i.test(message)));
+      add('Small preferred fingers produce a warning', buildDesignResult({ ...inside, preferredFingerWidth:'4' }).warnings.some(message => /unusually small/i.test(message)));
+      add('Large layout produces a warning', buildDesignResult({ ...inside, boxWidth:'500', boxDepth:'400', boxHeight:'250' }).warnings.some(message => /large|layout/i.test(message)));
+      const immutableDraft = { ...inside }, before = JSON.stringify(immutableDraft); buildDesignResult(immutableDraft);
+      add('Design generation does not mutate its draft', JSON.stringify(immutableDraft) === before);
+
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Design geometry fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runDesignGeometryFixtures = runDesignGeometryFixtures;
     function renderReference() {
       const focusText = focusSuggestion(state.focusJobType, num(state.focusMaterialMm, NaN));
       const activeRows = state.machineProfile === '40W' ? reference40w : reference20w;
@@ -4522,16 +4938,22 @@
       if (newGrid) newGrid.onclick = () => openGridForm();
       const designForm = document.getElementById('designForm');
       if (designForm) {
-        designForm.oninput = () => updateDesignDraft(designForm);
+        designForm.oninput = e => {
+          updateDesignDraft(designForm);
+          if (e.target.matches('input')) refreshDesignPreview();
+        };
         designForm.onchange = e => {
           updateDesignDraft(designForm);
-          if (e.target.name === 'template') render();
+          if (e.target.name === 'template' || e.target.name === 'boxDimensionMode') render();
+          else refreshDesignPreview();
         };
       }
       const downloadDesignSvg = document.getElementById('downloadDesignSvg');
       if (downloadDesignSvg) downloadDesignSvg.onclick = () => {
         updateDesignDraft(document.getElementById('designForm'));
-        downloadTextFile(`l8-${fileSlug(designDraft.template)}-${today()}.svg`, designSvg(), 'image/svg+xml;charset=utf-8');
+        const result = refreshDesignPreview(), validation = result.valid ? designSvgValidation(result.svg, result.widthMm, result.heightMm) : { valid:false };
+        if (!result.valid || !validation.valid) return;
+        downloadTextFile(`l8-${fileSlug(designDraft.template)}-${today()}.svg`, result.svg, 'image/svg+xml;charset=utf-8');
       };
       const resetDesign = document.getElementById('resetDesign');
       if (resetDesign) resetDesign.onclick = () => { designDraft = designDefaults(); render(); };
@@ -6138,6 +6560,7 @@
     if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
     if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
+    if (selftest === 'design' || selftest === 'all') runDesignGeometryFixtures();
     render();
   })();
   </script>
