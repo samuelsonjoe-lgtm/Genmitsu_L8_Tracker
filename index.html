@@ -84,6 +84,12 @@
     .help-tip { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 999px; margin-left: 5px; background: #eef1f5; color: #425166; font-size: 11px; font-weight: 800; cursor: help; vertical-align: text-bottom; }
     .help-tip:focus { outline: 2px solid var(--blue); outline-offset: 2px; }
     .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .wizard-choice { display: block; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: #fbfcfe; cursor: pointer; }
+    .wizard-choice input { width: auto; margin-right: 7px; }
+    .wizard-choice.selected { border-color: var(--blue); background: #eef6fb; }
+    .wizard-choice.blocked { cursor: not-allowed; opacity: .72; }
+    .wizard-choice .pill { float: right; }
+    .wizard-summary { white-space: pre-line; overflow-wrap: anywhere; }
     .project-cover { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 7px; border: 1px solid var(--line); margin-bottom: 10px; background: #eef1f5; cursor: pointer; }
     .photo-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
     .photo-thumb { border: 1px solid var(--line); border-radius: 7px; padding: 7px; background: #f8fafc; }
@@ -231,6 +237,7 @@
   <div class="modal" id="cellModal"></div>
   <div class="modal" id="testModal"></div>
   <div class="modal" id="materialTestWizardModal"></div>
+  <div class="modal" id="projectWizardModal"></div>
   <div class="toast" id="undoToast"></div>
 
   <script>
@@ -352,6 +359,7 @@
     let gridSearch = '';
     let gridOperationFilter = 'all';
     let materialTestWizard = null;
+    let projectWizard = null;
     let editingProjectId = null;
     let projectPhotosDraft = [];
     let projectMaterialLinesDraft = [];
@@ -691,14 +699,39 @@
       const current = String(category || '').trim();
       return current && !rawMaterialCategories.includes(current) ? [current, ...rawMaterialCategories] : [...rawMaterialCategories];
     }
+    const INVENTORY_DUAL_UNIT_TOLERANCE_MM = 0.2;
+    function inventoryDualUnitThicknessIsConsistent(metricMm, fractionMm) {
+      return Number.isFinite(metricMm) && metricMm > 0
+        && Number.isFinite(fractionMm) && fractionMm > 0
+        && Math.abs(metricMm - fractionMm) <= INVENTORY_DUAL_UNIT_TOLERANCE_MM + Number.EPSILON * Math.max(metricMm, fractionMm);
+    }
     function parseInventorySizeMetadata(item) {
       const original = String(item?.name || ''); const text = `${original} ${item?.notes || ''}`;
-      const dual = text.match(/(\d+(?:\.\d+)?\s*mm)\s*\/\s*(\d+\s*\/\s*\d+\s*in)/i);
-      if (dual) return { displayLabel: `${dual[1].replace(/(\d)(mm)\b/i, '$1 $2').replace(/\s+/g, ' ').trim()} / ${dual[2].replace(/\s+/g, ' ').trim()}`, groupingKey: materialMatchKey(dual[0]), thicknessValue: Number(dual[1]), thicknessUnit: 'mm', thicknessConfidence: true };
+      const dual = text.match(/(\d+(?:\.\d+)?\s*mm)\s*\/\s*([^\s/]+)\s*\/\s*([^\s]+?)\s*in\b/i);
+      if (dual) {
+        const metricMm = Number.parseFloat(dual[1]), numerator = Number(dual[2]), denominator = Number(dual[3]);
+        const preceding = text.slice(0, dual.index).slice(-1);
+        const validFraction = /^[+]?[0-9]+$/.test(dual[2]) && /^[+]?[0-9]+$/.test(dual[3]) && numerator > 0 && denominator > 0;
+        const fractionMm = validFraction ? numerator / denominator * 25.4 : NaN;
+        if (!['+', '-', '–', '—', ',', '.'].includes(preceding) && inventoryDualUnitThicknessIsConsistent(metricMm, fractionMm)) return { displayLabel: `${dual[1].replace(/(\d)(mm)\b/i, '$1 $2').replace(/\s+/g, ' ').trim()} / ${dual[2]}/${dual[3]} in`, groupingKey: materialMatchKey(dual[0]), thicknessValue: metricMm, thicknessUnit: 'mm', thicknessConfidence: true };
+        return { displayLabel: 'Unspecified size', groupingKey: 'unspecified', thicknessConfidence: false };
+      }
+      if (/\d+(?:\.\d+)?\s*mm\s*\/\s*\//i.test(original)) return { displayLabel: 'Unspecified size', groupingKey: 'unspecified', thicknessConfidence: false };
       const dimension = text.match(/\b(\d+(?:\.\d+)?\s*(?:mm|in)?\s*[x×]\s*\d+(?:\.\d+)?\s*(?:mm|in)?)(?:\s+sheets?)?\b/i);
       if (dimension) return { displayLabel: dimension[1].replace(/\s*([x×])\s*/i, ' × ').replace(/(\d)(mm|in)\b/ig, '$1 $2'), groupingKey: materialMatchKey(dimension[1]), thicknessConfidence: false };
-      const single = original.match(/\b(\d+(?:\.\d+)?\s*mm|\d+\s*\/\s*\d+\s*in)\b/i);
-      if (single) { const value = single[1]; return { displayLabel: value.replace(/(\d)(mm|in)\b/i, '$1 $2'), groupingKey: materialMatchKey(value), thicknessValue: /mm/i.test(value) ? Number(value) : '', thicknessUnit: /mm/i.test(value) ? 'mm' : 'in', thicknessConfidence: true }; }
+      const metricMatches = [...original.matchAll(/\d+(?:\.\d+)?\s*mm\b/gi)];
+      const ambiguous = /\d+(?:\.\d+)?\s*(?:-|–|—|to|or|\/)\s*\d+(?:\.\d+)?\s*mm\b/i.test(original)
+        || /\d+(?:\.\d+)?\s*mm\s*(?:-|–|—|to|or|\/)\s*\d+(?:\.\d+)?(?:\s*(?:mm|in)\b)?/i.test(original)
+        || /(?:^|\s)[+-]\s*\d+(?:\.\d+)?\s*mm\b/i.test(original)
+        || /\d+,\d+\s*mm\b/i.test(original)
+        || metricMatches.length !== 1;
+      if (!ambiguous) {
+        const match = metricMatches[0], raw = match[0], value = Number.parseFloat(raw);
+        const preceding = original.slice(0, match.index).slice(-1);
+        if (!['+', '-', '–', '—', ',', '.'].includes(preceding) && Number.isFinite(value) && value > 0) {
+          return { displayLabel: raw.replace(/(\d)(mm)\b/i, '$1 $2'), groupingKey: materialMatchKey(raw), thicknessValue: value, thicknessUnit: 'mm', thicknessConfidence: true };
+        }
+      }
       return { displayLabel: 'Unspecified size', groupingKey: 'unspecified', thicknessConfidence: false };
     }
     function browserMaterialBaseName(item) { return materialMatchKey(String(item?.name || '').replace(/\s+\d+(?:\.\d+)?\s*mm(?:\s*\/\s*\d+\s*\/\s*\d+\s*in)?\b|\s+\d+\s*\/\s*\d+\s*in\b|\s+\d+(?:\.\d+)?\s*[x×]\s*\d+(?:\.\d+)?\s*(?:mm|in)?\b/ig, '')) || 'unnamed material'; }
@@ -1751,6 +1784,7 @@
           </div>
           <div class="row">
             <button id="exportProjectsCsv" type="button">Export filtered accounting CSV</button>
+            <button id="openProjectWizard" type="button">Project Wizard</button>
             <button class="primary" id="newProject">New Project</button>
           </div>
         </div>
@@ -2931,6 +2965,647 @@
       if (draft.intendedOperation === 'unknown') return 'other';
       return 'engrave_matrix';
     }
+    const projectWizardOperations = [
+      ['engrave_vector', 'Vector engraving'],
+      ['photo', 'Photo engraving'],
+      ['cut', 'Cutting']
+    ];
+    const projectWizardClassificationRank = { 'Best Known': 4, Experimental: 3, 'Saved setting': 2, Unverified: 1 };
+    const projectWizardMaterialMatchRank = { 'exact-name': 4, 'exact-alias': 3, 'similar-name': 2, 'similar-alias': 1 };
+    function projectWizardDefaults() {
+      return { step: 1, inventoryId: '', compositionConfirmed: false, intendedOperation: '', candidates: [], candidateKey: '', similarConfirmedKey: '', automaticSelectionDone: false, goal: 'copy', reviewDraft: null };
+    }
+    function projectWizardCanonicalOperation(value) {
+      const key = String(value || '').trim().toLowerCase();
+      if (['engrave_vector', 'vector', 'engrave', 'vector engraving'].includes(key)) return 'engrave_vector';
+      if (['photo', 'photo engraving'].includes(key)) return 'photo';
+      if (['cut', 'cutting'].includes(key)) return 'cut';
+      return '';
+    }
+    function projectWizardOperationLabel(value) { return (projectWizardOperations.find(item => item[0] === value) || ['', 'Unknown operation'])[1]; }
+    function projectWizardCanonicalMachine(value) {
+      const key = materialMatchKey(value);
+      if (['genmitsu l8 20w', 'genmitsu l8 20 watt', 'l8 20w', 'l8 20 watt'].includes(key)) return 'l8-20w';
+      if (['genmitsu l8 40w', 'genmitsu l8 40 watt', 'l8 40w', 'l8 40 watt'].includes(key)) return 'l8-40w';
+      return '';
+    }
+    function projectWizardMachineCompatibility(testMachine, currentMachine = wizardMachineLabel()) {
+      const test = projectWizardCanonicalMachine(testMachine), current = projectWizardCanonicalMachine(currentMachine);
+      if (!test) return { key: 'missing', compatible: false, exact: false, label: 'Machine missing - incompatible for production copying' };
+      if (!current || test !== current) return { key: 'mismatch', compatible: false, exact: false, label: `Machine mismatch: ${testMachine || 'unknown'} versus ${currentMachine || 'unknown'}` };
+      return { key: 'exact', compatible: true, exact: true, label: `Machine matched: ${currentMachine}` };
+    }
+    function projectWizardQuantityValue(value) {
+      if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? value : null;
+      if (typeof value !== 'string') return null;
+      const text = value.trim();
+      if (!/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(text)) return null;
+      const quantity = Number(text);
+      return Number.isFinite(quantity) && quantity > 0 ? quantity : null;
+    }
+    function projectWizardInventoryEligibility(item, compositionConfirmed = false) {
+      const id = String(item?.id || '').trim(), name = String(item?.name || '').trim();
+      const quantity = projectWizardQuantityValue(item?.quantityOnHand), warning = materialBrowserSafetyWarning(item);
+      if (!id || !name) return { state: 'Needs verification', eligible: false, blocked: true, quantity, warning, reason: 'A stable Inventory ID and material name are required.' };
+      if (quantity === null) return { state: 'Out of stock', eligible: false, blocked: true, quantity, warning, reason: 'Quantity on hand must be a plain decimal number greater than zero.' };
+      if (warning?.blocksLaserActions) return { state: 'Blocked unsafe', eligible: false, blocked: true, quantity, warning, reason: warning.message };
+      if (!compositionConfirmed) return { state: 'Needs verification', eligible: false, blocked: false, quantity, warning, reason: 'Confirm the material identity, composition, and coatings before continuing.' };
+      return { state: 'Eligible', eligible: true, blocked: false, quantity, warning, reason: warning ? warning.message : 'On hand and explicitly verified for this wizard session.' };
+    }
+    function projectWizardInventoryThickness(item) {
+      const size = parseInventorySizeMetadata(item), value = Number(size.thicknessValue), unit = size.thicknessUnit;
+      if (!size.thicknessConfidence || !Number.isFinite(value) || value <= 0 || !['mm', 'in'].includes(unit)) return { known: false, key: 'unspecified', label: 'Inventory thickness is unknown or unreliable', value: '', unit: unit || state.unit, mm: null };
+      const grouped = libraryThicknessMetadata({ thicknessValue: value, thicknessUnit: unit }, 'mm');
+      return { known: grouped.key !== 'unspecified', key: grouped.key, label: `${grouped.label} from Inventory`, value, unit, mm: grouped.mm };
+    }
+    function projectWizardThicknessCompatibility(item, profile, intendedOperation) {
+      const inventory = projectWizardInventoryThickness(item), library = libraryThicknessMetadata(profile, 'mm');
+      const exact = inventory.known && library.key !== 'unspecified' && inventory.key === library.key;
+      if (exact) return { key: 'exact', compatible: true, exact: true, inventory, library, label: `Thickness matched: ${library.label}` };
+      const missing = !inventory.known || library.key === 'unspecified';
+      if (intendedOperation === 'cut') return { key: missing ? 'unknown' : 'mismatch', compatible: false, exact: false, inventory, library, label: missing ? 'Cutting thickness is missing or unreliable' : `Cutting thickness mismatch: ${inventory.label}; Library ${library.label}` };
+      return { key: missing ? 'unknown' : 'mismatch', compatible: true, exact: false, inventory, library, label: missing ? 'Thickness is incomplete; engraving evidence is downgraded' : `Thickness differs; engraving evidence is downgraded (${inventory.label}; Library ${library.label})` };
+    }
+    function projectWizardProfileOperation(profile) {
+      const key = libraryOperationMetadata(profile).key;
+      return key === 'engrave' ? 'engrave_vector' : key === 'photo' ? 'photo' : key === 'cut' ? 'cut' : '';
+    }
+    function projectWizardTestOperationCompatibility(test, profile, intendedOperation) {
+      const type = String(test?.testType || ''), explicit = projectWizardCanonicalOperation(test?.intendedOperation);
+      if (projectWizardProfileOperation(profile) !== intendedOperation) return { compatible: false, exact: false, label: 'Containing Library profile operation is incompatible' };
+      const allowedType = intendedOperation === 'engrave_vector' ? type === 'engrave_matrix' : intendedOperation === 'photo' ? type === 'photo' || type === 'engrave_matrix' : intendedOperation === 'cut' && type === 'cut';
+      if (!allowedType) return { compatible: false, exact: false, label: 'Test type is not production-compatible with this operation' };
+      if (explicit) return { compatible: explicit === intendedOperation, exact: explicit === intendedOperation, label: explicit === intendedOperation ? 'Operation matched from test metadata' : 'Test operation does not match' };
+      const profileOperation = projectWizardProfileOperation(profile);
+      const inferred = intendedOperation === 'engrave_vector'
+        ? type === 'engrave_matrix' && profileOperation === 'engrave_vector'
+        : intendedOperation === 'photo'
+          ? (type === 'photo' || type === 'engrave_matrix') && profileOperation === 'photo'
+          : intendedOperation === 'cut' && type === 'cut' && profileOperation === 'cut';
+      return { compatible: inferred, exact: false, label: inferred ? 'Operation inferred from legacy test and Library profile' : 'Test type or Library operation is incompatible' };
+    }
+    function projectWizardRecipeCompleteness(settings, intendedOperation) {
+      const required = intendedOperation === 'cut' ? ['speed', 'maxPower', 'passes'] : ['speed', 'maxPower', 'passes', 'lineInterval'];
+      const missing = required.filter(key => !hasUsableNumber(settings?.[key]));
+      return { complete: missing.length === 0, missing, presentCount: required.length - missing.length, requiredCount: required.length, label: missing.length ? `Incomplete recipe: missing ${missing.join(', ')}` : 'Complete operation-specific recipe' };
+    }
+    function projectWizardProfileSettings(profile) { return settingsFromSetting(profile || {}); }
+    function projectWizardTestSettings(test, profile) {
+      return {
+        ...settingsFromSetting(profile || {}),
+        minPower: test?.winningPower ?? '', maxPower: test?.winningPower ?? '', speed: test?.winningSpeed ?? '',
+        passes: test?.winningPasses ?? '', lineInterval: test?.winningInterval ?? '', airAssist: !!test?.airAssist
+      };
+    }
+    function projectWizardCandidateClassification(candidate) {
+      if (!candidate.materialConfirmed || !candidate.operation.compatible || !candidate.thickness.compatible || !candidate.completeness.complete || candidate.starter) return 'Unverified';
+      if (candidate.kind === 'profile') return candidate.materialExact ? 'Saved setting' : 'Unverified';
+      if (!candidate.machine.compatible || !['recommended', 'experimental'].includes(candidate.status)) return 'Unverified';
+      if (!candidate.materialExact && !candidate.similarConfirmed) return 'Unverified';
+      const bestKnown = candidate.materialExact && candidate.operation.exact && candidate.machine.exact && candidate.thickness.exact && candidate.status === 'recommended' && candidate.confidence >= 4;
+      return bestKnown ? 'Best Known' : 'Experimental';
+    }
+    function projectWizardCandidateKey(kind, profileId, testId = '') {
+      const profile = String(profileId ?? '');
+      if (!profile.trim()) return '';
+      if (kind === 'profile') return `profile:${encodeURIComponent(profile)}`;
+      const test = String(testId ?? '');
+      return kind === 'test' && test.trim() ? `test:${encodeURIComponent(profile)}:${encodeURIComponent(test)}` : '';
+    }
+    function projectWizardValidDate(value) {
+      const text = String(value || ''), match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+      if (!match) return '';
+      const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+      const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+      const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      return month >= 1 && month <= 12 && day >= 1 && day <= days[month - 1] ? text : '';
+    }
+    function compareProjectWizardCandidates(a, b) {
+      const dateA = projectWizardValidDate(a.date), dateB = projectWizardValidDate(b.date);
+      const statusRank = value => value === 'recommended' ? 2 : value === 'experimental' ? 1 : 0;
+      const thicknessRank = value => value === 'exact' ? 2 : value === 'unknown' ? 1 : 0;
+      const machineRank = value => value === 'exact' ? 2 : value === 'missing' ? 1 : 0;
+      return Number(b.eligible) - Number(a.eligible)
+        || projectWizardClassificationRank[b.classification] - projectWizardClassificationRank[a.classification]
+        || projectWizardMaterialMatchRank[b.matchType] - projectWizardMaterialMatchRank[a.matchType]
+        || Number(b.operation.exact) - Number(a.operation.exact)
+        || machineRank(b.machine.key) - machineRank(a.machine.key)
+        || thicknessRank(b.thickness.key) - thicknessRank(a.thickness.key)
+        || statusRank(b.status) - statusRank(a.status)
+        || b.confidence - a.confidence
+        || b.completeness.presentCount - a.completeness.presentCount
+        || compareText(dateB, dateA)
+        || compareText(a.profileId, b.profileId)
+        || compareText(a.testId, b.testId)
+        || compareText(a.key, b.key);
+    }
+    function projectWizardCandidatesForInventory(item, intendedOperation, profiles = state.profiles, options = {}) {
+      const operation = projectWizardCanonicalOperation(intendedOperation), materialConfirmed = !!options.materialConfirmed;
+      if (!item || !operation) return [];
+      const matches = libraryProfilesForInventory(item, profiles), candidates = [];
+      matches.forEach(match => {
+        const profile = match.profile, profileId = String(profile?.id ?? '');
+        if (!profileId.trim()) return;
+        const materialExact = match.matchType === 'exact-name' || match.matchType === 'exact-alias';
+        const thickness = projectWizardThicknessCompatibility(item, profile, operation), profileOperation = projectWizardProfileOperation(profile);
+        const operationMatch = { compatible: profileOperation === operation, exact: profileOperation === operation, label: profileOperation === operation ? 'Library operation matched' : 'Library operation is incompatible' };
+        const starter = libraryProfileStatusLabel(profile) === 'starter/unverified';
+        const profileSettings = projectWizardProfileSettings(profile), profileCompleteness = projectWizardRecipeCompleteness(profileSettings, operation);
+        const profileCandidate = {
+          key: projectWizardCandidateKey('profile', profileId), kind: 'profile', profile, test: null, profileId, testId: '',
+          matchType: match.matchType, matchedAlias: match.matchedAlias || '', materialExact, materialConfirmed,
+          similarConfirmed: false, operation: operationMatch, machine: { key: 'missing', compatible: true, exact: false, label: 'Machine provenance is unknown for Library primary settings' },
+          thickness, completeness: profileCompleteness, settings: profileSettings, status: '', confidence: 0, date: '', starter
+        };
+        profileCandidate.classification = projectWizardCandidateClassification(profileCandidate);
+        profileCandidate.eligible = profileCandidate.classification === 'Saved setting';
+        candidates.push(profileCandidate);
+        const stableTests = (Array.isArray(profile.tests) ? profile.tests : [])
+          .filter(test => test && typeof test === 'object' && String(test.id ?? '').trim())
+          .map(test => ({ ...test, id: String(test.id) }));
+        normalizeMaterialTests(stableTests).forEach(test => {
+          const testId = String(test.id ?? ''), key = projectWizardCandidateKey('test', profileId, testId);
+          const settings = projectWizardTestSettings(test, profile), completeness = projectWizardRecipeCompleteness(settings, operation);
+          const testOperation = projectWizardTestOperationCompatibility(test, profile, operation);
+          const machine = projectWizardMachineCompatibility(test.machine, options.currentMachine || wizardMachineLabel());
+          const similarConfirmed = !materialExact && options.similarConfirmedKey === key;
+          const candidate = {
+            key, kind: 'test', profile, test, profileId, testId,
+            matchType: match.matchType, matchedAlias: match.matchedAlias || '', materialExact, materialConfirmed,
+            similarConfirmed, operation: testOperation, machine, thickness, completeness, settings,
+            status: test.status, confidence: num(test.confidence), date: test.date || '', starter
+          };
+          candidate.classification = projectWizardCandidateClassification(candidate);
+          candidate.eligible = candidate.classification === 'Best Known' || candidate.classification === 'Experimental';
+          candidates.push(candidate);
+        });
+      });
+      return candidates.sort(compareProjectWizardCandidates);
+    }
+    function projectWizardAutomaticCandidate(candidates) {
+      return candidates.find(candidate => candidate.eligible && candidate.classification === 'Best Known')
+        || candidates.find(candidate => candidate.eligible && candidate.classification === 'Experimental' && candidate.materialExact)
+        || null;
+    }
+    function projectWizardGoalsForOperation(operation) {
+      const goals = [['copy', 'Copy baseline unchanged']];
+      if (operation === 'engrave_vector') goals.push(['darker', 'Darker'], ['deeper', 'Deeper'], ['cleaner', 'Cleaner'], ['faster', 'Faster']);
+      if (operation === 'photo') goals.push(['darker', 'Darker'], ['cleaner', 'Cleaner'], ['faster', 'Faster']);
+      if (operation === 'cut') goals.push(['cleaner', 'Cleaner'], ['faster', 'Faster'], ['reliable-cut', 'Reliable cut-through']);
+      return goals;
+    }
+    function projectWizardGoalGuidance(goal, operation) {
+      if (goal === 'darker') return 'Consider slower speed or higher power after testing; change one variable at a time.';
+      if (goal === 'deeper') return 'Consider slower speed or another pass after testing.';
+      if (goal === 'cleaner' && operation === 'cut') return 'Verify focus, flatness, air assist, and material consistency before changing settings.';
+      if (goal === 'cleaner') return 'Verify focus and consider lower power or faster speed after testing.';
+      if (goal === 'faster') return `Test increased speed while checking ${operation === 'cut' ? 'cut-through' : 'contrast and detail'}.`;
+      if (goal === 'reliable-cut') return 'Verify focus, thickness, flatness, air assist, lens condition, and safe multi-pass behavior.';
+      return 'Copy the selected baseline unchanged and review every value before production.';
+    }
+    function projectWizardEvidenceExplanation(candidate, goal, operation) {
+      if (!candidate || !candidate.eligible) return { classification: 'Unverified', warnings: ['No eligible production baseline is selected.', 'Run an appropriate Material Test before production.'], guidance: projectWizardGoalGuidance(goal, operation), copiedUnchanged: false };
+      const warnings = [];
+      if (!candidate.materialExact) warnings.push('A similar material match was explicitly confirmed; verify that the physical materials are equivalent.');
+      if (!candidate.thickness.exact) warnings.push(candidate.thickness.label);
+      if (candidate.kind === 'profile') warnings.push('Library primary-setting machine provenance is unknown.');
+      if (candidate.kind === 'test' && !candidate.operation.exact) warnings.push('Operation compatibility was inferred from legacy test and Library metadata.');
+      if (candidate.kind === 'test' && candidate.status === 'experimental') warnings.push('The selected Material Test is experimental.');
+      if (candidate.kind === 'test' && candidate.status === 'recommended' && candidate.confidence < 4) warnings.push(`Recommended test confidence is ${candidate.confidence}/5, so the evidence remains Experimental.`);
+      return { classification: candidate.classification, warnings, guidance: projectWizardGoalGuidance(goal, operation), copiedUnchanged: true };
+    }
+    function projectWizardInvalidateAfterMaterial(draft, inventoryId) {
+      return { ...draft, inventoryId, compositionConfirmed: false, intendedOperation: '', candidates: [], candidateKey: '', similarConfirmedKey: '', automaticSelectionDone: false, goal: 'copy', reviewDraft: null };
+    }
+    function projectWizardInvalidateAfterOperation(draft, intendedOperation) {
+      return { ...draft, intendedOperation, candidates: [], candidateKey: '', similarConfirmedKey: '', automaticSelectionDone: false, goal: 'copy', reviewDraft: null };
+    }
+    function projectWizardInvalidateAfterCandidate(draft, candidateKey) { return { ...draft, candidateKey, similarConfirmedKey: '', goal: 'copy', reviewDraft: null }; }
+    function projectDraftFromWizard(draft, inventoryItem, candidate = null) {
+      const operation = projectWizardCanonicalOperation(draft?.intendedOperation), thickness = projectWizardInventoryThickness(inventoryItem);
+      const eligibleCandidate = candidate?.eligible ? candidate : null, evidence = projectWizardEvidenceExplanation(eligibleCandidate, draft?.goal || 'copy', operation);
+      const operationLabel = projectWizardOperationLabel(operation), goalLabel = (projectWizardGoalsForOperation(operation).find(item => item[0] === draft?.goal) || ['', 'Copy baseline unchanged'])[1];
+      const lines = [
+        'Project Wizard evidence:',
+        `Inventory: ${inventoryItem?.name || 'Unknown'} (${inventoryItem?.id || 'no ID'})`,
+        `Classification: ${evidence.classification}`,
+        `Operation: ${operationLabel}`,
+        `Goal: ${goalLabel}`
+      ];
+      if (eligibleCandidate) {
+        lines.push(`Library profile: ${libraryProfileLeafLabel(eligibleCandidate.profile)} (${eligibleCandidate.profileId})`);
+        if (eligibleCandidate.test) lines.push(`Material Test: ${eligibleCandidate.testId}${eligibleCandidate.date ? `, ${eligibleCandidate.date}` : ''}, ${eligibleCandidate.status}, confidence ${eligibleCandidate.confidence}/5`);
+        lines.push(eligibleCandidate.machine.label, eligibleCandidate.thickness.label, 'Settings copied unchanged from the selected evidence.');
+      } else {
+        lines.push('No production baseline was copied.', 'An appropriate Material Test is recommended before production.');
+      }
+      if (evidence.warnings.length) lines.push(`Warnings: ${evidence.warnings.join(' ')}`);
+      lines.push(`Manual guidance: ${evidence.guidance}`, 'Inventory was not deducted. Review and test settings before production.');
+      return {
+        ...formDefaults('project'),
+        name: `${inventoryItem?.name || 'Material'} ${operationLabel.toLowerCase()} project`, material: inventoryItem?.name || '',
+        thicknessValue: thickness.known ? thickness.value : '', thicknessUnit: thickness.known ? thickness.unit : state.unit,
+        jobType: operation === 'cut' ? 'cut' : 'engrave', dateCreated: today(), quantity: '1',
+        sourceProfileId: eligibleCandidate?.profileId || '', notes: lines.join('\n'),
+        settings: eligibleCandidate ? { ...eligibleCandidate.settings, ditherMode: operation === 'engrave_vector' ? 'none' : eligibleCandidate.settings.ditherMode || 'none' } : formDefaults('project').settings
+      };
+    }
+    function projectWizardSelectedInventory(draft = projectWizard) { return rawInventoryMaterials().find(item => item.id === draft?.inventoryId) || null; }
+    function refreshProjectWizardCandidates(autoSelect = true) {
+      if (!projectWizard) return [];
+      const item = projectWizardSelectedInventory();
+      projectWizard.candidates = projectWizardCandidatesForInventory(item, projectWizard.intendedOperation, state.profiles, {
+        materialConfirmed: projectWizard.compositionConfirmed,
+        similarConfirmedKey: projectWizard.similarConfirmedKey,
+        currentMachine: wizardMachineLabel()
+      });
+      if (autoSelect && !projectWizard.automaticSelectionDone) {
+        const automatic = projectWizardAutomaticCandidate(projectWizard.candidates);
+        projectWizard.candidateKey = automatic?.key || '';
+        projectWizard.automaticSelectionDone = true;
+      }
+      if (projectWizard.candidateKey && !projectWizard.candidates.some(candidate => candidate.key === projectWizard.candidateKey)) projectWizard.candidateKey = '';
+      return projectWizard.candidates;
+    }
+    function projectWizardCandidateCanConfirmSimilar(candidate) {
+      return candidate.kind === 'test' && !candidate.materialExact && candidate.materialConfirmed && candidate.operation.compatible && candidate.machine.compatible && candidate.thickness.compatible && candidate.completeness.complete && !candidate.starter && ['recommended', 'experimental'].includes(candidate.status);
+    }
+    function projectWizardMaterialStepHtml(draft) {
+      const items = [...rawInventoryMaterials()].sort((a, b) => compareText(a.name, b.name) || compareText(a.id, b.id));
+      if (!items.length) return `<div class="span2 panel"><b>No raw Inventory materials</b><div class="small muted">Add an Inventory material with quantity on hand before using the Project Wizard.</div></div>`;
+      const choices = items.map(item => {
+        const selected = item.id === draft.inventoryId;
+        const eligibility = projectWizardInventoryEligibility(item, selected && draft.compositionConfirmed);
+        const baseEligibility = projectWizardInventoryEligibility(item, false);
+        const blocked = baseEligibility.blocked;
+        const tone = eligibility.state === 'Eligible' ? 'good' : eligibility.state === 'Needs verification' ? 'warn' : 'softbad';
+        return `<label class="wizard-choice ${selected ? 'selected' : ''} ${blocked ? 'blocked' : ''}"><span class="pill ${tone}">${esc(eligibility.state)}</span><input type="radio" name="inventoryId" value="${esc(item.id)}" ${selected ? 'checked' : ''} ${blocked ? 'disabled' : ''}><b>${esc(item.name)}</b><div class="small muted">${esc(stockUnitText(item.quantityOnHand, item.unit))} on hand${item.category ? ` / ${esc(categoryDisplayLabel(item.category))}` : ''}</div><div class="small" style="margin-top:5px">${esc(eligibility.reason)}</div>${eligibility.warning ? `<div class="small muted" style="margin-top:5px">${esc(eligibility.warning.label)}: ${esc(eligibility.warning.message)}</div>` : ''}</label>`;
+      }).join('');
+      const selected = projectWizardSelectedInventory(draft), base = projectWizardInventoryEligibility(selected, false);
+      const confirmation = selected && base.state !== 'Out of stock' && base.state !== 'Blocked unsafe'
+        ? `<label class="span2 row panel"><input id="projectWizardCompositionConfirmed" type="checkbox" ${draft.compositionConfirmed ? 'checked' : ''} style="width:auto"> I confirm this material's identity, composition, and coatings are known and verified.</label>`
+        : '';
+      return `<div class="span2 small muted">Only raw Inventory records with a positive quantity can continue. Library matches do not prove that the physical material is safe.</div><div class="span2 grid">${choices}</div>${confirmation}`;
+    }
+    function projectWizardCandidateSettingsHtml(candidate) {
+      const s = candidate.settings || {};
+      return `<div class="small muted" style="margin-top:5px">${esc(fmt(s.maxPower, '%'))} power / ${esc(fmt(s.speed, ' mm/min'))} / ${esc(fmt(s.passes, ' passes'))}${s.lineInterval !== '' && s.lineInterval != null ? ` / ${esc(fmt(s.lineInterval, ' mm interval'))}` : ''}</div>`;
+    }
+    function projectWizardBaselineStepHtml(draft) {
+      const candidates = refreshProjectWizardCandidates(true), selected = candidates.find(candidate => candidate.key === draft.candidateKey);
+      const exact = candidates.filter(candidate => candidate.materialExact), possible = candidates.filter(candidate => !candidate.materialExact);
+      const candidateHtml = candidate => {
+        const selectedCandidate = candidate.key === draft.candidateKey;
+        const confirmable = projectWizardCandidateCanConfirmSimilar(candidate), selectable = candidate.eligible || confirmable;
+        const tone = candidate.classification === 'Best Known' ? 'good' : candidate.classification === 'Experimental' ? 'warn' : candidate.classification === 'Unverified' ? 'softbad' : '';
+        const source = candidate.kind === 'test' ? `${materialTestLabel(candidate.test.testType)} / ${candidate.status} / confidence ${candidate.confidence}/5` : 'Library primary settings / machine unknown';
+        return `<label class="wizard-choice ${selectedCandidate ? 'selected' : ''} ${selectable ? '' : 'blocked'}"><span class="pill ${tone}">${esc(candidate.classification)}</span><input type="radio" name="candidateKey" value="${esc(candidate.key)}" ${selectedCandidate ? 'checked' : ''} ${selectable ? '' : 'disabled'}><b>${esc(libraryProfileLeafLabel(candidate.profile))}</b><div class="small">${esc(source)}</div><div class="small muted">${esc(candidate.matchType)} / ${esc(candidate.operation.label)} / ${esc(candidate.machine.label)} / ${esc(candidate.thickness.label)} / ${esc(candidate.completeness.label)}</div>${projectWizardCandidateSettingsHtml(candidate)}</label>`;
+      };
+      const possibleConfirm = selected && !selected.materialExact && projectWizardCandidateCanConfirmSimilar(selected)
+        ? `<label class="span2 row panel"><input id="projectWizardSimilarConfirmed" type="checkbox" ${draft.similarConfirmedKey === selected.key ? 'checked' : ''} style="width:auto"> I confirm this Library material represents the selected Inventory material.</label>`
+        : '';
+      return `<label class="span2">Operation<select id="projectWizardOperation" name="intendedOperation"><option value="">Choose an operation</option>${projectWizardOperations.map(([value, label]) => `<option value="${value}" ${draft.intendedOperation === value ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select></label>${draft.intendedOperation ? `<div class="span2 panel"><b>Current machine</b><div class="small muted">${esc(wizardMachineLabel())}. Material Test evidence must match this machine exactly; no wattage conversion is performed.</div></div><div class="span2"><b>Exact material evidence</b><div class="grid" style="margin-top:7px">${exact.length ? exact.map(candidateHtml).join('') : '<div class="small muted">No exact Library evidence matches this operation.</div>'}</div></div><div class="span2"><b>Possible material matches</b><div class="small muted">Similar matches require explicit confirmation and can never be Best Known.</div><div class="grid" style="margin-top:7px">${possible.length ? possible.map(candidateHtml).join('') : '<div class="small muted">No similar Library matches.</div>'}</div></div>${possibleConfirm}<label class="span2 wizard-choice ${!draft.candidateKey ? 'selected' : ''}"><input type="radio" name="candidateKey" value="" ${!draft.candidateKey ? 'checked' : ''}><b>Continue in Unverified mode</b><div class="small muted">No numeric recipe will be copied. A Material Test is recommended before production.</div></label>` : '<div class="span2 small muted">Choose an operation to rank compatible evidence.</div>'}`;
+    }
+    function projectWizardGoalStepHtml(draft) {
+      const candidate = refreshProjectWizardCandidates(false).find(item => item.key === draft.candidateKey), evidence = projectWizardEvidenceExplanation(candidate, draft.goal, draft.intendedOperation);
+      return `<div class="span2 panel"><b>${esc(evidence.classification)}</b><div class="small muted">${candidate ? `${esc(libraryProfileLeafLabel(candidate.profile))}. Numeric settings will be copied unchanged.` : 'No eligible recipe is selected. The goal records planning guidance only.'}</div></div><div class="span2"><b>Choose one production goal</b><div class="grid" style="margin-top:7px">${projectWizardGoalsForOperation(draft.intendedOperation).map(([value, label]) => `<label class="wizard-choice ${draft.goal === value ? 'selected' : ''}"><input type="radio" name="goal" value="${value}" ${draft.goal === value ? 'checked' : ''}><b>${esc(label)}</b><div class="small muted">${esc(projectWizardGoalGuidance(value, draft.intendedOperation))}</div></label>`).join('')}</div></div><div class="span2 panel"><b>Phase 1 boundary</b><div class="small muted">Goals change only the explanation and manual testing guidance. Speed, power, passes, interval, air assist, focus, and kerf are not adjusted.</div></div>`;
+    }
+    function projectWizardReviewStepHtml(draft) {
+      const item = projectWizardSelectedInventory(draft), candidate = refreshProjectWizardCandidates(false).find(value => value.key === draft.candidateKey), eligible = !!candidate?.eligible;
+      const evidence = projectWizardEvidenceExplanation(candidate, draft.goal, draft.intendedOperation), projectDraft = projectDraftFromWizard(draft, item, candidate);
+      draft.reviewDraft = projectDraft;
+      const s = eligible ? candidate.settings : {};
+      const source = candidate ? `${libraryProfileLeafLabel(candidate.profile)}${candidate.test ? ` / Test ${candidate.testId}${candidate.date ? ` / ${candidate.date}` : ''} / ${candidate.status} / confidence ${candidate.confidence}/5` : ' / primary setting'}` : 'No eligible production baseline';
+      const eligibility = projectWizardInventoryEligibility(item, draft.compositionConfirmed);
+      return `<div class="span2 panel"><div class="spread"><div><b>${esc(evidence.classification)}</b><div class="small muted">${esc(source)}</div></div><span class="pill ${evidence.classification === 'Best Known' ? 'good' : evidence.classification === 'Experimental' ? 'warn' : evidence.classification === 'Unverified' ? 'softbad' : ''}">${esc(evidence.classification)}</span></div></div><div class="span2 panel"><b>Material and safety</b><div class="small">${esc(item?.name || 'No material')} / ${esc(item ? stockUnitText(item.quantityOnHand, item.unit) : '-')}<br>Identity, composition, and coatings: ${draft.compositionConfirmed ? 'confirmed for this session' : 'not confirmed'}${eligibility.warning ? `<br>${esc(eligibility.warning.message)}` : ''}</div></div><div class="span2 panel"><b>Evidence</b><div class="small">Operation: ${esc(projectWizardOperationLabel(draft.intendedOperation))}<br>Material match: ${esc(candidate?.matchType || 'none')}<br>Machine: ${esc(candidate?.machine.label || 'No compatible test machine')}<br>Thickness: ${esc(candidate?.thickness.label || projectWizardInventoryThickness(item).label)}<br>Recipe: ${esc(candidate?.completeness.label || 'No recipe selected')}</div></div><div class="span2 panel"><b>Copied settings</b>${eligible ? `<div class="metrics">${metric('Power', fmt(s.maxPower, '%'))}${metric('Speed', fmt(s.speed, ' mm/min'))}${metric('Passes', fmt(s.passes, ''))}${metric('Line interval', fmt(s.lineInterval, ' mm'))}</div><div class="small muted" style="margin-top:7px">Air assist: ${s.airAssist ? 'On' : 'Off'} / Dither: ${esc(s.ditherMode || 'none')} / Focus: ${esc(fmt(s.focusValue, s.focusUnit))}</div>` : '<div class="small muted">No numeric baseline settings will be copied.</div>'}</div><div class="span2 panel"><b>Goal and guidance</b><div class="small">${esc((projectWizardGoalsForOperation(draft.intendedOperation).find(value => value[0] === draft.goal) || ['', 'Copy baseline unchanged'])[1])}<br>${esc(evidence.guidance)}</div></div>${evidence.warnings.length ? `<div class="span2 panel" style="background:#fff4db;border-color:#d9982f"><b>Warnings</b><div class="small">${evidence.warnings.map(esc).join('<br>')}</div></div>` : ''}<div class="span2 panel"><b>Before production</b><div class="small muted">Inventory will not be deducted. Review every field in the normal Project form and run an appropriate material test before production.</div></div>`;
+    }
+    function captureProjectWizardStep(validate = true) {
+      if (!projectWizard) return false;
+      if (projectWizard.step === 1) {
+        const item = projectWizardSelectedInventory(), eligibility = projectWizardInventoryEligibility(item, projectWizard.compositionConfirmed);
+        if (validate && !eligibility.eligible) return alert(eligibility.reason || 'Choose and verify an eligible Inventory material.'), false;
+      } else if (projectWizard.step === 2) {
+        if (validate && !projectWizard.intendedOperation) return alert('Choose a production operation first.'), false;
+        const selected = refreshProjectWizardCandidates(false).find(candidate => candidate.key === projectWizard.candidateKey);
+        if (validate && projectWizard.candidateKey && !selected?.eligible) return alert('Confirm the possible material match or choose an eligible baseline.'), false;
+      } else if (projectWizard.step === 3) {
+        if (validate && !projectWizardGoalsForOperation(projectWizard.intendedOperation).some(goal => goal[0] === projectWizard.goal)) return alert('Choose one applicable production goal.'), false;
+      }
+      return true;
+    }
+    function renderProjectWizard() {
+      if (!projectWizard) return;
+      const titles = ['Material', 'Operation and baseline', 'Production goal', 'Review'];
+      const body = projectWizard.step === 1 ? projectWizardMaterialStepHtml(projectWizard) : projectWizard.step === 2 ? projectWizardBaselineStepHtml(projectWizard) : projectWizard.step === 3 ? projectWizardGoalStepHtml(projectWizard) : projectWizardReviewStepHtml(projectWizard);
+      const candidate = projectWizard.step === 4 ? refreshProjectWizardCandidates(false).find(value => value.key === projectWizard.candidateKey) : null;
+      const finalAction = projectWizard.step === 4
+        ? candidate?.eligible ? '<button type="submit" class="primary">Open Project Form for Review</button>' : '<button type="button" id="openBlankProjectFromWizard">Open Blank Project Form Anyway</button>'
+        : '<button type="submit" class="primary">Next</button>';
+      openModal('projectWizardModal', `<div class="dialog"><div class="spread"><div><h2>Project Wizard</h2><div class="small muted">Step ${projectWizard.step}: ${titles[projectWizard.step - 1]}</div></div><button type="button" data-project-wizard-cancel>&times;</button></div><div class="small muted" style="margin:8px 0 14px">${titles.map((title, index) => `${index + 1 === projectWizard.step ? '<b>' : ''}Step ${index + 1}: ${title}${index + 1 === projectWizard.step ? '</b>' : ''}`).join(' &middot; ')}</div><form id="projectWizardForm" class="formgrid">${body}<div class="span2 modal-actions"><button type="button" data-project-wizard-cancel>Cancel</button>${projectWizard.step > 1 ? '<button type="button" id="projectWizardBack">Back</button>' : ''}${finalAction}</div></form></div>`);
+      document.querySelectorAll('#projectWizardModal [data-project-wizard-cancel]').forEach(button => button.onclick = cancelProjectWizard);
+      const form = document.getElementById('projectWizardForm');
+      form.onsubmit = event => {
+        event.preventDefault();
+        if (!captureProjectWizardStep(true)) return;
+        if (projectWizard.step < 4) { projectWizard.step += 1; renderProjectWizard(); }
+        else handoffProjectWizard(false);
+      };
+      const back = document.getElementById('projectWizardBack');
+      if (back) back.onclick = () => { captureProjectWizardStep(false); projectWizard.step -= 1; projectWizard.reviewDraft = null; renderProjectWizard(); };
+      form.querySelectorAll('input[name="inventoryId"]').forEach(input => input.onchange = () => { if (projectWizard.inventoryId !== input.value) projectWizard = projectWizardInvalidateAfterMaterial(projectWizard, input.value); renderProjectWizard(); });
+      const composition = document.getElementById('projectWizardCompositionConfirmed');
+      if (composition) composition.onchange = () => { projectWizard.compositionConfirmed = composition.checked; renderProjectWizard(); };
+      const operation = document.getElementById('projectWizardOperation');
+      if (operation) operation.onchange = () => { projectWizard = projectWizardInvalidateAfterOperation(projectWizard, projectWizardCanonicalOperation(operation.value)); renderProjectWizard(); };
+      form.querySelectorAll('input[name="candidateKey"]').forEach(input => input.onchange = () => { projectWizard = projectWizardInvalidateAfterCandidate(projectWizard, input.value); projectWizard.automaticSelectionDone = true; renderProjectWizard(); });
+      const similar = document.getElementById('projectWizardSimilarConfirmed');
+      if (similar) similar.onchange = () => { projectWizard.similarConfirmedKey = similar.checked ? projectWizard.candidateKey : ''; projectWizard.reviewDraft = null; renderProjectWizard(); };
+      form.querySelectorAll('input[name="goal"]').forEach(input => input.onchange = () => { projectWizard.goal = input.value; projectWizard.reviewDraft = null; renderProjectWizard(); });
+      const blank = document.getElementById('openBlankProjectFromWizard');
+      if (blank) blank.onclick = () => { if (confirm('No eligible production baseline is selected. Open a blank Project form without numeric Wizard settings?')) handoffProjectWizard(true); };
+    }
+    function openProjectWizard() {
+      projectWizard = projectWizardDefaults();
+      renderProjectWizard();
+      document.querySelector('#projectWizardModal input:not([disabled]), #projectWizardModal select, #projectWizardModal button')?.focus();
+    }
+    function cancelProjectWizard() { projectWizard = null; closeModal('projectWizardModal'); }
+    function handoffProjectWizard(forceBlank) {
+      if (!projectWizard) return;
+      const inventoryItem = projectWizardSelectedInventory(), candidate = forceBlank ? null : refreshProjectWizardCandidates(false).find(value => value.key === projectWizard.candidateKey && value.eligible);
+      const draft = projectDraftFromWizard(projectWizard, inventoryItem, candidate);
+      const classification = candidate?.classification || 'Unverified';
+      projectWizard = null;
+      closeModal('projectWizardModal');
+      openProject(draft, { draftNote: `${classification} Project Wizard draft. ${candidate ? 'The selected baseline was copied unchanged.' : 'No numeric Wizard baseline was copied; ordinary blank-form defaults remain.'} Review and test before production.` });
+    }
+    function runProjectWizardFixtures() {
+      const fixture = (name, pass, expected = 'true', actual = String(pass)) => ({ name, expected, actual, pass: !!pass });
+      const baseItem = { id: 'inventory-birch', name: 'Baltic birch plywood 3mm', quantityOnHand: 4, unit: 'sheet', aliases: 'basswood ply 3mm', notes: '' };
+      const recommendedTest = { id: 'recommended-test', date: '2026-07-12', machine: 'Genmitsu L8 20W', testType: 'engrave_matrix', intendedOperation: 'engrave_vector', status: 'recommended', confidence: 5, winningSpeed: 12000, winningPower: 55, winningInterval: 0.1, winningPasses: 1, airAssist: false };
+      const baseProfile = { id: 'profile-vector', material: 'Baltic birch plywood 3mm', thicknessValue: 3, thicknessUnit: 'mm', jobType: 'engrave', ditherMode: 'none', minPower: 45, maxPower: 55, speed: 12000, passes: 1, lineInterval: 0.1, airAssist: false, notes: 'Verified profile', tests: [recommendedTest] };
+      const photoProfile = { ...baseProfile, id: 'profile-photo', ditherMode: 'floyd-steinberg', tests: [{ ...recommendedTest, id: 'photo-test', testType: 'photo', intendedOperation: 'photo' }] };
+      const cutProfile = { ...baseProfile, id: 'profile-cut', jobType: 'cut', tests: [{ ...recommendedTest, id: 'cut-test', testType: 'cut', intendedOperation: 'cut', winningSpeed: 450, winningPower: 100, winningInterval: '', winningPasses: 2, airAssist: true }] };
+      const sourceSnapshot = JSON.stringify({ baseItem, baseProfile, photoProfile, cutProfile });
+      const exactCandidates = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [baseProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' });
+      const best = exactCandidates.find(candidate => candidate.testId === 'recommended-test');
+      const saved = exactCandidates.find(candidate => candidate.kind === 'profile');
+      const aliasItem = { ...baseItem, id: 'inventory-alias', name: 'Trade plywood 3mm', aliases: 'Baltic birch plywood 3mm' };
+      const similarItem = { ...baseItem, id: 'inventory-similar', name: 'Baltic birch plywood 3mm sheet', aliases: '' };
+      const similarUnconfirmed = projectWizardCandidatesForInventory(similarItem, 'engrave_vector', [baseProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' });
+      const similarKey = similarUnconfirmed.find(candidate => candidate.kind === 'test')?.key || '';
+      const similarConfirmed = projectWizardCandidatesForInventory(similarItem, 'engrave_vector', [baseProfile], { materialConfirmed: true, similarConfirmedKey: similarKey, currentMachine: 'Genmitsu L8 20W' });
+      const intervalProfile = { ...baseProfile, id: 'profile-types', tests: [
+        { ...recommendedTest, id: 'interval-test', testType: 'interval' },
+        { ...recommendedTest, id: 'kerf-test', testType: 'kerf' },
+        { ...recommendedTest, id: 'other-test', testType: 'other' },
+        { ...recommendedTest, id: 'failed-test', status: 'failed' },
+        { ...recommendedTest, id: 'archived-test', status: 'archived' },
+        { ...recommendedTest, id: 'malformed-test', testType: 'not-real' }
+      ] };
+      const excluded = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [intervalProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' });
+      const exactCut = projectWizardCandidatesForInventory(baseItem, 'cut', [cutProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.testId === 'cut-test');
+      const unknownThicknessItem = { ...baseItem, id: 'inventory-unknown', name: 'Baltic birch plywood', aliases: 'Baltic birch plywood 3mm' };
+      const mismatchThicknessItem = { ...baseItem, id: 'inventory-mismatch', name: 'Baltic birch plywood 4mm', aliases: 'Baltic birch plywood 3mm' };
+      const experimentalProfile = { ...baseProfile, id: 'profile-experimental', tests: [{ ...recommendedTest, id: 'experimental-test', status: 'experimental' }] };
+      const lowConfidenceProfile = { ...baseProfile, id: 'profile-low-confidence', tests: [{ ...recommendedTest, id: 'low-confidence-test', confidence: 3 }] };
+      const starterProfile = { ...baseProfile, id: 'profile-starter', notes: 'UNVERIFIED starter profile', tests: [{ ...recommendedTest, id: 'starter-test' }] };
+      const machineMismatchProfile = { ...baseProfile, id: 'profile-machine-mismatch', tests: [{ ...recommendedTest, id: 'machine-mismatch-test', machine: 'Genmitsu L8 40W' }] };
+      const incompleteProfile = { ...baseProfile, id: 'profile-incomplete', tests: [{ ...recommendedTest, id: 'incomplete-test', winningSpeed: '' }] };
+      const experimental = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [experimentalProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.testId === 'experimental-test');
+      const lowConfidence = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [lowConfidenceProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.testId === 'low-confidence-test');
+      const starter = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [starterProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.testId === 'starter-test');
+      const mismatchMachine = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [machineMismatchProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.testId === 'machine-mismatch-test');
+      const incomplete = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [incompleteProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.testId === 'incomplete-test');
+      const baselineDraft = { ...projectWizardDefaults(), inventoryId: baseItem.id, compositionConfirmed: true, intendedOperation: 'engrave_vector', candidateKey: best.key, goal: 'cleaner' };
+      const projectDraft = projectDraftFromWizard(baselineDraft, baseItem, best), unverifiedDraft = projectDraftFromWizard({ ...baselineDraft, candidateKey: '' }, baseItem, null);
+      const settingsBeforeGoal = JSON.stringify(best.settings);
+      projectWizardEvidenceExplanation(best, 'faster', 'engrave_vector');
+      const lifecycleStart = { ...projectWizardDefaults(), inventoryId: 'old', compositionConfirmed: true, intendedOperation: 'cut', candidates: [{}], candidateKey: 'old', similarConfirmedKey: 'old', automaticSelectionDone: true, goal: 'faster', reviewDraft: {} };
+      const afterMaterial = projectWizardInvalidateAfterMaterial(lifecycleStart, 'new');
+      const afterOperation = projectWizardInvalidateAfterOperation(lifecycleStart, 'photo');
+      const afterCandidate = projectWizardInvalidateAfterCandidate(lifecycleStart, 'new-candidate');
+      const duplicateItems = [{ ...baseItem, id: 'duplicate-a' }, { ...baseItem, id: 'duplicate-b' }];
+      const reverseA = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [baseProfile, experimentalProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).map(candidate => candidate.key).join('|');
+      const reverseB = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [experimentalProfile, baseProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).map(candidate => candidate.key).join('|');
+      const parsedSize = name => parseInventorySizeMetadata({ name });
+      const knownMetric = name => { const parsed = parsedSize(name); return parsed.thicknessConfidence && parsed.thicknessUnit === 'mm' && Number.isFinite(parsed.thicknessValue) && parsed.thicknessValue > 0; };
+      const unknownThickness = name => !parsedSize(name).thicknessConfidence && parsedSize(name).thicknessValue == null;
+      const cutThicknessFor = name => projectWizardThicknessCompatibility({ ...baseItem, name }, cutProfile, 'cut');
+      const collisionProfiles = [
+        { ...baseProfile, id: 'a:b', tests: [{ ...recommendedTest, id: 'c' }] },
+        { ...baseProfile, id: 'a', tests: [{ ...recommendedTest, id: 'b:c' }] }
+      ];
+      const collisionCandidates = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', collisionProfiles, { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).filter(candidate => candidate.kind === 'test');
+      const unicodeProfile = { ...baseProfile, id: 'prø file/一', tests: [{ ...recommendedTest, id: 'té|st/二' }] };
+      const missingTestProfile = { ...baseProfile, id: 'missing-test-profile', tests: [{ ...recommendedTest, id: '' }] };
+      const missingProfile = { ...baseProfile, id: '', tests: [{ ...recommendedTest, id: 'test-without-profile' }] };
+      const identityProfiles = [...collisionProfiles, unicodeProfile];
+      const identityA = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', identityProfiles, { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).map(candidate => candidate.key).join('|');
+      const identityB = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', identityProfiles, { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).map(candidate => candidate.key).join('|');
+      const reversedTestsProfileA = { ...baseProfile, id: 'reversed-tests', tests: [{ ...recommendedTest, id: 'test-b' }, { ...recommendedTest, id: 'test-a' }] };
+      const reversedTestsProfileB = { ...reversedTestsProfileA, tests: [...reversedTestsProfileA.tests].reverse() };
+      const reversedTestsA = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [reversedTestsProfileA], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).map(candidate => candidate.key).join('|');
+      const reversedTestsB = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [reversedTestsProfileB], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).map(candidate => candidate.key).join('|');
+      const retainedKey = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [baseProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.testId === recommendedTest.id)?.key;
+      const retainedAfterRerender = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [baseProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).some(candidate => candidate.key === retainedKey);
+      const collisionSimilarItem = { ...baseItem, name: `${baseItem.name} sheet` };
+      const confirmedCollisionKey = projectWizardCandidateKey('test', 'a:b', 'c');
+      const confirmedCollisionCandidates = projectWizardCandidatesForInventory(collisionSimilarItem, 'engrave_vector', collisionProfiles, { materialConfirmed: true, similarConfirmedKey: confirmedCollisionKey, currentMachine: 'Genmitsu L8 20W' }).filter(candidate => candidate.kind === 'test');
+      const datedProfile = { ...baseProfile, id: 'dated-profile', tests: [
+        { ...recommendedTest, id: 'valid-date', date: '2026-07-12' },
+        { ...recommendedTest, id: 'impossible-date', date: '2026-99-99' }
+      ] };
+      const datedOrder = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [datedProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).filter(candidate => candidate.kind === 'test').map(candidate => candidate.testId).join('|');
+      const equalDateProfileA = { ...baseProfile, id: 'equal-dates', tests: [{ ...recommendedTest, id: 'test-b' }, { ...recommendedTest, id: 'test-a' }] };
+      const equalDateProfileB = { ...equalDateProfileA, tests: [...equalDateProfileA.tests].reverse() };
+      const equalDateA = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [equalDateProfileA], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).map(candidate => candidate.key).join('|');
+      const equalDateB = projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [equalDateProfileB], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).map(candidate => candidate.key).join('|');
+      const grid = { id: 'grid-source', cells: { '50_1000': { best: true } } }, gridSnapshot = JSON.stringify(grid);
+      const projectCount = state.projects.length;
+      const results = [
+        fixture('Positive quantity requires confirmation', projectWizardInventoryEligibility(baseItem, false).state === 'Needs verification'),
+        fixture('Confirmed positive quantity is eligible', projectWizardInventoryEligibility(baseItem, true).eligible),
+        fixture('Zero quantity blocked', projectWizardInventoryEligibility({ ...baseItem, quantityOnHand: 0 }, true).state === 'Out of stock'),
+        fixture('Negative quantity blocked', projectWizardInventoryEligibility({ ...baseItem, quantityOnHand: -1 }, true).state === 'Out of stock'),
+        fixture('Missing quantity blocked', projectWizardInventoryEligibility({ ...baseItem, quantityOnHand: undefined }, true).state === 'Out of stock'),
+        fixture('Malformed quantity blocked', projectWizardInventoryEligibility({ ...baseItem, quantityOnHand: 'many' }, true).state === 'Out of stock'),
+        fixture('Positive numeric quantity accepted', projectWizardQuantityValue(2) === 2),
+        fixture('Positive decimal string quantity accepted', projectWizardQuantityValue('1.5') === 1.5),
+        fixture('Leading-decimal quantity accepted', projectWizardQuantityValue('.5') === 0.5),
+        fixture('Zero quantity value rejected', projectWizardQuantityValue(0) === null),
+        fixture('Negative quantity value rejected', projectWizardQuantityValue(-1) === null),
+        fixture('Blank quantity value rejected', projectWizardQuantityValue('  ') === null),
+        fixture('Word quantity value rejected', projectWizardQuantityValue('many') === null),
+        fixture('Unit-bearing quantity rejected', projectWizardQuantityValue('2 sheets') === null),
+        fixture('Hexadecimal quantity rejected', projectWizardQuantityValue('0x10') === null),
+        fixture('Exponent quantity rejected', projectWizardQuantityValue('1e2') === null),
+        fixture('Infinity quantity rejected', projectWizardQuantityValue(Infinity) === null && projectWizardQuantityValue('Infinity') === null),
+        fixture('Decimal-comma quantity rejected', projectWizardQuantityValue('1,5') === null),
+        fixture('Missing stable Inventory ID blocked', projectWizardInventoryEligibility({ ...baseItem, id: '' }, true).blocked),
+        fixture('Hard unsafe material blocked', projectWizardInventoryEligibility({ ...baseItem, name: 'PVC sheet 3mm' }, true).state === 'Blocked unsafe'),
+        fixture('Caution retained after confirmation', projectWizardInventoryEligibility({ ...baseItem, name: 'Fiberglass sheet 3mm' }, true).eligible && !!projectWizardInventoryEligibility({ ...baseItem, name: 'Fiberglass sheet 3mm' }, true).warning),
+        fixture('Duplicate Inventory names remain distinct', new Set(duplicateItems.map(item => item.id)).size === 2),
+        fixture('Metric parser accepts 3mm', knownMetric('3mm') && parsedSize('3mm').thicknessValue === 3),
+        fixture('Metric parser accepts spaced 3 mm', knownMetric('3 mm') && parsedSize('3 mm').thicknessValue === 3),
+        fixture('Metric parser accepts decimal 3.0 mm', knownMetric('3.0 mm') && parsedSize('3.0 mm').thicknessValue === 3),
+        fixture('Metric parser accepts leading material words', knownMetric('Plywood 3mm') && parsedSize('Plywood 3mm').thicknessValue === 3),
+        fixture('Metric parser accepts unambiguous package suffix', knownMetric('Plywood 3mm 5-pack') && parsedSize('Plywood 3mm 5-pack').thicknessValue === 3),
+        fixture('Metric parser accepts descriptive package suffix', knownMetric('Plywood 3 mm sheet, pack of 5') && parsedSize('Plywood 3 mm sheet, pack of 5').thicknessValue === 3),
+        fixture('Metric parser accepts labeled quantity suffix', knownMetric('Plywood 3mm, quantity 5') && parsedSize('Plywood 3mm, quantity 5').thicknessValue === 3),
+        fixture('Metric parser retains supported dual-unit form', knownMetric('Plywood 3mm / 1/8 in') && parsedSize('Plywood 3mm / 1/8 in').thicknessValue === 3),
+        ...['3mm / 1/8 in', '3 mm / 1/8 in', '3mm/1/8in', '3mm / 2/16 in']
+          .map(value => fixture(`Metric parser accepts consistent dual-unit label: ${value}`, knownMetric(value) && parsedSize(value).thicknessValue === 3)),
+        ...['3mm // 1/8 in', '3 mm // 1/8 in', '3mm//1/8in']
+          .map(value => fixture(`Metric parser rejects repeated slash: ${value}`, unknownThickness(value))),
+        ...[
+          '3mm / 1/4 in', '3mm / 3/16 in', '3mm / 1/2 in', '3mm / 7/8 in',
+          '3mm / 0/8 in', '3mm / 1/0 in', '3mm / -1/8 in', '3mm / 1/-8 in',
+          '3mm / 0.118 in', '3mm / 0.125 in', '3mm / 1in', '3mm/4',
+          '3mm / Infinity/8 in', '3mm / 1/Infinity in', '3mm / malformed/8 in'
+        ].map(value => fixture(`Metric parser rejects inconsistent dual-unit label: ${value}`, unknownThickness(value))),
+        fixture('Dual-unit tolerance accepts exact boundary', inventoryDualUnitThicknessIsConsistent(3, 3.2)),
+        fixture('Dual-unit tolerance rejects value beyond boundary', !inventoryDualUnitThicknessIsConsistent(3, 3.200001)),
+        ...[
+          '3mm-4', '3mm - 4', '3mm–4', '3mm—4', '3mm to 4', '3mm or 4', '3mm/4',
+          '3 mm - 4', '3 mm to 4', '3 mm or 4', '3 mm / 4', '3mm/0.118in',
+          '3 mm / 0.118 in', '3mm/1in', '3 mm / 1 in'
+        ].map(value => fixture(`Metric parser rejects unit-first ambiguity: ${value}`, unknownThickness(value))),
+        fixture('Metric parser rejects hyphen range', unknownThickness('Plywood 3-4 mm')),
+        fixture('Metric parser rejects en-dash range', unknownThickness('Plywood 3–4 mm')),
+        fixture('Metric parser rejects negative thickness', unknownThickness('Plywood -3mm')),
+        fixture('Metric parser rejects positive sign', unknownThickness('Plywood +3mm')),
+        fixture('Metric parser rejects decimal comma', unknownThickness('Plywood 3,5 mm')),
+        fixture('Metric parser rejects or range', unknownThickness('Plywood 3 mm or 4 mm')),
+        fixture('Metric parser rejects multiple metric values', unknownThickness('Plywood 3mm 4mm')),
+        fixture('Metric parser rejects metric slash alternatives', unknownThickness('Plywood 3 mm / 4 mm')),
+        fixture('Metric parser rejects metric to range', unknownThickness('Plywood 3 mm to 4 mm')),
+        fixture('Metric parser rejects unsupported fraction', unknownThickness('1/8 in')),
+        fixture('Metric parser rejects unsupported decimal inches', unknownThickness('0.125 in')),
+        fixture('Metric parser rejects blank text', unknownThickness('')),
+        fixture('Metric parser rejects malformed text', unknownThickness('not a thickness')),
+        fixture('Metric parser rejects zero thickness', unknownThickness('0mm')),
+        fixture('Exact name match retained', best.matchType === 'exact-name'),
+        fixture('Exact alias match retained', projectWizardCandidatesForInventory(aliasItem, 'engrave_vector', [baseProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).some(candidate => candidate.matchType === 'exact-alias')),
+        fixture('Similar name match retained', similarUnconfirmed.some(candidate => candidate.matchType === 'similar-name')),
+        fixture('Similar alias match retained', projectWizardCandidatesForInventory({ ...aliasItem, name: 'Unrelated 3mm', aliases: 'Baltic birch plywood 3mm sheet' }, 'engrave_vector', [baseProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).some(candidate => candidate.matchType === 'similar-alias')),
+        fixture('Similar match requires extra confirmation', similarUnconfirmed.find(candidate => candidate.kind === 'test')?.classification === 'Unverified'),
+        fixture('Confirmed similar match is Experimental', similarConfirmed.find(candidate => candidate.kind === 'test')?.classification === 'Experimental'),
+        fixture('Similar match never Best Known', !similarConfirmed.some(candidate => candidate.classification === 'Best Known')),
+        fixture('Reversed profile input is deterministic', reverseA === reverseB, reverseA, reverseB),
+        fixture('Punctuation-containing profile ID is encoded', projectWizardCandidateKey('profile', 'a:b') === 'profile:a%3Ab'),
+        fixture('Punctuation-containing test ID is encoded', projectWizardCandidateKey('test', 'a', 'b:c/| value') === 'test:a:b%3Ac%2F%7C%20value'),
+        fixture('Composite candidate keys do not collide', collisionCandidates.length === 2 && new Set(collisionCandidates.map(candidate => candidate.key)).size === 2),
+        fixture('Unicode candidate IDs remain stable', projectWizardCandidateKey('test', unicodeProfile.id, unicodeProfile.tests[0].id) === projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [unicodeProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.kind === 'test')?.key),
+        fixture('Missing test ID creates no test candidate', !projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [missingTestProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).some(candidate => candidate.kind === 'test')),
+        fixture('Missing profile ID creates no candidate', projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [missingProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).length === 0),
+        fixture('Repeated candidate construction keeps identical keys', identityA === identityB, identityA, identityB),
+        fixture('Reversed test input is deterministic', reversedTestsA === reversedTestsB, reversedTestsA, reversedTestsB),
+        fixture('Candidate selection survives rerender', !!retainedKey && retainedAfterRerender),
+        fixture('Similar confirmation stays with one candidate', confirmedCollisionCandidates.filter(candidate => candidate.similarConfirmed).length === 1 && confirmedCollisionCandidates.find(candidate => candidate.similarConfirmed)?.key === confirmedCollisionKey),
+        fixture('Valid calendar date accepted', projectWizardValidDate('2026-07-12') === '2026-07-12'),
+        fixture('Valid leap day accepted', projectWizardValidDate('2024-02-29') === '2024-02-29'),
+        fixture('Invalid leap day rejected', projectWizardValidDate('2026-02-29') === ''),
+        fixture('Invalid month rejected', projectWizardValidDate('2026-13-01') === '' && projectWizardValidDate('2026-00-12') === ''),
+        fixture('Invalid day rejected', projectWizardValidDate('2026-02-30') === ''),
+        fixture('Regex-shaped impossible date sorts after valid date', datedOrder === 'valid-date|impossible-date', 'valid-date|impossible-date', datedOrder),
+        fixture('Missing and malformed dates rejected', projectWizardValidDate('') === '' && projectWizardValidDate('not-a-date') === ''),
+        fixture('Equal valid dates use stable IDs', equalDateA.includes('test-a') && equalDateA.indexOf('test-a') < equalDateA.indexOf('test-b')),
+        fixture('Equal-date reversed input remains deterministic', equalDateA === equalDateB, equalDateA, equalDateB),
+        fixture('Vector operation accepted', best.operation.compatible),
+        fixture('Photo operation accepted', projectWizardCandidatesForInventory(baseItem, 'photo', [photoProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).some(candidate => candidate.testId === 'photo-test' && candidate.operation.compatible)),
+        fixture('Cut operation accepted', exactCut?.operation.compatible),
+        fixture('Test inside incompatible Library operation excluded', !projectWizardCandidatesForInventory(baseItem, 'cut', [{ ...baseProfile, id: 'wrong-profile-operation', tests: [{ ...recommendedTest, id: 'wrong-operation-test', testType: 'cut', intendedOperation: 'cut' }] }], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.testId === 'wrong-operation-test')?.eligible),
+        fixture('Interval test excluded', !excluded.find(candidate => candidate.testId === 'interval-test')?.eligible),
+        fixture('Kerf test excluded', !excluded.find(candidate => candidate.testId === 'kerf-test')?.eligible),
+        fixture('Other test excluded', !excluded.find(candidate => candidate.testId === 'other-test')?.eligible),
+        fixture('Failed test excluded', !excluded.find(candidate => candidate.testId === 'failed-test')?.eligible),
+        fixture('Archived test excluded', !excluded.find(candidate => candidate.testId === 'archived-test')?.eligible),
+        fixture('Malformed test excluded', !excluded.find(candidate => candidate.testId === 'malformed-test')?.eligible),
+        fixture('Exact machine accepted', projectWizardMachineCompatibility('Genmitsu L8 20W', 'Genmitsu L8 20W').compatible),
+        fixture('Known machine alias accepted', projectWizardMachineCompatibility('L8 20W', 'Genmitsu L8 20W').compatible),
+        fixture('Missing machine incompatible', !projectWizardMachineCompatibility('', 'Genmitsu L8 20W').compatible),
+        fixture('Mismatched machine incompatible', !projectWizardMachineCompatibility('Genmitsu L8 40W', 'Genmitsu L8 20W').compatible),
+        fixture('No wattage conversion', !projectWizardMachineCompatibility('Genmitsu L8 40W', 'Genmitsu L8 20W').compatible),
+        fixture('Exact cut thickness accepted', exactCut?.thickness.exact && exactCut.eligible),
+        fixture('Unambiguous metric thickness qualifies for cutting', cutThicknessFor('Baltic birch plywood 3mm').exact && cutThicknessFor('Baltic birch plywood 3mm').compatible),
+        fixture('Labeled quantity suffix qualifies for cutting', cutThicknessFor('Baltic birch plywood 3mm, quantity 5').exact && cutThicknessFor('Baltic birch plywood 3mm, quantity 5').compatible),
+        ...['3mm / 1/8 in', '3 mm / 1/8 in', '3mm/1/8in', '3mm / 2/16 in']
+          .map(value => fixture(`Consistent dual-unit label qualifies for cutting: ${value}`, cutThicknessFor(`Baltic birch plywood ${value}`).exact && cutThicknessFor(`Baltic birch plywood ${value}`).compatible)),
+        ...['3mm // 1/8 in', '3 mm // 1/8 in', '3mm//1/8in']
+          .map(value => fixture(`Repeated slash cannot qualify for cutting: ${value}`, !cutThicknessFor(`Baltic birch plywood ${value}`).compatible)),
+        ...[
+          '3mm / 1/4 in', '3mm / 3/16 in', '3mm / 1/2 in', '3mm / 7/8 in',
+          '3mm / 0/8 in', '3mm / 1/0 in', '3mm / -1/8 in', '3mm / 1/-8 in',
+          '3mm / 0.118 in', '3mm / 0.125 in', '3mm / 1in', '3mm/4',
+          '3mm / Infinity/8 in', '3mm / 1/Infinity in', '3mm / malformed/8 in'
+        ].map(value => fixture(`Inconsistent dual-unit label cannot qualify for cutting: ${value}`, !cutThicknessFor(`Baltic birch plywood ${value}`).compatible)),
+        ...[
+          '3mm-4', '3mm - 4', '3mm–4', '3mm—4', '3mm to 4', '3mm or 4', '3mm/4',
+          '3 mm - 4', '3 mm to 4', '3 mm or 4', '3 mm / 4', '3mm/0.118in',
+          '3 mm / 0.118 in', '3mm/1in', '3 mm / 1 in'
+        ].map(value => fixture(`Unit-first ambiguity cannot qualify for cutting: ${value}`, !cutThicknessFor(`Baltic birch plywood ${value}`).compatible)),
+        fixture('Ambiguous range cannot qualify for cutting', !cutThicknessFor('Baltic birch plywood 3-4 mm').compatible),
+        fixture('Signed thickness cannot qualify for cutting', !cutThicknessFor('Baltic birch plywood -3mm').compatible),
+        fixture('Decimal-comma thickness cannot qualify for cutting', !cutThicknessFor('Baltic birch plywood 3,5 mm').compatible),
+        fixture('Unsupported fractional inches cannot qualify for cutting', !cutThicknessFor('Baltic birch plywood 1/8 in').compatible),
+        fixture('Missing cut thickness rejected', !projectWizardCandidatesForInventory(unknownThicknessItem, 'cut', [cutProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.testId === 'cut-test')?.eligible),
+        fixture('Mismatched cut thickness rejected', !projectWizardCandidatesForInventory(mismatchThicknessItem, 'cut', [cutProfile], { materialConfirmed: true, similarConfirmedKey: projectWizardCandidateKey('test', 'profile-cut', 'cut-test'), currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.testId === 'cut-test')?.eligible),
+        fixture('Engraving exact thickness preferred', best.thickness.exact),
+        fixture('Engraving unknown thickness downgraded', projectWizardCandidatesForInventory(unknownThicknessItem, 'engrave_vector', [baseProfile], { materialConfirmed: true, similarConfirmedKey: 'test:profile-vector:recommended-test', currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.testId === 'recommended-test')?.classification === 'Experimental'),
+        fixture('Engraving mismatched thickness downgraded', projectWizardCandidatesForInventory(mismatchThicknessItem, 'engrave_vector', [baseProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.testId === 'recommended-test')?.classification === 'Experimental'),
+        fixture('Complete vector recipe accepted', projectWizardRecipeCompleteness(best.settings, 'engrave_vector').complete),
+        fixture('Complete photo recipe accepted', projectWizardRecipeCompleteness({ speed: 1000, maxPower: 50, passes: 1, lineInterval: 0.1 }, 'photo').complete),
+        fixture('Complete cut recipe accepted', projectWizardRecipeCompleteness({ speed: 400, maxPower: 100, passes: 2 }, 'cut').complete),
+        fixture('Missing required value rejected', !projectWizardRecipeCompleteness({ speed: 1000, maxPower: 50, passes: 1 }, 'photo').complete),
+        fixture('Partial winner rejected', !incomplete.completeness.complete && !incomplete.eligible),
+        fixture('No starter or generic filling', incomplete.settings.speed === ''),
+        fixture('Recommended high-confidence test is Best Known', best.classification === 'Best Known'),
+        fixture('Experimental test is Experimental', experimental.classification === 'Experimental'),
+        fixture('Recommended confidence below four is Experimental', lowConfidence.classification === 'Experimental'),
+        fixture('Library primary recipe is Saved setting', saved.classification === 'Saved setting' && saved.eligible),
+        fixture('Starter profile override is Unverified', starter.classification === 'Unverified'),
+        fixture('Failed-only history is Unverified', projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [{ ...baseProfile, id: 'failed-only-profile', minPower: '', maxPower: '', speed: '', lineInterval: '', tests: [{ ...recommendedTest, id: 'failed-only-test', status: 'failed' }] }], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).every(candidate => !candidate.eligible)),
+        fixture('Machine mismatch is Unverified', mismatchMachine.classification === 'Unverified' && !mismatchMachine.eligible),
+        fixture('Incomplete recipe is Unverified', incomplete.classification === 'Unverified'),
+        fixture('Best Known may auto-select', projectWizardAutomaticCandidate(exactCandidates)?.key === best.key),
+        fixture('Exact Experimental may auto-select', projectWizardAutomaticCandidate(projectWizardCandidatesForInventory(baseItem, 'engrave_vector', [experimentalProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }))?.testId === 'experimental-test'),
+        fixture('Saved setting does not auto-select', projectWizardAutomaticCandidate([saved]) === null),
+        fixture('Similar match does not auto-select', projectWizardAutomaticCandidate(similarConfirmed) === null),
+        fixture('Unverified does not auto-select', projectWizardAutomaticCandidate([incomplete]) === null),
+        fixture('Copy unchanged always available', ['engrave_vector', 'photo', 'cut'].every(operation => projectWizardGoalsForOperation(operation)[0][0] === 'copy')),
+        fixture('Vector goal matrix exact', projectWizardGoalsForOperation('engrave_vector').map(goal => goal[0]).join('|') === 'copy|darker|deeper|cleaner|faster'),
+        fixture('Photo goal matrix exact', projectWizardGoalsForOperation('photo').map(goal => goal[0]).join('|') === 'copy|darker|cleaner|faster'),
+        fixture('Cut goal matrix exact', projectWizardGoalsForOperation('cut').map(goal => goal[0]).join('|') === 'copy|cleaner|faster|reliable-cut'),
+        fixture('Wizard stores one primary goal', typeof baselineDraft.goal === 'string' && !Array.isArray(baselineDraft.goal)),
+        fixture('Goal explanation does not mutate settings', JSON.stringify(best.settings) === settingsBeforeGoal),
+        fixture('Draft uses selected Inventory identity', projectDraft.material === baseItem.name && projectDraft.quantity === '1'),
+        fixture('Vector draft maps job type and dither', projectDraft.jobType === 'engrave' && projectDraft.settings.ditherMode === 'none'),
+        fixture('Eligible baseline settings copied value-for-value', JSON.stringify(projectDraft.settings) === JSON.stringify(best.settings)),
+        fixture('Photo draft preserves selected dither', projectDraftFromWizard({ ...baselineDraft, intendedOperation: 'photo' }, baseItem, projectWizardCandidatesForInventory(baseItem, 'photo', [photoProfile], { materialConfirmed: true, currentMachine: 'Genmitsu L8 20W' }).find(candidate => candidate.testId === 'photo-test')).settings.ditherMode === 'floyd-steinberg'),
+        fixture('Cut draft maps job type', projectDraftFromWizard({ ...baselineDraft, intendedOperation: 'cut' }, baseItem, exactCut).jobType === 'cut'),
+        fixture('Baseline draft preserves sourceProfileId', projectDraft.sourceProfileId === baseProfile.id),
+        fixture('Provenance notes include Inventory source', projectDraft.notes.includes(baseItem.id) && projectDraft.notes.includes('recommended-test')),
+        fixture('Unverified draft has no source profile', unverifiedDraft.sourceProfileId === ''),
+        fixture('Unverified draft copies no numeric baseline', unverifiedDraft.settings.speed === '' && unverifiedDraft.settings.maxPower === '' && unverifiedDraft.settings.minPower === ''),
+        fixture('Accounting remains at normal defaults', projectDraft.soldPrice === '' && projectDraft.materialCost === '' && projectDraft.machineMinutes === ''),
+        fixture('No Project inserted before form save', state.projects.length === projectCount),
+        fixture('Material change invalidates downstream state', afterMaterial.inventoryId === 'new' && !afterMaterial.compositionConfirmed && !afterMaterial.intendedOperation && !afterMaterial.candidateKey && afterMaterial.reviewDraft === null),
+        fixture('Operation change invalidates downstream state', afterOperation.intendedOperation === 'photo' && !afterOperation.candidateKey && afterOperation.goal === 'copy' && afterOperation.reviewDraft === null),
+        fixture('Baseline change invalidates goal and review', afterCandidate.candidateKey === 'new-candidate' && afterCandidate.goal === 'copy' && afterCandidate.reviewDraft === null),
+        fixture('Wizard session absent from backup', !Object.prototype.hasOwnProperty.call(backupObject(), 'projectWizard')),
+        fixture('Inventory, Library, and tests remain unmodified', JSON.stringify({ baseItem, baseProfile, photoProfile, cutProfile }) === sourceSnapshot),
+        fixture('Raw Test Grid remains unmodified and unused', JSON.stringify(grid) === gridSnapshot)
+      ];
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Project Wizard fixtures');
+      console.table(results);
+      console.log(`${passed} passed`);
+      console.log(`${failed} failed`);
+      console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runProjectWizardFixtures = runProjectWizardFixtures;
     function wizardMachineLabel() { return state.machineProfile === '40W' ? 'Genmitsu L8 40W' : 'Genmitsu L8 20W'; }
     function wizardNumber(value, fallback = '') { return value === '' || value == null || !Number.isFinite(Number(value)) ? fallback : Number(value); }
     function wizardTestTypeLabel(type) { return (wizardTestTypes.find(item => item[0] === type) || wizardTestTypes[4])[1]; }
@@ -3841,6 +4516,8 @@
       if (printLibrary) printLibrary.onclick = () => window.print();
       const newProject = document.getElementById('newProject');
       if (newProject) newProject.onclick = () => openProject();
+      const openProjectWizardBtn = document.getElementById('openProjectWizard');
+      if (openProjectWizardBtn) openProjectWizardBtn.onclick = openProjectWizard;
       const newGrid = document.getElementById('newGrid');
       if (newGrid) newGrid.onclick = () => openGridForm();
       const designForm = document.getElementById('designForm');
@@ -3881,6 +4558,7 @@
     function closeModal(id) {
       if (id === 'profileModal') pendingGridPromotion = null;
       if (id === 'profileModal') libraryBrowserSelectNewProfile = false;
+      if (id === 'projectWizardModal') projectWizard = null;
       document.getElementById(id).classList.remove('open');
       document.getElementById(id).innerHTML = '';
     }
@@ -5434,6 +6112,7 @@
             if (!confirm('Replace all current entries, library, grids, projects, and inventory?')) return;
             replaceData(data);
           }
+          if (projectWizard) closeModal('projectWizardModal');
           const recovering = !!storageRecoveryIssue;
           if (!persist({ allowRecoveryOverwrite: recovering })) {
             render();
@@ -5458,6 +6137,7 @@
     if (selftest === 'project-browser' || selftest === 'all') runProjectBrowserFixtures();
     if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
+    if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
     render();
   })();
   </script>
