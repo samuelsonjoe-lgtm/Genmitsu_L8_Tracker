@@ -178,6 +178,11 @@
     .design-preview-layout > * { min-width: 0; }
     .design-svg-preview { min-height: 280px; display: grid; place-items: center; background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: auto; padding: 8px; }
     .design-svg-preview object { display: block; width: 100%; min-height: 360px; border: 0; }
+    .drawer-front-svg { display: block; width: 100%; height: auto; max-height: 620px; }
+    .drawer-front-legend { width: 100%; margin-top: 8px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: #f7f9fb; color: #425166; font-size: 12px; line-height: 1.45; }
+    .design-preview-selector { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .design-preview-selector button[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: white; }
+    .design-preview-selector button:disabled { cursor: not-allowed; opacity: .6; }
     .design-message { border-left: 4px solid var(--line); padding: 8px 10px; margin-top: 8px; background: var(--soft); border-radius: 4px; }
     .design-message.error { border-left-color: var(--red); }
     .design-message.warning { border-left-color: var(--amber); }
@@ -193,6 +198,7 @@
       .nested-browser-layout, .material-browser-layout { grid-template-columns: minmax(0, 1fr); }
       .design-preview-layout { grid-template-columns: minmax(0, 1fr); }
       .design-svg-preview object { min-height: 280px; }
+      .drawer-front-svg { max-height: 520px; }
     }
     @media print {
       body { background: white; color: #111827; }
@@ -383,6 +389,7 @@
     let pendingUndo = null;
     let storageWarningShown = false;
     let designDraft = designDefaults();
+    let designPreviewMode = 'cut-layout';
     let designProductionSession = designProductionSessionDefaults();
     let designProductionNotice = '';
     let pricingPersistTimer = null;
@@ -410,6 +417,7 @@
     }
     function resetDesignWorkspaceSession() {
       designDraft = designDefaults();
+      designPreviewMode = 'cut-layout';
       designProductionSession = designProductionSessionDefaults();
       designProductionNotice = '';
     }
@@ -2298,7 +2306,43 @@
       if (Math.abs(drawerInsertionWidth-dimensions.drawerOutsideWidth)>1e-6 || Math.abs(drawerInsertionHeight-dimensions.drawerOutsideHeight)>1e-6) errors.push('Calculated drawer insertion opening does not match the requested running clearances.');
       const shelfBottomElevations=Array.from({length:shelves.length},(_,index)=>designRound((index+1)*dimensions.cellHeight+index*t));
       const metrics={drawerCabinet:true,rows:parameters.rows,cabinetPanelCount:5,shelfCount:shelves.length,shelfBottomElevations,drawerCount:parameters.rows,pieceCount:panels.length,cabinetClearance:parameters.cabinetClearance,drawerClearance:parameters.drawerClearance,lateralClearance:parameters.lateralClearance,verticalClearance:parameters.verticalClearance,rearClearance:parameters.rearClearance,requestedFingerWidth:parameters.preferredFingerWidth,requiredWeb};
-      return {valid:!errors.length,errors,warnings,dimensions,patterns:{cabinet:cabinetPatterns,drawer:drawerModel.patterns},panels,metrics};
+      const result={valid:!errors.length,errors,warnings,dimensions,patterns:{cabinet:cabinetPatterns,drawer:drawerModel.patterns},panels,metrics};
+      result.frontElevation=result.valid?buildDrawerCabinetFrontElevation(result):null;
+      return result;
+    }
+    function buildDrawerCabinetFrontElevation(model) {
+      if (!model?.valid || !model.dimensions || !model.metrics) return null;
+      const d=model.dimensions, m=model.metrics, t=d.materialThickness ?? (d.cabinetOutsideWidth-d.cabinetInsideWidth)/2;
+      const width=d.cabinetOutsideWidth, height=d.cabinetOutsideHeight, rows=m.rows;
+      const finite=value=>Number.isFinite(value);
+      if (![t,width,height,d.cabinetInsideWidth,d.cabinetInsideHeight,d.drawerOutsideWidth,d.drawerOutsideHeight,d.cellWidth,d.cellHeight,m.lateralClearance,m.verticalClearance].every(finite) || !Number.isInteger(rows) || rows<1 || rows>3) return null;
+      const perSide=m.lateralClearance/2, drawerPanelNames=['bottom','front','back','left','right'];
+      const rowsModel=Array.from({length:rows},(_,index)=>{
+        const row=index+1, prefix=`drawer-r${String(row).padStart(2,'0')}`, bottomInteriorY=t+index*(d.cellHeight+t), openingPhysicalTop=bottomInteriorY+d.cellHeight;
+        const position=row===1?'Bottom':row===rows?'Top':'Middle';
+        return {
+          row,
+          position:position.toLowerCase(),
+          label:`Drawer ${row} - ${position}`,
+          drawerPrefix:prefix,
+          drawerPanelIds:drawerPanelNames.map(name=>`${prefix}-${name}`),
+          opening:{x:designRound(t),y:designRound(height-openingPhysicalTop),width:designRound(d.cabinetInsideWidth),height:designRound(d.cellHeight)},
+          front:{x:designRound(t+perSide),y:designRound(height-bottomInteriorY-d.drawerOutsideHeight),width:designRound(d.drawerOutsideWidth),height:designRound(d.drawerOutsideHeight)},
+          clearance:{totalLateral:designRound(m.lateralClearance),perSideLateral:designRound(perSide),vertical:designRound(m.verticalClearance)}
+        };
+      });
+      const shelves=(m.shelfBottomElevations||[]).map((bottomElevation,index)=>({
+        rowBelow:index+1,
+        panelId:`cabinet-shelf-r${String(index+1).padStart(2,'0')}`,
+        x:designRound(t),
+        y:designRound(height-(t+bottomElevation+t)),
+        width:designRound(d.cabinetInsideWidth),
+        height:designRound(t),
+        bottomElevation:designRound(bottomElevation)
+      }));
+      const rectangles=[...rowsModel.flatMap(row=>[row.opening,row.front]),...shelves];
+      if (!rectangles.every(rect=>[rect.x,rect.y,rect.width,rect.height].every(finite)&&rect.width>=0&&rect.height>=0&&rect.x>=0&&rect.y>=0&&rect.x+rect.width<=width+1e-6&&rect.y+rect.height<=height+1e-6)) return null;
+      return {width:designRound(width),height:designRound(height),materialThickness:designRound(t),insideBounds:{x:designRound(t),y:designRound(t),width:designRound(d.cabinetInsideWidth),height:designRound(d.cabinetInsideHeight)},totalLateralClearance:designRound(m.lateralClearance),perSideLateralClearance:designRound(perSide),verticalClearance:designRound(m.verticalClearance),rows:rowsModel,shelves};
     }
     function slidingLidBoxDimensions(parameters) {
       const t = parameters.materialThickness, upperWeb = Math.max(t, 4), lowerWeb = Math.max(t, 4), stopLength = Math.max(t, 4);
@@ -2967,7 +3011,7 @@
       const partial={widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,labelPaths:labelResult.paths},svg=errors.length?'':serializeDesignSvg(partial),validation=svg?designSvgValidation(svg,layout.widthMm,layout.heightMm):{valid:false,errors:[]};
       errors.push(...validation.errors);
       if(svg&&labelResult.paths.length) errors.push(...designSerializedAssemblyLabelValidation(svg,layout.panels,{},Math.max(1,normalized.values.materialThickness/3)).errors);
-      return {valid:!errors.length,errors:[...new Set(errors)],warnings:[...new Set(warnings)],svg:errors.length?'':svg,widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,labelPaths:labelResult.paths,metrics:{...model.metrics,dimensions:model.dimensions,patterns:model.patterns,assemblyLabels:normalized.values.assemblyLabels,labelCount:labelResult.paths.length,margin:layout.margin,gap:layout.gap,layoutRows:rows},validation};
+      return {valid:!errors.length,errors:[...new Set(errors)],warnings:[...new Set(warnings)],svg:errors.length?'':svg,widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,labelPaths:labelResult.paths,frontElevation:model.frontElevation,metrics:{...model.metrics,dimensions:model.dimensions,patterns:model.patterns,assemblyLabels:normalized.values.assemblyLabels,labelCount:labelResult.paths.length,margin:layout.margin,gap:layout.gap,layoutRows:rows},validation};
     }
     function buildDesignResult(rawDraft = designDraft) {
       const normalized = normalizeDesignDraft(rawDraft);
@@ -2978,6 +3022,32 @@
     }
     function designSvg(d = designDraft) { return buildDesignResult(d).svg; }
     function designMetric(label, value) { return `<div class="metric"><span>${esc(label)}</span><b>${esc(value)}</b></div>`; }
+    function buildDrawerCabinetFrontElevationSvg(frontElevation) {
+      if (!frontElevation || !Number.isFinite(frontElevation.width) || !Number.isFinite(frontElevation.height)) return '';
+      const f=frontElevation, w=f.width, h=f.height, t=f.materialThickness, shortFront=f.rows.some(row=>row.front.height<24);
+      const labelSize=Math.max(2.4,Math.min(4.2,t*1.15)), dimSize=Math.max(2.2,Math.min(3.2,t*.9)), gapStroke=Math.max(.18,t*.08);
+      const rowSvg=[...f.rows].sort((a,b)=>b.row-a.row).map(row=>{
+        const label=shortFront||row.front.height<12?`D${row.row}`:row.label;
+        return `<g data-drawer-row="${row.row}" data-panel-prefix="${esc(row.drawerPrefix)}"><rect class="front-opening" x="${row.opening.x}" y="${row.opening.y}" width="${row.opening.width}" height="${row.opening.height}"/><rect class="drawer-front" x="${row.front.x}" y="${row.front.y}" width="${row.front.width}" height="${row.front.height}"/><line class="clearance-line" x1="${row.opening.x}" y1="${row.front.y}" x2="${row.front.x}" y2="${row.front.y}"/><line class="clearance-line" x1="${row.front.x+row.front.width}" y1="${row.front.y}" x2="${row.opening.x+row.opening.width}" y2="${row.front.y}"/><text class="drawer-label" x="${row.front.x+row.front.width/2}" y="${row.front.y+row.front.height/2}" font-size="${labelSize}" text-anchor="middle" dominant-baseline="middle">${esc(label)}</text></g>`;
+      }).join('');
+      const shelfSvg=f.shelves.map(shelf=>`<g data-shelf-panel-id="${esc(shelf.panelId)}"><rect class="support-shelf" x="${shelf.x}" y="${shelf.y}" width="${shelf.width}" height="${shelf.height}"/><text class="shelf-label" x="${shelf.x+shelf.width-1}" y="${shelf.y+shelf.height/2}" font-size="${dimSize}" text-anchor="end" dominant-baseline="middle">Shelf ${shelf.rowBelow}</text></g>`).join('');
+      const legend='';
+      return `<svg class="drawer-front-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Finished front view of Drawer Cabinet" width="100%" height="auto" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet"><title>Finished front view - ${designNumberText(w)} by ${designNumberText(h)} mm, ${f.rows.length} drawer${f.rows.length===1?'':'s'}</title><desc>Screen-only assembly preview. Shows cabinet exterior, support shelves, drawer fronts, row order, and running clearances. Not included in the downloaded cut file.</desc><defs><pattern id="front-wall-hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="4" stroke="#8a96a5" stroke-width="1"/></pattern></defs><style>.cabinet-outline{fill:none;stroke:#263445;stroke-width:${Math.max(.45,t*.18)}}.wall-band{fill:url(#front-wall-hatch);stroke:#263445;stroke-width:${gapStroke}}.front-opening{fill:#f7f9fb;stroke:#93a4b5;stroke-width:${gapStroke};stroke-dasharray:${Math.max(1,t*.45)} ${Math.max(1,t*.35)}}.drawer-front{fill:#dbeaf4;stroke:#236d9c;stroke-width:${Math.max(.35,t*.14)}}.support-shelf{fill:#e8e1d2;stroke:#765d35;stroke-width:${gapStroke}}.clearance-line{stroke:#b14242;stroke-width:${gapStroke};stroke-dasharray:${Math.max(1,t*.35)} ${Math.max(1,t*.25)}}.drawer-label{fill:#16202d;font-weight:700}.shelf-label{fill:#5a452a}.dimension-line{stroke:#667085;stroke-width:${gapStroke}}.dimension-text,.front-legend{fill:#425166;font-weight:700}.dimension-tick{stroke:#667085;stroke-width:${gapStroke}}</style><rect class="wall-band" x="0" y="0" width="${t}" height="${h}"/><rect class="wall-band" x="${w-t}" y="0" width="${t}" height="${h}"/><rect class="wall-band" x="0" y="0" width="${w}" height="${t}"/><rect class="wall-band" x="0" y="${h-t}" width="${w}" height="${t}"/>${rowSvg}${shelfSvg}<rect class="cabinet-outline" x="${gapStroke/2}" y="${gapStroke/2}" width="${w-gapStroke}" height="${h-gapStroke}"/><line class="dimension-line" x1="${t}" y1="${Math.max(.8,t*.32)}" x2="${w-t}" y2="${Math.max(.8,t*.32)}"/><line class="dimension-tick" x1="${t}" y1="0" x2="${t}" y2="${Math.max(1.5,t*.6)}"/><line class="dimension-tick" x1="${w-t}" y1="0" x2="${w-t}" y2="${Math.max(1.5,t*.6)}"/><text class="dimension-text" x="${w/2}" y="${Math.max(2,t*.82)}" font-size="${dimSize}" text-anchor="middle">Outside width ${designNumberText(w)} mm</text><line class="dimension-line" x1="${Math.max(.8,t*.32)}" y1="${t}" x2="${Math.max(.8,t*.32)}" y2="${h-t}"/><line class="dimension-tick" x1="0" y1="${t}" x2="${Math.max(1.5,t*.6)}" y2="${t}"/><line class="dimension-tick" x1="0" y1="${h-t}" x2="${Math.max(1.5,t*.6)}" y2="${h-t}"/><text class="dimension-text" x="${Math.max(2,t*.82)}" y="${h/2}" font-size="${dimSize}" text-anchor="middle" transform="rotate(-90 ${Math.max(2,t*.82)} ${h/2})">Outside height ${designNumberText(h)} mm</text><text class="dimension-text" x="${w/2}" y="${h-t*.45}" font-size="${dimSize}" text-anchor="middle">${f.rows.length} drawer${f.rows.length===1?'':'s'} - red marks show running gaps</text>${legend}</svg>`;
+    }
+    function drawerCabinetFrontLegendHtml(frontElevation) {
+      if (!frontElevation?.rows?.some(row=>row.front.height<24)) return '';
+      return `<div class="drawer-front-legend" data-front-legend="compact"><b>Compact drawer labels:</b> ${frontElevation.rows.map(row=>`<span data-front-legend-entry="D${row.row}">D${row.row} - ${esc(row.label)}</span>`).join(' &nbsp; | &nbsp; ')}</div>`;
+    }
+    function designPreviewModeForTemplate(template, mode=designPreviewMode) { return template==='drawer-cabinet' && mode==='finished-front' ? 'finished-front' : 'cut-layout'; }
+    function designPreviewSelectorHtml(result) {
+      if (designDraft.template!=='drawer-cabinet') return '';
+      const valid=!!result.valid&&!!result.frontElevation;
+      if (!valid && designPreviewMode==='finished-front') {
+        designPreviewMode='cut-layout';
+      }
+      const effectiveMode=designPreviewModeForTemplate(designDraft.template);
+      return `<div class="design-preview-selector" role="group" aria-label="Design preview"><span><b>Preview:</b></span><button type="button" data-design-preview-mode="cut-layout" aria-pressed="${effectiveMode==='cut-layout'}">Cut Layout</button><button type="button" data-design-preview-mode="finished-front" aria-pressed="${effectiveMode==='finished-front'}" ${valid?'':'disabled'}>Finished Front View</button></div>`;
+    }
     function designResultsHtml(result) {
       const dimensions = result.metrics?.dimensions, patterns = result.metrics?.patterns;
       const sliding = result.metrics?.slidingLid && dimensions;
@@ -3047,7 +3117,8 @@
           + (patterns?.vertical ? designMetric('Vertical fingers', `${patterns.vertical.count} segments × ${designNumberText(patterns.vertical.actualWidth)} mm`) : '')
         : designMetric('Shapes', String(result.panels.length)) + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable');
       const messages = result.errors.map(message => `<div class="design-message error"><b>Error:</b> ${esc(message)}</div>`).join('') + result.warnings.map(message => `<div class="design-message warning"><b>Warning:</b> ${esc(message)}</div>`).join('');
-      const preview = result.valid ? `<div class="design-svg-preview"><object type="image/svg+xml" aria-label="Exact exported SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`)}"></object></div>` : '<div class="design-svg-preview"><div class="empty"><b>Preview unavailable</b><div class="small muted">Correct the errors before previewing or downloading.</div></div></div>';
+      const activePreviewMode=designPreviewModeForTemplate(designDraft.template), frontVisible=activePreviewMode==='finished-front'&&result.valid&&result.frontElevation;
+      const preview = frontVisible ? `<div class="design-svg-preview">${buildDrawerCabinetFrontElevationSvg(result.frontElevation)}${drawerCabinetFrontLegendHtml(result.frontElevation)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> Labels use bottom-up row numbering; red dashed marks indicate nominal running gaps.</div></div>` : result.valid ? `<div class="design-svg-preview"><object type="image/svg+xml" aria-label="Exact exported SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`)}"></object></div>` : '<div class="design-svg-preview"><div class="empty"><b>Preview unavailable</b><div class="small muted">Correct the errors before previewing or downloading.</div></div></div>';
       const assembly = jointCoupon
         ? '<div class="design-message"><b>Use:</b> Keep each A/B pair together and assemble the two panel planes at 90 degrees. Test from looser positive values toward zero and negative interference values. Stop if insertion force crushes, splits, or permanently locks the material. Kerf remains separate and must be established through material testing. A successful coupon selects the next full prototype setting but does not replace final box testing.</div>'
         : cabinet
@@ -3055,13 +3126,23 @@
         : sliding
         ? `<div class="design-message"><b>Assembly:</b> Assemble the five body panels. Glue the two identical rails inside the side walls, top-flush and Back-flush, with both channels facing inward. Clamp with a thickness-plus-clearance spacer, keep glue out of the channels, and let it cure. Insert the lid from Front toward Back; the shortened edges face Front and the stop ends face Back while the tongue closes the center gap. ${result.metrics.guideMarks || result.metrics.assemblyLabels ? 'Labels and rail guides are placed on the displayed sheet face. Install both marked side faces inward. Keep shortened edges toward Front and stop ends toward Back. Verify label visibility and face orientation during the first assembly.' : ''} <b>Kerf is not included.</b></div>`
         : result.metrics?.assemblyLabels ? '<div class="design-message"><b>Assembly labels:</b> Marks are placed on the displayed sheet face and are intended for the inside or concealed faces. Verify Left/Right orientation, label visibility, and the marked face during the first assembly; the finger-box cut geometry is unchanged.</div>' : '';
-      return `<div class="design-preview-layout"><div class="panel"><b>Design results</b><div class="metrics" style="margin-top:10px">${metrics}</div>${messages || '<div class="design-message"><b>Ready:</b> Preview and download use the same validated SVG.</div>'}${assembly}</div>${preview}</div>`;
+      return `${designPreviewSelectorHtml(result)}<div class="design-preview-layout"><div class="panel"><b>Design results</b><div class="metrics" style="margin-top:10px">${metrics}</div>${messages || '<div class="design-message"><b>Ready:</b> Preview and download use the same validated SVG.</div>'}${assembly}</div>${preview}</div>`;
     }
     function refreshDesignPreview() {
       const result = buildDesignResult(designDraft), results = document.getElementById('designResults'), download = document.getElementById('downloadDesignSvg');
       if (results) results.innerHTML = designResultsHtml(result);
       if (download) download.disabled = !result.valid;
+      bindDesignPreviewActions();
       return result;
+    }
+    function bindDesignPreviewActions() {
+      document.querySelectorAll('[data-design-preview-mode]').forEach(button => {
+        button.onclick = () => {
+          const nextMode=button.getAttribute('data-design-preview-mode');
+          designPreviewMode=nextMode==='finished-front'?'finished-front':'cut-layout';
+          refreshDesignPreview();
+        };
+      });
     }
     function downloadCurrentDesignSvg(download = downloadTextFile) {
       updateDesignDraft(document.getElementById('designForm'));
@@ -3571,6 +3652,47 @@
       add('Drawer cabinet SVG is valid',[cabinetOne,cabinetTwo,cabinetThree].every(result=>designSvgValidation(result.svg,result.widthMm,result.heightMm).valid));
       add('Drawer cabinet SVG contains no invalid numeric token',[cabinetOne,cabinetTwo,cabinetThree].every(result=>!/NaN|Infinity|undefined/.test(result.svg)));
       add('Drawer cabinet preview and download stay identical',designSvg(cabinetDraft)===cabinetOne.svg&&designSvg({...cabinetDraft,drawerRows:'2'})===cabinetTwo.svg&&designSvg({...cabinetDraft,drawerRows:'3'})===cabinetThree.svg);
+      const frontRoot=result=>{const front=result.frontElevation,svg=front?buildDrawerCabinetFrontElevationSvg(front):'',root=svg?new DOMParser().parseFromString(svg,'image/svg+xml').documentElement:null;return{front,svg,root};};
+      const cabinetFronts=[cabinetOne,cabinetTwo,cabinetThree].map(frontRoot);
+      add('Drawer front metadata uses authoritative outside dimensions',cabinetFronts.every(({front},index)=>front&&front.width===[cabinetOne,cabinetTwo,cabinetThree][index].metrics.dimensions.cabinetOutsideWidth&&front.height===[cabinetOne,cabinetTwo,cabinetThree][index].metrics.dimensions.cabinetOutsideHeight));
+      add('Drawer front metadata preserves row and drawer counts',cabinetFronts.every(({front},index)=>front.rows.length===index+1&&front.rows.length===[cabinetOne,cabinetTwo,cabinetThree][index].metrics.drawerCount));
+      add('Drawer front metadata preserves shelf counts and elevations',cabinetFronts.every(({front},index)=>front.shelves.length===[cabinetOne,cabinetTwo,cabinetThree][index].metrics.shelfCount&&JSON.stringify(front.shelves.map(shelf=>shelf.bottomElevation))===JSON.stringify([cabinetOne,cabinetTwo,cabinetThree][index].metrics.shelfBottomElevations)));
+      add('Drawer front dimensions and clearances agree with model',cabinetFronts.every(({front},index)=>front.rows.every(row=>row.front.width===[cabinetOne,cabinetTwo,cabinetThree][index].metrics.dimensions.drawerOutsideWidth&&row.front.height===[cabinetOne,cabinetTwo,cabinetThree][index].metrics.dimensions.drawerOutsideHeight&&row.clearance.totalLateral===[cabinetOne,cabinetTwo,cabinetThree][index].metrics.lateralClearance&&row.clearance.perSideLateral===[cabinetOne,cabinetTwo,cabinetThree][index].metrics.lateralClearance/2&&row.clearance.vertical===[cabinetOne,cabinetTwo,cabinetThree][index].metrics.verticalClearance)));
+      add('Drawer front row labels and prefixes are bottom-up and stable',cabinetFronts[2].front.rows.map(row=>row.label).join('|')==='Drawer 1 - Bottom|Drawer 2 - Middle|Drawer 3 - Top'&&cabinetFronts[2].front.rows.map(row=>row.drawerPrefix).join('|')==='drawer-r01|drawer-r02|drawer-r03'&&cabinetFronts[2].front.rows.every(row=>row.drawerPanelIds.join('|')===`${row.drawerPrefix}-bottom|${row.drawerPrefix}-front|${row.drawerPrefix}-back|${row.drawerPrefix}-left|${row.drawerPrefix}-right`));
+      add('Drawer front row 1 is physically below the final row',cabinetFronts[2].front.rows[0].front.y>cabinetFronts[2].front.rows[2].front.y&&cabinetFronts[2].front.rows[0].opening.y>cabinetFronts[2].front.rows[2].opening.y);
+      add('Drawer front SVGs are valid screen-only documents',cabinetFronts.every(({svg,root})=>{const viewBox=(root?.getAttribute('viewBox')||'').trim().split(/\s+/).map(Number);return !!root&&root.nodeName.toLowerCase()==='svg'&&viewBox.length===4&&viewBox.every(value=>Number.isFinite(value))&&viewBox[2]>0&&viewBox[3]>0&&!/NaN|Infinity|undefined/.test(svg)&&root.querySelectorAll('title').length===1&&root.querySelectorAll('desc').length===1&&root.querySelectorAll('[data-drawer-row]').length>0;}));
+      add('Drawer front SVG contains exact shelf and row identity metadata',cabinetFronts.every(({root},index)=>root.querySelectorAll('[data-drawer-row]').length===index+1&&root.querySelectorAll('[data-shelf-panel-id]').length===index&&[...root.querySelectorAll('[data-shelf-panel-id]')].every((node,shelfIndex)=>node.getAttribute('data-shelf-panel-id')===`cabinet-shelf-r${String(shelfIndex+1).padStart(2,'0')}`)));
+      add('One-row front view has no intermediate support shelf',cabinetFronts[0].front.rows.length===1&&cabinetFronts[0].front.shelves.length===0&&cabinetFronts[0].root.querySelectorAll('[data-shelf-panel-id]').length===0);
+      add('Multi-row front view has no overlapping drawer fronts',cabinetFronts.slice(1).every(({front})=>front.rows.every((row,index)=>front.rows.slice(index+1).every(other=>row.front.y+row.front.height<=other.front.y||other.front.y+other.front.height<=row.front.y))));
+      const frontZero=buildDesignResult({...cabinetDraft,drawerLateralClearance:'0',drawerVerticalClearance:'0'}),frontExtreme=buildDesignResult({...cabinetDraft,drawerInsideWidth:'250',drawerInsideHeight:'180',drawerRows:'3'}),frontInvalid=buildDesignResult({...cabinetDraft,drawerRows:'0'});
+      add('Zero-clearance front view remains finite and valid',frontZero.valid&&frontZero.frontElevation&&!!buildDrawerCabinetFrontElevationSvg(frontZero.frontElevation)&&!/NaN|Infinity|undefined/.test(buildDrawerCabinetFrontElevationSvg(frontZero.frontElevation)));
+      add('Extreme valid front view remains finite and bounded',frontExtreme.valid&&frontExtreme.frontElevation&&frontExtreme.frontElevation.rows.every(row=>[row.front,row.opening].every(rect=>Object.values(rect).every(value=>Number.isFinite(value)))));
+      add('Invalid Drawer Cabinet produces no front view',!frontInvalid.valid&&!frontInvalid.frontElevation&&!buildDrawerCabinetFrontElevationSvg(frontInvalid.frontElevation));
+      const savedPreviewMode=designPreviewMode,savedDesignDraft=designDraft,frontStorageBefore=localStorage.getItem(STORAGE_KEY),frontProfilesBefore=JSON.stringify(state.profiles);
+      designDraft={...cabinetDraft}; designPreviewMode='cut-layout'; const cutMarkup=designResultsHtml(cabinetOne),cutProductionSvg=cabinetOne.svg;
+      designPreviewMode='finished-front'; const frontMarkup=designResultsHtml(cabinetOne),frontBackup=backupObject();
+      add('Finished Front selector is session-only and accessible',frontMarkup.includes('data-design-preview-mode="finished-front"')&&frontMarkup.includes('aria-pressed="true"')&&frontMarkup.includes('Screen-only assembly preview'));
+      add('Finished Front markup is separate from production SVG',frontMarkup.includes('<svg class="drawer-front-svg"')&&!cutProductionSvg.includes('drawer-front-svg')&&!cutProductionSvg.includes('Finished front view'));
+      add('Preview mode does not enter backup or storage',!Object.keys(frontBackup).some(key=>/previewMode|designPreview/i.test(key))&&localStorage.getItem(STORAGE_KEY)===frontStorageBefore&&JSON.stringify(state.profiles)===frontProfilesBefore);
+      add('Switching preview mode leaves production SVG byte-identical',buildDesignResult(designDraft).svg===cutProductionSvg);
+      const existingFixtureElements=['designForm','designResults','downloadDesignSvg'].map(id=>document.getElementById(id)); existingFixtureElements.forEach((element,index)=>{if(element)element.id=`${['designForm','designResults','downloadDesignSvg'][index]}-front-fixture`;}); const frontFixtureRoot=document.createElement('div'); frontFixtureRoot.innerHTML='<form id="designForm"></form><button id="downloadDesignSvg" type="button"></button><div id="designResults"></div>'; document.body.appendChild(frontFixtureRoot); let frontDownloaded='',frontDownloadFilename='',frontDownloadType=''; const frontDownloadResult=downloadCurrentDesignSvg((filename,text,type)=>{frontDownloadFilename=filename;frontDownloaded=text;frontDownloadType=type;}); frontFixtureRoot.remove(); existingFixtureElements.forEach((element,index)=>{if(element)element.id=['designForm','designResults','downloadDesignSvg'][index];});
+      add('Finished Front download receives exact production SVG',frontDownloadResult.valid&&frontDownloaded===cutProductionSvg&&frontDownloadFilename===`l8-drawer-cabinet-${today()}.svg`&&frontDownloadType==='image/svg+xml;charset=utf-8'&&!frontDownloaded.includes('Screen-only assembly preview')&&!frontDownloaded.includes('drawer-front-svg'));
+      const compactCabinets=[1,2,3].map(rows=>buildDesignResult({...cabinetDraft,drawerRows:String(rows),drawerInsideHeight:'15'})),compactFronts=compactCabinets.map(frontRoot),compactLegends=compactFronts.map(({front})=>new DOMParser().parseFromString(drawerCabinetFrontLegendHtml(front),'text/html').body);
+      add('Compact one-row legend maps the only drawer once',compactFronts[0].front.rows[0].front.height<24&&compactLegends[0].querySelector('[data-front-legend]')?.textContent.includes('D1 - Drawer 1 - Bottom')&&compactLegends[0].querySelectorAll('[data-front-legend-entry]').length===1&&compactFronts[0].root.querySelectorAll('.drawer-label').length===1&&compactFronts[0].root.querySelector('.drawer-label')?.textContent==='D1');
+      add('Compact two-row legend maps both rows once',compactFronts[1].front.rows[0].front.height<24&&compactLegends[1].querySelector('[data-front-legend]')?.textContent.includes('D1 - Drawer 1 - Bottom')&&compactLegends[1].querySelector('[data-front-legend]')?.textContent.includes('D2 - Drawer 2 - Top')&&compactLegends[1].querySelectorAll('[data-front-legend-entry]').length===2&&compactFronts[1].root.querySelectorAll('.drawer-label').length===2);
+      add('Compact three-row legend maps Bottom Middle and Top',compactFronts[2].front.rows[0].front.height<24&&compactLegends[2].querySelector('[data-front-legend]')?.textContent.includes('D1 - Drawer 1 - Bottom')&&compactLegends[2].querySelector('[data-front-legend]')?.textContent.includes('D2 - Drawer 2 - Middle')&&compactLegends[2].querySelector('[data-front-legend]')?.textContent.includes('D3 - Drawer 3 - Top')&&compactLegends[2].querySelectorAll('[data-front-legend-entry]').length===3);
+      add('Compact legend markers and production prefixes agree',compactFronts.every(({front,root})=>[...root.querySelectorAll('.drawer-label')].map(node=>node.textContent).join('|')===front.rows.slice().sort((a,b)=>b.row-a.row).map(row=>`D${row.row}`).join('|')&&front.rows.every(row=>root.querySelector(`[data-drawer-row="${row.row}"]`)?.getAttribute('data-panel-prefix')===row.drawerPrefix)));
+      add('Compact legend text never enters production SVG',compactCabinets.every(result=>!result.svg.includes('D1 - Drawer')&&!result.svg.includes('D2 - Drawer')&&!result.svg.includes('D3 - Drawer')));
+      const invalidDraft={...cabinetDraft,drawerInsideWidth:'0'},invalidStorageBefore=localStorage.getItem(STORAGE_KEY),invalidProfilesBefore=JSON.stringify(state.profiles); designDraft=invalidDraft; const invalidFrontMarkup=designResultsHtml(buildDesignResult(designDraft));
+      add('Invalidation normalizes Finished Front to Cut Layout',designPreviewMode==='cut-layout'&&invalidFrontMarkup.includes('data-design-preview-mode="cut-layout" aria-pressed="true"')&&invalidFrontMarkup.includes('data-design-preview-mode="finished-front" aria-pressed="false" disabled')&&!invalidFrontMarkup.includes('<svg class="drawer-front-svg"')&&invalidFrontMarkup.includes('Preview unavailable'));
+      add('Invalidation leaves only the intentional draft field changed',designDraft.drawerInsideWidth==='0'&&designDraft.template===cabinetDraft.template&&designDraft.drawerRows===cabinetDraft.drawerRows);
+      const revalidatedFrontMarkup=designResultsHtml(buildDesignResult(cabinetDraft));
+      add('Revalidation does not reactivate Finished Front automatically',designPreviewMode==='cut-layout'&&revalidatedFrontMarkup.includes('data-design-preview-mode="finished-front" aria-pressed="false"')&&!revalidatedFrontMarkup.includes('data-design-preview-mode="finished-front" aria-pressed="false" disabled'));
+      add('Invalidation and revalidation preserve storage and Library data',localStorage.getItem(STORAGE_KEY)===invalidStorageBefore&&JSON.stringify(state.profiles)===invalidProfilesBefore);
+      const transitionStorageBefore=localStorage.getItem(STORAGE_KEY),transitionProfilesBefore=JSON.stringify(state.profiles),transitionBackupBefore=JSON.stringify(backupObject()); designDraft={...cabinetDraft}; designPreviewMode='cut-layout'; ['finished-front','cut-layout','finished-front','cut-layout'].forEach(mode=>{designPreviewMode=mode;designResultsHtml(buildDesignResult(designDraft));}); resetDesignWorkspaceSession(); const resetMode=designPreviewMode; designDraft={...cabinetDraft,template:'finger-box'}; designPreviewMode='finished-front'; const otherTemplateMode=designPreviewModeForTemplate(designDraft.template); designDraft={...cabinetDraft}; const returnedMode=designPreviewModeForTemplate(designDraft.template,otherTemplateMode);
+      add('Repeated transitions and reset stay session-only',resetMode==='cut-layout'&&otherTemplateMode==='cut-layout'&&returnedMode==='cut-layout'&&localStorage.getItem(STORAGE_KEY)===transitionStorageBefore&&JSON.stringify(state.profiles)===transitionProfilesBefore&&JSON.stringify(backupObject())===transitionBackupBefore);
+      designDraft=savedDesignDraft; designPreviewMode=savedPreviewMode;
+      designPreviewMode=savedPreviewMode; designDraft=savedDesignDraft;
       add('Drawer cabinet defaults have cut only',cabinetOne.svg.includes('<g id="cut"')&&!cabinetOne.svg.includes('<g id="score"'));
       const cabinetLabeled=buildDesignResult({...cabinetDraft,drawerRows:'3',assemblyLabels:true}),cabinetLabeledRoot=new DOMParser().parseFromString(cabinetLabeled.svg,'image/svg+xml').documentElement;
       add('Drawer cabinet labels remain optional',cabinetOne.labelPaths.length===0&&cabinetLabeled.metrics.assemblyLabels===true&&cabinetLabeled.labelPaths.length>0);
@@ -7573,12 +7695,14 @@
           if (e.target.name === 'template') {
             designProductionSession = designProductionSessionForTemplateChange(designProductionSession);
             designProductionNotice = '';
+            designPreviewMode = 'cut-layout';
           }
           if (['template','boxDimensionMode','slidingDimensionMode','lidPull','slidingGuideMarks','slidingFitCoupon','assemblyLabels'].includes(e.target.name)) render();
           else refreshDesignPreview();
         };
       }
       bindDesignProductionActions();
+      bindDesignPreviewActions();
       const downloadDesignSvg = document.getElementById('downloadDesignSvg');
       if (downloadDesignSvg) downloadDesignSvg.onclick = () => downloadCurrentDesignSvg();
       const resetDesign = document.getElementById('resetDesign');
