@@ -393,7 +393,7 @@
       return { status: 'ok', data };
     }
     function designDefaults() {
-      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated', slidingGuideMarks: false, slidingFitCoupon: false };
+      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated', slidingGuideMarks: false, slidingFitCoupon: false, assemblyLabels: false };
     }
     function normalizeInventoryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function normalizeLibraryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
@@ -1459,7 +1459,9 @@
         + field('boxHeight', `${d.boxDimensionMode === 'outside' ? 'Outside body' : 'Inside'} height (mm)`, d.boxHeight, 'number', 'min="0.01" step="0.1"')
         + field('jointClearance', 'Joint clearance (mm)', d.jointClearance, 'number', 'min="0" step="0.01"', '0.00 mm is nominal. Positive clearance loosens internal finger transitions without enlarging panel envelopes.')
           + field('preferredFingerWidth', 'Preferred finger width (mm)', d.preferredFingerWidth, 'number', 'min="0.01" step="0.1"', 'A target only; the exact width is calculated from an odd segment count.')
-          + designSelect('boxLid', 'Top', d.boxLid, [['open','Open top'],['loose','Loose flat lid']]);
+          + designSelect('boxLid', 'Top', d.boxLid, [['open','Open top'],['loose','Loose flat lid']])
+          + '<label class="row"><input name="assemblyLabels" type="checkbox" style="width:auto" ' + (d.assemblyLabels ? 'checked' : '') + '> Add assembly labels (blue score layer)</label>'
+          + '<div class="small muted" style="grid-column:1/-1">Adds small identification marks to intended inside or concealed faces. Run the blue score layer before cutting. Verify label visibility and face orientation during the first assembly; these are assembly aids, not decorative engraving. Deterministic vector glyph paths are used so no font is required.</div>';
       const slidingFields = designSelect('slidingDimensionMode', 'Dimensions mean', d.slidingDimensionMode, [['usable','Usable cavity below lid'],['outside','Outside body']], 'Usable cavity is the unobstructed space below the lid, between the inner rail faces, and between the Front and Back walls.')
         + field('slidingWidth', `${d.slidingDimensionMode === 'outside' ? 'Outside body' : 'Usable cavity'} width (mm)`, d.slidingWidth, 'number', 'min="0.01" step="0.1"')
         + field('slidingDepth', `${d.slidingDimensionMode === 'outside' ? 'Outside body' : 'Usable cavity'} depth (mm)`, d.slidingDepth, 'number', 'min="0.01" step="0.1"')
@@ -1472,7 +1474,9 @@
         + designSelect('lidPull', 'Finger pull', d.lidPull, [['none','None'],['rectangular','Centered rectangular edge notch']])
         + (d.lidPull === 'rectangular' ? field('lidPullWidth', 'Pull width (mm)', d.lidPullWidth, 'number', 'min="0.01" step="0.1"', 'The notch depth is the greater of material thickness or 6 mm.') : '')
         + '<label class="row"><input name="slidingGuideMarks" type="checkbox" style="width:auto" ' + (d.slidingGuideMarks ? 'checked' : '') + '> Add rail-placement guide marks (blue score layer)</label>'
-        + '<div class="small muted" style="grid-column:1/-1">Adds four concealed corner marks beneath each rail footprint. Run the blue score layer before cutting. Rails install top-flush and Back-flush; both marked faces assemble inward.</div>'
+        + '<div class="small muted" style="grid-column:1/-1">Adds four concealed corner marks beneath each rail footprint. The marks sit slightly inward from the rail ends so they remain on retained side-panel material. Run the blue score layer before cutting; align the rail within the marks, top-flush and Back-flush against the actual Back edge. Both marked faces assemble inward.</div>'
+        + '<label class="row"><input name="assemblyLabels" type="checkbox" style="width:auto" ' + (d.assemblyLabels ? 'checked' : '') + '> Add assembly labels (blue score layer)</label>'
+        + '<div class="small muted" style="grid-column:1/-1">Adds small identification marks to intended inside or concealed faces. Run the blue score layer before cutting. Verify label visibility and face orientation during the first assembly; these are assembly aids, not decorative engraving. Deterministic vector glyph paths are used so no font is required.</div>'
         + '<label class="row"><input name="slidingFitCoupon" type="checkbox" style="width:auto" ' + (d.slidingFitCoupon ? 'checked' : '') + '> Include six-piece sliding-fit coupon</label>'
         + '<div class="small muted" style="grid-column:1/-1">Adds a six-piece glue-up test for the current lid side and vertical clearances. Allow the glue to cure before judging the fit.</div>';
       const legacyFields = tray
@@ -1489,7 +1493,7 @@
             : field('baseDepth','Base depth (mm)',d.baseDepth,'number','min="20" step="1"')
               + field('slotDepth','Stand slot depth (mm)',d.slotDepth,'number','min="10" step="1"'));
       const note = sliding
-        ? 'Eight through-cut pieces form a Front-loading box: five body panels, one shouldered lid, and two identical glue-on inner channel rails. Optional guide marks are blue score geometry; the complete Right side panel is mirrored with its guides. The optional coupon adds six non-interlocking fit-test pieces. All fit values are experimental starting points; test the body joints and sliding fit on scrap.'
+        ? 'Eight through-cut pieces form a Front-loading box: five body panels, one shouldered lid, and two identical glue-on inner channel rails. Optional guide marks are blue score geometry; the marks sit slightly inward from the end joinery so they remain on retained material, and the complete Right side panel is mirrored with its guides. The optional coupon adds six non-interlocking fit-test pieces. All fit values are experimental starting points; test the body joints and sliding fit on scrap.'
         : box
         ? 'The open-top body uses complementary rectangular fingers at all four corners and all four bottom joints. A loose lid is a separate plain panel with no retention.'
         : tray ? `${d.jointStyle === 'finger' ? 'Finger-tab' : 'Tab-and-slot'} tray layout includes a slotted base and wall tabs. Corner glue is recommended after a dry fit.`
@@ -1601,6 +1605,7 @@
         values.pullMode = String(draft.lidPull || '');
         values.guideMarks = draft.slidingGuideMarks === true || draft.slidingGuideMarks === 'true' || draft.slidingGuideMarks === 'on';
         values.fitCoupon = draft.slidingFitCoupon === true || draft.slidingFitCoupon === 'true' || draft.slidingFitCoupon === 'on';
+        values.assemblyLabels = draft.assemblyLabels === true || draft.assemblyLabels === 'true' || draft.assemblyLabels === 'on';
         if (!['usable','outside'].includes(values.dimensionMode)) errors.push('Choose Usable cavity below lid or Outside body dimensions.');
         if (values.openEnd !== 'front') errors.push('Choose the supported Front open end.');
         if (values.railMode !== 'laminated') errors.push('Choose the supported laminated inner rail construction.');
@@ -1617,6 +1622,7 @@
       } else if (template === 'finger-box') {
         values.dimensionMode = String(draft.boxDimensionMode || '');
         values.lid = String(draft.boxLid || '');
+        values.assemblyLabels = draft.assemblyLabels === true || draft.assemblyLabels === 'true' || draft.assemblyLabels === 'on';
         if (!['inside','outside'].includes(values.dimensionMode)) errors.push('Choose Inside dimensions or Outside body dimensions.');
         if (!['open','loose'].includes(values.lid)) errors.push('Choose Open top or Loose flat lid.');
         values.width = designRequiredNumber(draft, 'boxWidth', 'Width', errors, 0);
@@ -1829,6 +1835,48 @@
       const a = `${designNumberText(segment.a.x)},${designNumberText(segment.a.y)}`, b = `${designNumberText(segment.b.x)},${designNumberText(segment.b.y)}`;
       return a < b ? `${a}|${b}` : `${b}|${a}`;
     }
+    function designPointOnSegment(point, segment, epsilon = 1e-9) {
+      const cross = (point.y - segment.a.y) * (segment.b.x - segment.a.x) - (point.x - segment.a.x) * (segment.b.y - segment.a.y);
+      if (Math.abs(cross) > epsilon) return false;
+      const minX = Math.min(segment.a.x, segment.b.x) - epsilon, maxX = Math.max(segment.a.x, segment.b.x) + epsilon;
+      const minY = Math.min(segment.a.y, segment.b.y) - epsilon, maxY = Math.max(segment.a.y, segment.b.y) + epsilon;
+      return point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY;
+    }
+    function designPointStrictlyInsidePolygon(point, polygonPoints) {
+      let inside = false;
+      for (let index = 0, previous = polygonPoints.length - 1; index < polygonPoints.length; previous = index++) {
+        const a = polygonPoints[previous], b = polygonPoints[index];
+        if (designPointOnSegment(point, { a, b })) return false;
+        const intersects = (a.y > point.y) !== (b.y > point.y) && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x;
+        if (intersects) inside = !inside;
+      }
+      return inside;
+    }
+    function designPointToSegmentDistance(point, segment) {
+      const dx = segment.b.x - segment.a.x, dy = segment.b.y - segment.a.y, lengthSquared = dx * dx + dy * dy;
+      if (lengthSquared <= 1e-18) return Math.hypot(point.x - segment.a.x, point.y - segment.a.y);
+      const projection = ((point.x - segment.a.x) * dx + (point.y - segment.a.y) * dy) / lengthSquared;
+      const t = Math.min(1, Math.max(0, projection));
+      const closest = { x: segment.a.x + dx * t, y: segment.a.y + dy * t };
+      return Math.hypot(point.x - closest.x, point.y - closest.y);
+    }
+    function designSegmentDistance(first, second) {
+      if (designSegmentsIntersect(first, second)) return 0;
+      return Math.min(
+        designPointToSegmentDistance(first.a, second),
+        designPointToSegmentDistance(first.b, second),
+        designPointToSegmentDistance(second.a, first),
+        designPointToSegmentDistance(second.b, first)
+      );
+    }
+    function designSegmentContainedInPolygon(segment, polygonPoints) {
+      const polygonSegments = designPointSegments(polygonPoints);
+      if (!designPointStrictlyInsidePolygon(segment.a, polygonPoints) || !designPointStrictlyInsidePolygon(segment.b, polygonPoints)) return false;
+      return polygonSegments.every(edge => designSegmentDistance(segment, edge) > 1e-9);
+    }
+    function designSegmentsContainedInPolygon(segments, polygonPoints) {
+      return segments.every(segment => designSegmentContainedInPolygon(segment, polygonPoints));
+    }
     function designSegmentsIntersect(first, second) {
       const epsilon = 1e-9, firstHorizontal = Math.abs(first.a.y - first.b.y) < epsilon, secondHorizontal = Math.abs(second.a.y - second.b.y) < epsilon;
       const range = (a,b) => [Math.min(a,b),Math.max(a,b)], overlaps = (a,b) => Math.min(a[1],b[1]) >= Math.max(a[0],b[0]) - epsilon;
@@ -1882,12 +1930,116 @@
     function designScoreSegmentsPath(segments) {
       return segments.map(segment => segment.a.y === segment.b.y
         ? `M${designNumberText(segment.a.x)} ${designNumberText(segment.a.y)} H${designNumberText(segment.b.x)}`
-        : `M${designNumberText(segment.a.x)} ${designNumberText(segment.a.y)} V${designNumberText(segment.b.y)}`).join('');
+        : segment.a.x === segment.b.x
+          ? `M${designNumberText(segment.a.x)} ${designNumberText(segment.a.y)} V${designNumberText(segment.b.y)}`
+          : `M${designNumberText(segment.a.x)} ${designNumberText(segment.a.y)} L${designNumberText(segment.b.x)} ${designNumberText(segment.b.y)}`).join('');
     }
-    function slidingRailGuideSegments(dimensions, thickness, panelWidth = dimensions.railLength) {
-      const inset = Math.max(1, thickness / 2), leg = Math.min(6, Math.max(3, thickness)), railOffsetX = panelWidth - dimensions.railLength, width = panelWidth, height = dimensions.railHeight;
-      if (railOffsetX < -1e-9 || 2 * inset + leg >= dimensions.railLength || 2 * inset + leg >= height) return {valid:false, errors:['Rail-placement guide marks do not fit within the side-panel envelope.'], segments:[], inset, leg, railOffsetX};
-      const xFront = designRound(railOffsetX + inset), xBack = designRound(width - inset), yTop = designRound(inset), yBottom = designRound(height - inset);
+    const designAssemblyGlyphs = {
+      A: { w: 4, s: [[0,6,0,0],[4,6,4,0],[0,3,4,3]] },
+      B: { w: 4, s: [[0,0,0,6],[0,0,2.8,0],[2.8,0,2.8,3],[0,3,2.8,3],[2.8,3,2.8,6],[0,6,2.8,6]] },
+      C: { w: 4, s: [[4,0,0,0],[0,0,0,6],[0,6,4,6]] },
+      D: { w: 4, s: [[0,0,0,6],[0,0,3.5,0],[3.5,0,3.5,6],[0,6,3.5,6]] },
+      E: { w: 4, s: [[4,0,0,0],[0,0,0,6],[0,3,3.2,3],[0,6,4,6]] },
+      F: { w: 4, s: [[0,0,0,6],[0,0,4,0],[0,3,3.2,3]] },
+      G: { w: 4, s: [[4,0,0,0],[0,0,0,6],[0,6,4,6],[4,6,4,3.5],[2.2,3.5,4,3.5]] },
+      H: { w: 4, s: [[0,0,0,6],[4,0,4,6],[0,3,4,3]] },
+      I: { w: 2.8, s: [[0,0,2.8,0],[1.4,0,1.4,6],[0,6,2.8,6]] },
+      K: { w: 4, s: [[0,0,0,6],[0,3,2.2,3],[2.2,3,2.2,0],[2.2,0,4,0],[2.2,3,2.2,6],[2.2,6,4,6]] },
+      L: { w: 4, s: [[0,0,0,6],[0,6,4,6]] },
+      M: { w: 4, s: [[0,6,0,0],[0,0,1.2,3],[1.2,3,2,0],[2,0,2.8,3],[2.8,3,4,0],[4,0,4,6]] },
+      N: { w: 4, s: [[0,6,0,0],[0,0,1.2,6],[1.2,6,1.2,0],[1.2,0,4,6],[4,6,4,0]] },
+      O: { w: 4, s: [[0,0,4,0],[4,0,4,6],[4,6,0,6],[0,6,0,0]] },
+      R: { w: 4, s: [[0,0,0,6],[0,0,2.8,0],[2.8,0,2.8,3],[0,3,2.8,3],[2.8,3,2.8,6],[2.8,6,4,6],[2.8,3,4,3]] },
+      T: { w: 4, s: [[0,0,4,0],[2,0,2,6]] }
+    };
+    function designAssemblyWordGeometry(text, capHeight = 4.5, spacing = 0.6) {
+      const value = String(text || '').trim().toUpperCase();
+      if (!value) return null;
+      const scale = capHeight / 6;
+      const segments = [], glyphRuns = [];
+      let cursor = 0;
+      for (let index = 0; index < value.length; index++) {
+        const ch = value[index], glyph = designAssemblyGlyphs[ch];
+        if (!glyph) return { valid:false, reason:`Unknown label glyph ${ch}.` };
+        glyphRuns.push({ char: ch, x: designRound(cursor * scale), width: designRound(glyph.w * scale) });
+        glyph.s.forEach(([x1, y1, x2, y2]) => {
+          segments.push({
+            a: { x: designRound((cursor + x1) * scale), y: designRound(y1 * scale) },
+            b: { x: designRound((cursor + x2) * scale), y: designRound(y2 * scale) }
+          });
+        });
+        cursor += glyph.w + (index < value.length - 1 ? spacing : 0);
+      }
+      return { valid:true, text: value, capHeight, spacing, width:designRound(cursor * scale), height:designRound(capHeight), segments, glyphRuns, path:designScoreSegmentsPath(segments) };
+    }
+    function designAssemblyLabelSpecs(template, values) {
+      const box = template === 'finger-box';
+      const sliding = template === 'sliding-lid-box';
+      if (!box && !sliding) return [];
+      const labels = [
+        { panelId: 'bottom', text: 'BOTTOM' },
+        { panelId: sliding ? 'front-open' : 'front', text: 'FRONT' },
+        { panelId: 'back', text: 'BACK' },
+        { panelId: 'left', text: 'LEFT' },
+        { panelId: 'right', text: 'RIGHT' }
+      ];
+      if (box && values.lid === 'loose') labels.push({ panelId: 'lid', text: 'LID' });
+      if (sliding) labels.push({ panelId: 'sliding-lid', text: 'LID' });
+      return labels;
+    }
+    function designAssemblyLabelGeometry(panel, text, options = {}) {
+      const geometry = designAssemblyWordGeometry(text, options.capHeight || 4.5, options.spacing || 0.6);
+      if (!geometry || !geometry.valid) return geometry || { valid:false, reason:`Assembly label ${text} is empty.` };
+      const points = geometry.segments.flatMap(segment => [segment.a,segment.b]), glyphBounds = { minX:Math.min(...points.map(point=>point.x)), minY:Math.min(...points.map(point=>point.y)), maxX:Math.max(...points.map(point=>point.x)), maxY:Math.max(...points.map(point=>point.y)) };
+      glyphBounds.width = designRound(glyphBounds.maxX - glyphBounds.minX); glyphBounds.height = designRound(glyphBounds.maxY - glyphBounds.minY);
+      const x = designRound((panel.width - glyphBounds.width) / 2 - glyphBounds.minX), y = designRound((panel.height - glyphBounds.height) / 2 - glyphBounds.minY);
+      const segments = geometry.segments.map(segment => ({ a: { x: designRound(segment.a.x + x), y: designRound(segment.a.y + y) }, b: { x: designRound(segment.b.x + x), y: designRound(segment.b.y + y) } }));
+      return { ...geometry, x, y, segments, glyphBounds };
+    }
+    function designMinimumSegmentClearance(segments, polygonPoints) {
+      const polygonSegments = designPointSegments(polygonPoints || []);
+      return Math.min(...segments.flatMap(segment => polygonSegments.map(edge => designSegmentDistance(segment, edge))));
+    }
+    function buildAssemblyLabelPaths(panels, specs, guideSegmentsByPanel = {}, options = {}) {
+      const byId = Object.fromEntries((panels || []).map(panel => [panel.id, panel]));
+      const minimumClearance = Number.isFinite(options.minimumClearance) ? options.minimumClearance : 1;
+      const paths = [], warnings = [];
+      specs.forEach((spec, index) => {
+        const panel = byId[spec.panelId];
+        if (!panel) { warnings.push(`Assembly label ${spec.text} omitted: missing panel ${spec.panelId}.`); return; }
+        const geometry = designAssemblyLabelGeometry(panel, spec.text, spec);
+        if (!geometry || !geometry.valid) {
+          warnings.push(`Assembly label ${spec.text} omitted: ${geometry?.reason || 'no safe placement.'}`);
+          return;
+        }
+        if (!designSegmentsContainedInPolygon(geometry.segments, panel.points || [])) {
+          warnings.push(`Assembly label ${spec.text} omitted: no safe polygon placement on ${panel.name}.`);
+          return;
+        }
+        const cutClearance = designMinimumSegmentClearance(geometry.segments, panel.points || []);
+        if (!(cutClearance >= minimumClearance - 1e-9)) {
+          warnings.push(`Assembly label ${spec.text} omitted on ${panel.name}: cut clearance ${designNumberText(cutClearance)} mm is below the ${designNumberText(minimumClearance)} mm minimum.`);
+          return;
+        }
+        const guides = guideSegmentsByPanel[spec.panelId] || [];
+        const guideClearance = guides.length ? Math.min(...geometry.segments.flatMap(labelSegment => guides.map(guideSegment => designSegmentDistance(labelSegment, guideSegment)))) : Infinity;
+        if (guides.length && !(guideClearance >= minimumClearance - 1e-9)) {
+          warnings.push(`Assembly label ${spec.text} omitted on ${panel.name}: rail-guide clearance ${designNumberText(guideClearance)} mm is below the ${designNumberText(minimumClearance)} mm minimum.`);
+          return;
+        }
+        const panelX = designRound(Number(panel.x) || 0), panelY = designRound(Number(panel.y) || 0);
+        paths.push({ id:`label-${spec.panelId}-${index}`, group:'assembly-labels', panelId:spec.panelId, name:spec.text, title:spec.text, text:spec.text, x:designRound(panelX + geometry.x), y:designRound(panelY + geometry.y), path:geometry.path, segments:geometry.segments, glyphRuns:geometry.glyphRuns, cutClearance, guideClearance });
+      });
+      return { paths, warnings };
+    }
+    function designSerializedPathGroup(paths, groupId) {
+      return paths.length ? `    <g id="${groupId}" fill="none" stroke="#0000ff" stroke-width="0.1">\n${paths.map(path => `      <g id="${esc(path.id)}" transform="translate(${designNumberText(path.x)} ${designNumberText(path.y)})">\n        <title>${esc(path.name)}</title>\n        <path d="${path.path}"/>\n      </g>`).join('\n')}\n    </g>\n` : '';
+    }
+    function slidingRailGuideSegments(dimensions, thickness, panelWidth = dimensions.railLength, endJoineryDepth = thickness) {
+      const inset = Math.max(1, thickness / 2), leg = Math.min(6, Math.max(3, thickness)), railOffsetX = panelWidth - dimensions.railLength, width = panelWidth, height = dimensions.railHeight, joineryDepth = Math.max(0, endJoineryDepth);
+      if (railOffsetX < -1e-9 || joineryDepth < -1e-9 || 2 * inset + leg >= height || 2 * (joineryDepth + inset) + leg >= dimensions.railLength) return {valid:false, errors:['Rail-placement guide marks do not fit within the side-panel envelope.'], segments:[], inset, leg, railOffsetX, endJoineryDepth:joineryDepth};
+      const xFront = designRound(railOffsetX + joineryDepth + inset), xBack = designRound(width - joineryDepth - inset), yTop = designRound(inset), yBottom = designRound(height - inset);
+      if (xFront + leg >= xBack - 1e-9) return {valid:false, errors:['Rail-placement guide marks do not fit beneath the rail footprint.'], segments:[], inset, leg, railOffsetX, endJoineryDepth:joineryDepth};
       return {valid:true, errors:[], inset, leg, segments:[
         [{x:xFront,y:yTop},{x:xFront+leg,y:yTop}], [{x:xFront,y:yTop},{x:xFront,y:yTop+leg}],
         [{x:xBack,y:yTop},{x:xBack-leg,y:yTop}], [{x:xBack,y:yTop},{x:xBack,y:yTop+leg}],
@@ -1994,16 +2146,20 @@
     }
     function layoutDesignPanels(panels, margin = 10, gap = 15) { return layoutDesignPanelRows(panels,[['bottom','lid'],['front','back'],['left','right']],margin,gap); }
     function serializeDesignSvg(result) {
-      const score = result.scorePaths?.length ? `  <g id="score" fill="none" stroke="#0000ff" stroke-width="0.1">\n${result.scorePaths.map(path => `    <g id="${esc(path.id)}" transform="translate(${designNumberText(path.x)} ${designNumberText(path.y)})">\n      <title>${esc(path.name)}</title>\n      <path d="${path.path}"/>\n    </g>`).join('\n')}\n  </g>\n` : '';
+      const scorePaths = result.scorePaths || [], labelPaths = result.labelPaths || [];
+      const score = scorePaths.length || labelPaths.length
+        ? `  <g id="score" fill="none" stroke="#0000ff" stroke-width="0.1">\n${designSerializedPathGroup(scorePaths, 'rail-guides')}${designSerializedPathGroup(labelPaths, 'assembly-labels')}  </g>\n`
+        : '';
       return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${designNumberText(result.widthMm)}mm" height="${designNumberText(result.heightMm)}mm" viewBox="0 0 ${designNumberText(result.widthMm)} ${designNumberText(result.heightMm)}">\n${score}  <g id="cut" fill="none" stroke="#ff0000" stroke-width="0.1">\n${result.panels.map(panel => `    <g id="panel-${esc(panel.id)}" transform="translate(${designNumberText(panel.x)} ${designNumberText(panel.y)})">\n      <title>${esc(panel.name)}</title>\n      <path d="${panel.path}"/>\n    </g>`).join('\n')}\n  </g>\n</svg>\n`;
     }
     function designPathPoints(path) {
-      const tokens = String(path || '').match(/[MHVZ]|[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi) || [], points = [];
+      const tokens = String(path || '').match(/[MHLVZ]|[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi) || [], points = [];
       let index = 0, x = 0, y = 0, start = null;
       while (index < tokens.length) {
         const command = tokens[index++].toUpperCase();
         if (command === 'M') { x = Number(tokens[index++]); y = Number(tokens[index++]); start = {x,y}; points.push({x,y}); }
         else if (command === 'H') { x = Number(tokens[index++]); points.push({x,y}); }
+        else if (command === 'L') { x = Number(tokens[index++]); y = Number(tokens[index++]); points.push({x,y}); }
         else if (command === 'V') { y = Number(tokens[index++]); points.push({x,y}); }
         else if (command === 'Z' && start) { x = start.x; y = start.y; points.push({x,y}); }
         else return [];
@@ -2033,6 +2189,56 @@
       if (elements.some(item => !item.finite)) errors.push('SVG contains unsupported or non-finite geometry.');
       if (elements.some(item => item.bounds && (item.bounds.minX < -1e-6 || item.bounds.minY < -1e-6 || item.bounds.maxX > widthMm + 1e-6 || item.bounds.maxY > heightMm + 1e-6))) errors.push('SVG geometry leaves the viewBox.');
       return { valid:!errors.length, errors, widthMm, heightMm, viewBox, elements, documentNode };
+    }
+    function designSvgPathSegments(path) {
+      const tokens = String(path || '').match(/[MHLVZ]|[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi) || [], segments = [];
+      let index = 0, x = 0, y = 0, start = null;
+      while (index < tokens.length) {
+        const command = tokens[index++].toUpperCase();
+        if (command === 'M') { x = Number(tokens[index++]); y = Number(tokens[index++]); start = { x, y }; }
+        else if (command === 'H') { const next = Number(tokens[index++]); segments.push({ a:{x,y}, b:{x:next,y} }); x = next; }
+        else if (command === 'L') { const nextX = Number(tokens[index++]), nextY = Number(tokens[index++]); segments.push({ a:{x,y}, b:{x:nextX,y:nextY} }); x = nextX; y = nextY; }
+        else if (command === 'V') { const next = Number(tokens[index++]); segments.push({ a:{x,y}, b:{x,y:next} }); y = next; }
+        else if (command === 'Z' && start) { segments.push({ a:{x,y}, b:{x:start.x,y:start.y} }); x = start.x; y = start.y; }
+        else return [];
+      }
+      return segments.filter(segment => segment.a.x !== segment.b.x || segment.a.y !== segment.b.y);
+    }
+    function designSvgTranslateChain(element) {
+      let x = 0, y = 0, current = element;
+      const transforms = [];
+      while (current) {
+        const match = String(current.getAttribute?.('transform') || '').match(/^translate\(([-+\d.eE]+)[ ,]+([-+\d.eE]+)\)$/);
+        if (match) { const tx=Number(match[1]),ty=Number(match[2]); x += tx; y += ty; transforms.push({id:current.id || current.localName || '',x:tx,y:ty}); }
+        current = current.parentElement;
+      }
+      return { x: designRound(x), y: designRound(y), transforms };
+    }
+    function designSvgAssemblyLabelPaths(svg) {
+      const documentNode = new DOMParser().parseFromString(String(svg || ''), 'image/svg+xml');
+      return [...documentNode.querySelectorAll('g#assembly-labels > g[id^="label-"]')].map(group => {
+        const path = group.querySelector('path'), translate = designSvgTranslateChain(group);
+        const segments = designSvgPathSegments(path?.getAttribute('d') || '').map(segment => ({ a:{x:designRound(segment.a.x + translate.x),y:designRound(segment.a.y + translate.y)}, b:{x:designRound(segment.b.x + translate.x),y:designRound(segment.b.y + translate.y)} }));
+        return { id:group.id, name:group.querySelector('title')?.textContent || '', segments, translate };
+      });
+    }
+    function designSerializedAssemblyLabelValidation(svg, panels, guideSegmentsByPanel = {}, minimumClearance = 1) {
+      const byId = Object.fromEntries((panels || []).map(panel => [panel.id, panel])), errors = [], labels = designSvgAssemblyLabelPaths(svg);
+      labels.forEach(label => {
+        const panelId = label.id.replace(/^label-/, '').replace(/-\d+$/, ''), panel = byId[panelId];
+        if (!panel) { errors.push(`Assembly label ${label.name} has no target panel.`); return; }
+        const panelPoints = (panel.points || []).map(point => ({ x:designRound(point.x + (panel.x || 0)), y:designRound(point.y + (panel.y || 0)) }));
+        if (!designSegmentsContainedInPolygon(label.segments, panelPoints)) errors.push(`Assembly label ${label.name} leaves the final ${panel.name} polygon.`);
+        const cutClearance = designMinimumSegmentClearance(label.segments, panelPoints);
+        if (cutClearance < minimumClearance - 1e-9) errors.push(`Assembly label ${label.name} has final cut clearance ${designNumberText(cutClearance)} mm below ${designNumberText(minimumClearance)} mm.`);
+        const guides = guideSegmentsByPanel[panelId] || [];
+        const translatedGuides = guides.map(segment => ({ a:{x:designRound(segment.a.x + (panel.x || 0)),y:designRound(segment.a.y + (panel.y || 0))}, b:{x:designRound(segment.b.x + (panel.x || 0)),y:designRound(segment.b.y + (panel.y || 0))} }));
+        if (translatedGuides.length) {
+          const guideClearance = Math.min(...label.segments.flatMap(labelSegment => translatedGuides.map(guideSegment => designSegmentDistance(labelSegment, guideSegment))));
+          if (guideClearance < minimumClearance - 1e-9) errors.push(`Assembly label ${label.name} has final rail-guide clearance ${designNumberText(guideClearance)} mm below ${designNumberText(minimumClearance)} mm.`);
+        }
+      });
+      return { valid:!errors.length, errors, labels };
     }
     function validateLegacyDesign(normalized) {
       const { draft, template, values, errors } = normalized;
@@ -2065,23 +2271,35 @@
       if (!model.valid) return { valid:false, errors:[...new Set(model.errors)], warnings:[...new Set([...normalized.warnings,...model.warnings])], svg:'', widthMm:0, heightMm:0, panels:model.panels, metrics:{...model.metrics,dimensions:model.dimensions,patterns:model.patterns} };
       const layout = layoutDesignPanels(model.panels), errors = [...model.errors,...layout.errors], warnings = [...normalized.warnings,...model.warnings];
       if (layout.widthMm > 400 || layout.heightMm > 400) warnings.push(`Generated layout is ${designNumberText(layout.widthMm)} × ${designNumberText(layout.heightMm)} mm; verify the available sheet and machine area.`);
-      const partial = { widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels }, svg = errors.length ? '' : serializeDesignSvg(partial), validation = svg ? designSvgValidation(svg,layout.widthMm,layout.heightMm) : {valid:false,errors:[]};
+      const labelSpecs = normalized.values.assemblyLabels ? designAssemblyLabelSpecs(normalized.template, normalized.values) : [];
+      const labelResult = labelSpecs.length ? buildAssemblyLabelPaths(layout.panels, labelSpecs, {}, { minimumClearance: Math.max(1, normalized.values.materialThickness / 3) }) : { paths: [], warnings: [] };
+      warnings.push(...labelResult.warnings);
+      const partial = { widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,labelPaths:labelResult.paths }, svg = errors.length ? '' : serializeDesignSvg(partial), validation = svg ? designSvgValidation(svg,layout.widthMm,layout.heightMm) : {valid:false,errors:[]};
       errors.push(...validation.errors);
-      return { valid:!errors.length, errors:[...new Set(errors)], warnings:[...new Set(warnings)], svg:errors.length ? '' : svg, widthMm:layout.widthMm, heightMm:layout.heightMm, panels:layout.panels, metrics:{...model.metrics,dimensions:model.dimensions,patterns:model.patterns,margin:layout.margin,gap:layout.gap}, validation };
+      if (svg && labelResult.paths.length) errors.push(...designSerializedAssemblyLabelValidation(svg, layout.panels, {}, Math.max(1, normalized.values.materialThickness / 3)).errors);
+      return { valid:!errors.length, errors:[...new Set(errors)], warnings:[...new Set(warnings)], svg:errors.length ? '' : svg, widthMm:layout.widthMm, heightMm:layout.heightMm, panels:layout.panels, labelPaths:labelResult.paths, metrics:{...model.metrics,dimensions:model.dimensions,patterns:model.patterns,margin:layout.margin,gap:layout.gap,assemblyLabels:normalized.values.assemblyLabels,labelCount:labelResult.paths.length}, validation };
     }
     function buildSlidingLidDesignResult(normalized) {
       if (normalized.errors.length) return { valid:false, errors:[...new Set(normalized.errors)], warnings:normalized.warnings, svg:'', widthMm:0, heightMm:0, panels:[], metrics:{slidingLid:true} };
       const model=buildSlidingLidBoxModel(normalized.values);
       if (!model.valid) return {valid:false,errors:[...new Set(model.errors)],warnings:[...new Set([...normalized.warnings,...model.warnings])],svg:'',widthMm:0,heightMm:0,panels:model.panels,metrics:{...model.metrics,slidingLid:true,dimensions:model.dimensions,patterns:model.patterns}};
-      let panels = model.panels.map(panel => panel.id === 'right' && normalized.values.guideMarks ? mirrorDesignPanel(panel) : panel);
+      const rightPanelMustBeHanded = normalized.values.guideMarks || normalized.values.assemblyLabels;
+      let panels = model.panels.map(panel => panel.id === 'right' && rightPanelMustBeHanded ? mirrorDesignPanel(panel) : panel);
+      let endJoineryDepth = 0;
       const scorePaths=[];
+      let guideSegmentsByPanel = {};
       if (normalized.values.guideMarks) {
-        const leftPanel=panels.find(panel=>panel.id==='left'), guides=slidingRailGuideSegments(model.dimensions,normalized.values.materialThickness,leftPanel.width);
+        endJoineryDepth = designEdgeTerminalOffset({ pattern:model.patterns.vertical, phase:false, depth:normalized.values.materialThickness }, true);
+        const leftPanel=panels.find(panel=>panel.id==='left'), rightPanel=panels.find(panel=>panel.id==='right'), guides=slidingRailGuideSegments(model.dimensions,normalized.values.materialThickness,leftPanel.width,endJoineryDepth);
         if (!guides.valid) model.errors.push(...guides.errors);
         else {
-          const leftSegments=guides.segments, rightPanel=panels.find(panel=>panel.id==='right'), rightSegments=leftSegments.map(segment=>({a:{x:designRound(rightPanel.width-segment.a.x),y:segment.a.y},b:{x:designRound(rightPanel.width-segment.b.x),y:segment.b.y}}));
-          scorePaths.push({id:'guide-rail-left',name:'Left rail placement guides',panelId:'left',path:designScoreSegmentsPath(leftSegments),segments:leftSegments});
-          scorePaths.push({id:'guide-rail-right',name:'Right rail placement guides',panelId:'right',path:designScoreSegmentsPath(rightSegments),segments:rightSegments});
+          const leftSegments=guides.segments, rightSegments=leftSegments.map(segment=>({a:{x:designRound(rightPanel.width-segment.a.x),y:segment.a.y},b:{x:designRound(rightPanel.width-segment.b.x),y:segment.b.y}}));
+          if (!designSegmentsContainedInPolygon(leftSegments, leftPanel.points) || !designSegmentsContainedInPolygon(rightSegments, rightPanel.points)) model.errors.push('Rail-placement guide marks do not stay within the retained side-panel material.');
+          else {
+            guideSegmentsByPanel = { left: leftSegments, right: rightSegments };
+            scorePaths.push({id:'guide-rail-left',name:'Left rail placement guides',panelId:'left',path:designScoreSegmentsPath(leftSegments),segments:leftSegments});
+            scorePaths.push({id:'guide-rail-right',name:'Right rail placement guides',panelId:'right',path:designScoreSegmentsPath(rightSegments),segments:rightSegments});
+          }
         }
       }
       let couponMetrics={};
@@ -2095,9 +2313,13 @@
       if (layout.widthMm>400||layout.heightMm>400) warnings.push(`Generated layout is ${designNumberText(layout.widthMm)} × ${designNumberText(layout.heightMm)} mm; verify the available sheet and machine area.`);
       const placedById=Object.fromEntries(layout.panels.map(panel=>[panel.id,panel]));
       const placedScorePaths=scorePaths.map(score=>({...score,x:placedById[score.panelId]?.x || 0,y:placedById[score.panelId]?.y || 0}));
-      const partial={widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,scorePaths:placedScorePaths},svg=errors.length?'':serializeDesignSvg(partial),validation=svg?designSvgValidation(svg,layout.widthMm,layout.heightMm):{valid:false,errors:[]};
+      const labelSpecs = normalized.values.assemblyLabels ? designAssemblyLabelSpecs(normalized.template, normalized.values) : [];
+      const labelResult = labelSpecs.length ? buildAssemblyLabelPaths(layout.panels, labelSpecs, guideSegmentsByPanel, { minimumClearance: Math.max(1, normalized.values.materialThickness / 3) }) : { paths: [], warnings: [] };
+      warnings.push(...labelResult.warnings);
+      const partial={widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,scorePaths:placedScorePaths,labelPaths:labelResult.paths},svg=errors.length?'':serializeDesignSvg(partial),validation=svg?designSvgValidation(svg,layout.widthMm,layout.heightMm):{valid:false,errors:[]};
       errors.push(...validation.errors);
-      return {valid:!errors.length,errors:[...new Set(errors)],warnings:[...new Set(warnings)],svg:errors.length?'':svg,widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,scorePaths:placedScorePaths,metrics:{...model.metrics,...couponMetrics,dimensions:model.dimensions,patterns:model.patterns,guideMarks:normalized.values.guideMarks,fitCoupon:normalized.values.fitCoupon,margin:layout.margin,gap:layout.gap,rows},validation};
+      if (svg && labelResult.paths.length) errors.push(...designSerializedAssemblyLabelValidation(svg, layout.panels, guideSegmentsByPanel, Math.max(1, normalized.values.materialThickness / 3)).errors);
+      return {valid:!errors.length,errors:[...new Set(errors)],warnings:[...new Set(warnings)],svg:errors.length?'':svg,widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,scorePaths:placedScorePaths,labelPaths:labelResult.paths,metrics:{...model.metrics,...couponMetrics,dimensions:model.dimensions,patterns:model.patterns,guideMarks:normalized.values.guideMarks,guideEndJoineryDepth:endJoineryDepth,fitCoupon:normalized.values.fitCoupon,assemblyLabels:normalized.values.assemblyLabels,labelCount:labelResult.paths.length,margin:layout.margin,gap:layout.gap,rows},validation};
     }
     function buildDesignResult(rawDraft = designDraft) {
       const normalized = normalizeDesignDraft(rawDraft);
@@ -2125,7 +2347,8 @@
           + designMetric('Open channel / Back stop', `${designNumberText(dimensions.channelLength)} mm / ${designNumberText(dimensions.stopLength)} mm`)
           + designMetric('Shortened Front height', `${designNumberText(dimensions.frontHeight)} mm`)
           + designMetric('Open end / direction', 'Front / Front toward Back')
-          + designMetric('Rail guide marks', result.metrics.guideMarks ? 'Enabled — blue score layer; Right panel mirrored with guides' : 'Disabled')
+          + designMetric('Rail guide marks', result.metrics.guideMarks ? 'Enabled — blue score layer; Right panel handed with guides' : 'Disabled')
+          + designMetric('Assembly labels', result.metrics.assemblyLabels ? `Enabled — ${result.metrics.labelCount || 0} intended-face labels` : 'Disabled')
           + designMetric('Sliding-fit coupon', result.metrics.fitCoupon ? 'Enabled — six pieces' : 'Disabled')
           + designMetric('Required pieces', String(result.panels.length || 8))
           + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable')
@@ -2141,6 +2364,7 @@
           + designMetric('Overall closed height', `${designNumberText(result.metrics.closedHeight)} mm`)
           + designMetric('Panels', String(result.panels.length))
           + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable')
+          + designMetric('Assembly labels', result.metrics.assemblyLabels ? `Enabled — ${result.metrics.labelCount || 0} intended-face labels` : 'Disabled')
           + designMetric('Requested finger width', `${designNumberText(result.metrics.requestedFingerWidth)} mm`)
           + (patterns?.width ? designMetric('Width-edge fingers', `${patterns.width.count} segments × ${designNumberText(patterns.width.actualWidth)} mm`) : '')
           + (patterns?.depth ? designMetric('Depth-edge fingers', `${patterns.depth.count} segments × ${designNumberText(patterns.depth.actualWidth)} mm`) : '')
@@ -2148,7 +2372,9 @@
         : designMetric('Shapes', String(result.panels.length)) + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable');
       const messages = result.errors.map(message => `<div class="design-message error"><b>Error:</b> ${esc(message)}</div>`).join('') + result.warnings.map(message => `<div class="design-message warning"><b>Warning:</b> ${esc(message)}</div>`).join('');
       const preview = result.valid ? `<div class="design-svg-preview"><object type="image/svg+xml" aria-label="Exact exported SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`)}"></object></div>` : '<div class="design-svg-preview"><div class="empty"><b>Preview unavailable</b><div class="small muted">Correct the errors before previewing or downloading.</div></div></div>';
-      const assembly = sliding ? `<div class="design-message"><b>Assembly:</b> Assemble the five body panels. Glue the two identical rails inside the side walls, top-flush and Back-flush, with both channels facing inward. Clamp with a thickness-plus-clearance spacer, keep glue out of the channels, and let it cure. Insert the lid from Front toward Back; the shortened edges face Front and the stop ends face Back while the tongue closes the center gap. ${result.metrics.guideMarks ? 'Run the blue guide score before the red cuts; install both marked faces inward. The visible Front gap is intentional and equals the Front plus Back wall allowance represented by panel width minus rail length.' : ''} <b>Kerf is not included.</b></div>` : '';
+      const assembly = sliding
+        ? `<div class="design-message"><b>Assembly:</b> Assemble the five body panels. Glue the two identical rails inside the side walls, top-flush and Back-flush, with both channels facing inward. Clamp with a thickness-plus-clearance spacer, keep glue out of the channels, and let it cure. Insert the lid from Front toward Back; the shortened edges face Front and the stop ends face Back while the tongue closes the center gap. ${result.metrics.guideMarks || result.metrics.assemblyLabels ? 'Labels and rail guides are placed on the displayed sheet face. Install both marked side faces inward. Keep shortened edges toward Front and stop ends toward Back. Verify label visibility and face orientation during the first assembly.' : ''} <b>Kerf is not included.</b></div>`
+        : result.metrics?.assemblyLabels ? '<div class="design-message"><b>Assembly labels:</b> Marks are placed on the displayed sheet face and are intended for the inside or concealed faces. Verify Left/Right orientation, label visibility, and the marked face during the first assembly; the finger-box cut geometry is unchanged.</div>' : '';
       return `<div class="design-preview-layout"><div class="panel"><b>Design results</b><div class="metrics" style="margin-top:10px">${metrics}</div>${messages || '<div class="design-message"><b>Ready:</b> Preview and download use the same validated SVG.</div>'}${assembly}</div>${preview}</div>`;
     }
     function refreshDesignPreview() {
@@ -2274,6 +2500,12 @@
       add('Legacy open-top finger-box SVG remains byte-stable',insideResult.svg.length===openSignature.length&&designFixtureHash(insideResult.svg)===openSignature.hash,`${openSignature.length}/${openSignature.hash}`,`${insideResult.svg.length}/${designFixtureHash(insideResult.svg)}`);
       add('Legacy loose-lid finger-box SVG remains byte-stable',lidResult.svg.length===looseSignature.length&&designFixtureHash(lidResult.svg)===looseSignature.hash,`${looseSignature.length}/${looseSignature.hash}`,`${lidResult.svg.length}/${designFixtureHash(lidResult.svg)}`);
       add('Legacy buildBoxModel remains byte-stable through result output',buildDesignResult({...inside}).svg===insideResult.svg);
+      const labeledBox = buildDesignResult({...inside, assemblyLabels:true}), looseLabeledBox = buildDesignResult({...inside, boxLid:'loose', assemblyLabels:true});
+      add('Open-top box labels are valid', labeledBox.valid && labeledBox.metrics.assemblyLabels === true && labeledBox.labelPaths.length === 5);
+      add('Open-top box labels serialize inside the score layer', labeledBox.svg.includes('<g id="score"') && labeledBox.svg.includes('<g id="assembly-labels"'));
+      add('Loose-lid box adds a lid label', looseLabeledBox.valid && looseLabeledBox.labelPaths.some(path => path.text === 'LID') && looseLabeledBox.labelPaths.length === 6);
+      add('Disabled box labels preserve the legacy SVG bytes', buildDesignResult({...inside, assemblyLabels:false}).svg === insideResult.svg);
+      add('Box label preview and download stay identical', designSvg({...inside, assemblyLabels:true}) === labeledBox.svg);
 
       const slidingA=defaultsFor('sliding-lid-box',{slidingJointClearance:'0.10'}),slidingB=defaultsFor('sliding-lid-box',{slidingDimensionMode:'outside',slidingWidth:'132',slidingDepth:'102',slidingHeight:'63',slidingJointClearance:'0.10'});
       const slidingAResult=buildDesignResult(slidingA),slidingBResult=buildDesignResult(slidingB),aDimensions=slidingAResult.metrics.dimensions,bDimensions=slidingBResult.metrics.dimensions;
@@ -2455,23 +2687,88 @@
       add('Guide SVG has a blue score group',guidedSliding.svg.includes('<g id="score"')&&guidedSliding.svg.includes('stroke="#0000ff"'));
       add('Guided Right panel mirrors the complete local geometry',JSON.stringify(guidedRight.points)===JSON.stringify(unmirroredRight.points.map(point=>({x:designRound(unmirroredRight.width-point.x),y:point.y}))));
       add('Right guide coordinates mirror with the Right panel',guidedSliding.scorePaths.find(score=>score.id==='guide-rail-right').segments.every((segment,index)=>{const source=guidedSliding.scorePaths.find(score=>score.id==='guide-rail-left').segments[index];return segment.a.x===designRound(guidedRight.width-source.a.x)&&segment.b.x===designRound(guidedRight.width-source.b.x)&&segment.a.y===source.a.y&&segment.b.y===source.b.y;}));
-      const leftGuide=guidedSliding.scorePaths.find(score=>score.id==='guide-rail-left'), rightGuide=guidedSliding.scorePaths.find(score=>score.id==='guide-rail-right'), guideInset=1.5, guideLeg=3, guideOffset=slidingLeft.width-aDimensions.railLength;
-      const expectedLeftGuide=[[[7.5,1.5],[10.5,1.5]],[[7.5,1.5],[7.5,4.5]],[[84.5,1.5],[81.5,1.5]],[[84.5,1.5],[84.5,4.5]],[[7.5,9.7],[10.5,9.7]],[[7.5,9.7],[7.5,6.7]],[[84.5,9.7],[81.5,9.7]],[[84.5,9.7],[84.5,6.7]]].map(([a,b])=>({a:{x:a[0],y:a[1]},b:{x:b[0],y:b[1]}}));
+      const leftGuide=guidedSliding.scorePaths.find(score=>score.id==='guide-rail-left'), rightGuide=guidedSliding.scorePaths.find(score=>score.id==='guide-rail-right'), fixtureGuideSegmentsByPanel={left:leftGuide.segments,right:rightGuide.segments}, guideInset=1.5, guideLeg=3, guideOffset=slidingLeft.width-aDimensions.railLength, guideJoineryDepth=guidedSliding.metrics.guideEndJoineryDepth;
+      const expectedLeftGuide=[[[10.5,1.5],[13.5,1.5]],[[10.5,1.5],[10.5,4.5]],[[81.5,1.5],[78.5,1.5]],[[81.5,1.5],[81.5,4.5]],[[10.5,9.7],[13.5,9.7]],[[10.5,9.7],[10.5,6.7]],[[81.5,9.7],[78.5,9.7]],[[81.5,9.7],[81.5,6.7]]].map(([a,b])=>({a:{x:a[0],y:a[1]},b:{x:b[0],y:b[1]}}));
       const expectedRightGuide=expectedLeftGuide.map(segment=>({a:{x:designRound(guidedRight.width-segment.a.x),y:segment.a.y},b:{x:designRound(guidedRight.width-segment.b.x),y:segment.b.y}}));
       const guideCoordinates=score=>score.segments.map(segment=>[segment.a.x,segment.a.y,segment.b.x,segment.b.y]);
       add('Guide rail offset equals panel width minus rail length',guideOffset===6,6,guideOffset);
+      add('Guide end joinery depth comes from the production side panel',guideJoineryDepth===3,3,guideJoineryDepth);
       add('Left guide endpoints use corrected Back-flush footprint',JSON.stringify(guideCoordinates(leftGuide))===JSON.stringify(guideCoordinates({segments:expectedLeftGuide})),JSON.stringify(guideCoordinates({segments:expectedLeftGuide})),JSON.stringify(guideCoordinates(leftGuide)));
       add('Right guide endpoints use independently mirrored corrected footprint',JSON.stringify(guideCoordinates(rightGuide))===JSON.stringify(guideCoordinates({segments:expectedRightGuide})),JSON.stringify(guideCoordinates({segments:expectedRightGuide})),JSON.stringify(guideCoordinates(rightGuide)));
-      add('Back guide reference uses panel width minus inset',leftGuide.segments[2].a.x===designRound(slidingLeft.width-guideInset)&&rightGuide.segments[2].a.x===designRound(guidedRight.width-(slidingLeft.width-guideInset)),'86-1.5 / mirrored 1.5',`${leftGuide.segments[2].a.x}/${rightGuide.segments[2].a.x}`);
-      add('Front guide reference includes rail offset',leftGuide.segments[0].a.x===designRound(guideOffset+guideInset));
+      add('Back guide reference uses panel width minus end joinery and inset',leftGuide.segments[2].a.x===designRound(slidingLeft.width-guideJoineryDepth-guideInset)&&rightGuide.segments[2].a.x===designRound(guidedRight.width-(slidingLeft.width-guideJoineryDepth-guideInset)),'81.5 / mirrored 10.5',`${leftGuide.segments[2].a.x}/${rightGuide.segments[2].a.x}`);
+      add('Front guide reference includes rail offset and end joinery',leftGuide.segments[0].a.x===designRound(guideOffset+guideJoineryDepth+guideInset));
       add('Guide marks remain within the corrected rail footprint',leftGuide.segments.every(segment=>[segment.a,segment.b].every(point=>point.x>=guideOffset&&point.x<=slidingLeft.width&&point.y>=0&&point.y<=aDimensions.railHeight)));
       add('Guide marks stay off all side-panel cut edges',leftGuide.segments.every(segment=>[segment.a,segment.b].every(point=>point.x>guideOffset&&point.x<slidingLeft.width&&point.y>0&&point.y<aDimensions.railHeight)));
-      add('Front guide gap equals the Back-flush rail offset',leftGuide.segments[0].a.x-guideInset===guideOffset);
+      add('Front guide gap equals the Back-flush rail offset plus end joinery',leftGuide.segments[0].a.x-guideInset===guideOffset+guideJoineryDepth);
+      add('Guide endpoints and whole segments stay inside the left panel polygon',leftGuide.segments.every(segment=>segment.a.x>0&&segment.a.y>0&&segment.b.x>0&&segment.b.y>0)&&designSegmentsContainedInPolygon(leftGuide.segments, guidedSliding.panels.find(panel=>panel.id==='left').points));
+      add('Guide endpoints and whole segments stay inside the mirrored right panel polygon',rightGuide.segments.every(segment=>segment.a.x>0&&segment.a.y>0&&segment.b.x>0&&segment.b.y>0)&&designSegmentsContainedInPolygon(rightGuide.segments, guidedRight.points));
+      add('No guide segment intersects or touches its target panel cut outline',leftGuide.segments.every(segment=>designSegmentContainedInPolygon(segment, guidedSliding.panels.find(panel=>panel.id==='left').points))&&rightGuide.segments.every(segment=>designSegmentContainedInPolygon(segment, guidedRight.points)));
+      const legacyCrossingGuide=[[[7.5,1.5],[10.5,1.5]],[[7.5,1.5],[7.5,4.5]],[[84.5,1.5],[81.5,1.5]],[[84.5,1.5],[84.5,4.5]],[[7.5,9.7],[10.5,9.7]],[[7.5,9.7],[7.5,6.7]],[[84.5,9.7],[81.5,9.7]],[[84.5,9.7],[84.5,6.7]]].map(([a,b])=>({a:{x:a[0],y:a[1]},b:{x:b[0],y:b[1]}}));
+      add('Legacy Front-flush guide would fail containment',!designSegmentsContainedInPolygon(legacyCrossingGuide, guidedSliding.panels.find(panel=>panel.id==='left').points));
       add('Corrected guide output keeps the document viewBox',guidedSliding.widthMm===slidingAResult.widthMm&&guidedSliding.heightMm===slidingAResult.heightMm);
       add('Guided Right preserves Bottom to Right mating metadata',guidedRight.edges[2].phase!==slidingBottom.edges[1].phase&&JSON.stringify(guidedRight.edges[2].pattern.boundaries)===JSON.stringify(slidingBottom.edges[1].pattern.boundaries));
       add('Guided Right preserves Back to Right mating metadata',guidedRight.edges[1].phase!==slidingBack.edges[3].phase&&JSON.stringify(guidedRight.edges[1].pattern.boundaries)===JSON.stringify(slidingBack.edges[3].pattern.boundaries));
       add('Guided Right preserves shortened Front lower-field metadata',guidedRight.edges[3].composite===true&&guidedRight.edges[3].compositeSpan===slidingRight.edges[3].compositeSpan);
       add('Guide inputs do not mutate the draft',JSON.stringify(slidingA)===slidingDraftBefore);
+      const labeledSliding = buildDesignResult({...slidingA,assemblyLabels:true}), guidedLabeledSliding = buildDesignResult({...slidingA,slidingGuideMarks:true,assemblyLabels:true}), slidingRightLabel = labeledSliding.labelPaths.find(path => path.panelId === 'right' && path.text === 'RIGHT'), guidedRightLabel = guidedLabeledSliding.labelPaths.find(path => path.panelId === 'right' && path.text === 'RIGHT');
+      add('Sliding labels are valid', labeledSliding.valid && labeledSliding.metrics.assemblyLabels === true && labeledSliding.labelPaths.length === 6);
+      add('Sliding labels serialize in the score layer', labeledSliding.svg.includes('<g id="score"') && labeledSliding.svg.includes('<g id="assembly-labels"'));
+      add('Guides and labels serialize together', guidedLabeledSliding.svg.includes('<g id="rail-guides"') && guidedLabeledSliding.svg.includes('<g id="assembly-labels"'));
+      add('Guided sliding keeps six labels', guidedLabeledSliding.valid && guidedLabeledSliding.labelPaths.length === 6);
+      add('Sliding Right remains readable after mirroring', guidedRightLabel && slidingRightLabel && guidedRightLabel.path === slidingRightLabel.path && guidedRightLabel.text === 'RIGHT');
+      const finalLabelCenters = result => {
+        const parsed = designSvgAssemblyLabelPaths(result.svg), panelsById = Object.fromEntries(result.panels.map(panel => [panel.id, panel])), pathsById = Object.fromEntries(result.labelPaths.map(path => [path.id,path]));
+        return parsed.map(label => {
+          const panelId = label.id.replace(/^label-/, '').replace(/-\d+$/, ''), panel = panelsById[panelId], sourcePath = pathsById[label.id], points = label.segments.flatMap(segment => [segment.a,segment.b]);
+          const bounds = { minX:Math.min(...points.map(point=>point.x)), minY:Math.min(...points.map(point=>point.y)), maxX:Math.max(...points.map(point=>point.x)), maxY:Math.max(...points.map(point=>point.y)) };
+          const centerX=designRound((bounds.minX+bounds.maxX)/2),centerY=designRound((bounds.minY+bounds.maxY)/2),expectedX=panel?designRound(panel.x+panel.width/2):NaN,expectedY=panel?designRound(panel.y+panel.height/2):NaN;
+          return { label, panel, sourcePath, panelId, centerX, centerY, expectedX, expectedY, deltaX:designRound(centerX-expectedX), deltaY:designRound(centerY-expectedY), localOffset:panel&&sourcePath?{x:designRound(sourcePath.x-panel.x),y:designRound(sourcePath.y-panel.y)}:null, panelOffset:panel?{x:panel.x,y:panel.y}:null, serializedTranslate:{x:label.translate.x,y:label.translate.y}, ancestorTransformCount:label.translate.transforms.length, finalBounds:bounds };
+        });
+      };
+      const translationDiagnostics=[...finalLabelCenters(labeledSliding).map(item=>({...item,mode:'labels-only'})),...finalLabelCenters(guidedLabeledSliding).map(item=>({...item,mode:'guides-and-labels'}))].map(({label,panel,sourcePath,...item})=>({labelId:label.id,...item})),translationMismatches=translationDiagnostics.filter(item=>!Number.isFinite(item.deltaX)||!Number.isFinite(item.deltaY)||Math.abs(item.deltaX)>1e-6||Math.abs(item.deltaY)>1e-6);
+      add('Sliding labels use one final translation', translationMismatches.length===0, 'every final label center within 0.000001 mm of its translated panel center', JSON.stringify(translationMismatches.length?translationMismatches:translationDiagnostics));
+      add('Final SVG label segments stay inside translated panel polygons', [labeledSliding,guidedLabeledSliding].every(result => designSerializedAssemblyLabelValidation(result.svg,result.panels,result === guidedLabeledSliding ? fixtureGuideSegmentsByPanel : {},1).valid));
+      add('Final SVG label extraction composes all ancestor translations', finalLabelCenters(labeledSliding).length === labeledSliding.labelPaths.length && finalLabelCenters(labeledSliding).every(item => item.label.segments.length > 0));
+      add('Sliding labels stay clear of rail guides', guidedLabeledSliding.labelPaths.filter(path => path.panelId === 'left' || path.panelId === 'right').every(path => {
+        const guides = path.panelId === 'left' ? leftGuide.segments : rightGuide.segments;
+        return path.segments.every(segment => guides.every(guide => designSegmentDistance(segment, guide) >= 1));
+      }));
+      const labelsOnlyRight = labeledSliding.panels.find(panel => panel.id === 'right');
+      add('Labels-only Right panel is handed without changing dimensions', JSON.stringify(labelsOnlyRight.points) === JSON.stringify(unmirroredRight.points.map(point=>({x:designRound(unmirroredRight.width-point.x),y:point.y}))) && labelsOnlyRight.width === unmirroredRight.width && labelsOnlyRight.height === unmirroredRight.height);
+      add('Labels-only Right label remains readable left-to-right', labeledSliding.labelPaths.find(path=>path.panelId==='right'&&path.text==='RIGHT')?.path === designAssemblyWordGeometry('RIGHT').path && !labeledSliding.labelPaths.find(path=>path.panelId==='right'&&path.text==='RIGHT')?.path.includes('scale'));
+      const stateStructure = (result, scoreChildren) => { const root = new DOMParser().parseFromString(result.svg,'image/svg+xml').documentElement, score = root.querySelector('g#score'), cut = root.querySelector('g#cut'); return !!cut && root.querySelectorAll('g#score').length === (scoreChildren.length ? 1 : 0) && root.querySelectorAll('g#cut').length === 1 && (!scoreChildren.length || [...score.children].map(child=>child.id).join('|') === scoreChildren.join('|')); };
+      add('No-score sliding structure is stable', stateStructure(slidingAResult,[]));
+      add('Guides-only sliding structure uses rail-guides', stateStructure(guidedSliding,['rail-guides']));
+      add('Labels-only sliding structure uses assembly-labels', stateStructure(labeledSliding,['assembly-labels']));
+      add('Guides-and-labels structure is ordered', stateStructure(guidedLabeledSliding,['rail-guides','assembly-labels']));
+      add('Coupon pieces remain unlabeled', buildDesignResult({...slidingA,slidingFitCoupon:true,assemblyLabels:true}).labelPaths.every(path=>!path.panelId.startsWith('coupon-')));
+      const labelPanel = designPanelFromPoints({id:'label-panel',name:'Label panel',width:120,height:40},[{x:0,y:0},{x:120,y:0},{x:120,y:40},{x:0,y:40},{x:0,y:0}]), labelOrder = buildAssemblyLabelPaths([labelPanel],[{panelId:'label-panel',text:'BOTTOM'},{panelId:'label-panel',text:'FRONT'}]), labelOrderRepeat = buildAssemblyLabelPaths([labelPanel],[{panelId:'label-panel',text:'BOTTOM'},{panelId:'label-panel',text:'FRONT'}]), tinyPanel = designPanelFromPoints({id:'tiny-panel',name:'Tiny panel',width:12,height:8},[{x:0,y:0},{x:12,y:0},{x:12,y:8},{x:0,y:8},{x:0,y:0}]), tinyLabel = buildAssemblyLabelPaths([tinyPanel],[{panelId:'tiny-panel',text:'BOTTOM'}]);
+      add('Label glyph ordering is deterministic', labelOrder.paths.map(path => path.text).join('|') === 'BOTTOM|FRONT' && JSON.stringify(labelOrder) === JSON.stringify(labelOrderRepeat));
+      add('Label geometry stays inside its panel polygon', labelOrder.paths.every(path => designSegmentsContainedInPolygon(path.segments, labelPanel.points)));
+      add('Label geometry does not touch the cut outline', labelOrder.paths.every(path => path.segments.every(segment => designSegmentContainedInPolygon(segment, labelPanel.points))));
+      add('Oversized labels warn and continue generating', tinyLabel.paths.length === 0 && tinyLabel.warnings.length === 1 && /omitted/i.test(tinyLabel.warnings[0]));
+      const glyphExpectations = { BOTTOM:[20.25,24], FRONT:[16.8,21], BACK:[13.35,18], LEFT:[13.35,11], RIGHT:[15.9,20], LID:[9,9] };
+      Object.entries(glyphExpectations).forEach(([word,[width,segmentCount]]) => {
+        const geometry = designAssemblyWordGeometry(word), repeated = designAssemblyWordGeometry(word), segments = designSvgPathSegments(geometry.path), keys = segments.map(designSegmentKey), commands = geometry.path.match(/[A-Z]/gi) || [], unsupportedCommands=commands.filter(command=>!['M','H','L','V'].includes(command.toUpperCase())), zeroLengthCount=geometry.segments.filter(segment=>segment.a.x===segment.b.x&&segment.a.y===segment.b.y).length, duplicateKeys=keys.filter((key,index)=>keys.indexOf(key)!==index), glyphDiagnostic={expectedSegmentCount:segmentCount,directSegmentCount:geometry.segments.length,parsedPathSegmentCount:segments.length,commands,unsupportedCommands,zeroLengthCount,duplicateSegmentKeys:[...new Set(duplicateKeys)],firstPath:geometry.path,repeatedPath:repeated.path,pathsByteIdentical:geometry.path===repeated.path};
+        add(`${word} glyph dimensions are fixed`, geometry.valid && geometry.width === width && geometry.height === 4.5, `${width}/4.5`, `${geometry.width}/${geometry.height}`);
+        add(`${word} glyph geometry is finite and nonzero`, geometry.segments.every(segment => [segment.a,segment.b].every(point => Number.isFinite(point.x) && Number.isFinite(point.y)) && (segment.a.x !== segment.b.x || segment.a.y !== segment.b.y)));
+        add(`${word} glyph has deterministic commands and segments`, unsupportedCommands.length===0 && geometry.segments.length === segmentCount && segments.length === segmentCount && duplicateKeys.length===0 && zeroLengthCount===0 && geometry.path === repeated.path, JSON.stringify({expectedSegmentCount:segmentCount,allowedCommands:['M','H','L','V']}), JSON.stringify(glyphDiagnostic));
+      });
+      add('Unsupported glyph is rejected without a partial word', !designAssemblyWordGeometry('BOTTOM?')?.valid && buildAssemblyLabelPaths([labelPanel],[{panelId:'label-panel',text:'BOTTOM?'}]).paths.length === 0);
+      add('Unknown label warning is deterministic and names the label', buildAssemblyLabelPaths([labelPanel],[{panelId:'label-panel',text:'BOTTOM?'}]).warnings.join('|') === 'Assembly label BOTTOM? omitted: Unknown label glyph ?.');
+      const realSmallBoxCandidates = [
+        buildDesignResult({...inside,boxWidth:'12',assemblyLabels:true}),
+        buildDesignResult({...inside,boxDepth:'24',assemblyLabels:true}),
+        buildDesignResult({...inside,boxHeight:'12',assemblyLabels:true}),
+        buildDesignResult({...inside,boxWidth:'12',boxLid:'loose',assemblyLabels:true})
+      ];
+      const smallBoxOmission = realSmallBoxCandidates[0];
+      const smallBoxIntended=designAssemblyLabelSpecs('finger-box',{lid:'open'}),smallBoxEmitted=smallBoxOmission.labelPaths.map(path=>path.text),smallBoxOmitted=smallBoxIntended.map(spec=>spec.text).filter(text=>!smallBoxEmitted.includes(text)),smallBoxDiagnostic={input:{boxDimensionMode:'inside',boxWidth:12,boxDepth:90,boxHeight:50,materialThickness:3},valid:smallBoxOmission.valid,errors:smallBoxOmission.errors,warnings:smallBoxOmission.warnings,emittedLabelIds:smallBoxOmission.labelPaths.map(path=>path.id),emittedLabels:smallBoxEmitted,omittedLabels:smallBoxOmitted,cutPanelCount:smallBoxOmission.panels.length,svgAvailable:!!smallBoxOmission.svg,exportValid:smallBoxOmission.valid&&!!smallBoxOmission.svg,outsideDimensions:smallBoxOmission.metrics.dimensions?{width:smallBoxOmission.metrics.dimensions.outsideWidth,depth:smallBoxOmission.metrics.dimensions.outsideDepth,height:smallBoxOmission.metrics.dimensions.outsideHeight}:null,patternCounts:smallBoxOmission.metrics.patterns?{width:smallBoxOmission.metrics.patterns.width?.count,depth:smallBoxOmission.metrics.patterns.depth?.count,height:smallBoxOmission.metrics.patterns.vertical?.count}:null};
+      add('Supported finger-box dimensions can omit only unsafe labels and keep cuts valid', smallBoxOmission.valid && !!smallBoxOmission.svg && smallBoxEmitted.join('|')==='BACK|LEFT|RIGHT' && smallBoxOmitted.join('|')==='BOTTOM|FRONT' && smallBoxOmission.warnings.some(message=>/Assembly label BOTTOM omitted/.test(message)&&/Bottom/.test(message)) && smallBoxOmission.warnings.some(message=>/Assembly label FRONT omitted/.test(message)&&/Front/.test(message)), JSON.stringify({valid:true,svgAvailable:true,emittedLabels:['BACK','LEFT','RIGHT'],omittedLabels:['BOTTOM','FRONT'],warningIncludes:['BOTTOM/Bottom','FRONT/Front']}), JSON.stringify(smallBoxDiagnostic));
+      const restoredBox = buildDesignResult({...inside,assemblyLabels:true});
+      add('Restoring the standard finger-box dimensions restores all labels', restoredBox.valid && restoredBox.labelPaths.length === 5 && !restoredBox.warnings.some(message => /Assembly label/.test(message)));
+      add('Disabled sliding labels preserve the legacy SVG bytes', buildDesignResult({...slidingA, assemblyLabels:false}).svg === slidingAResult.svg);
+      add('Sliding preview and download stay identical', designSvg({...slidingA, slidingGuideMarks:true, assemblyLabels:true}) === guidedLabeledSliding.svg);
 
       const couponSliding=buildDesignResult({...slidingA,slidingFitCoupon:true}), couponIds='bottom|sliding-lid|front-open|back|left|right|rail-left|rail-right|coupon-base|coupon-wall-left|coupon-wall-right|coupon-rail-left|coupon-rail-right|coupon-lid';
       add('Six-piece sliding coupon remains valid',couponSliding.valid);
@@ -5500,7 +5797,7 @@
         };
         designForm.onchange = e => {
           updateDesignDraft(designForm);
-          if (['template','boxDimensionMode','slidingDimensionMode','lidPull','slidingGuideMarks','slidingFitCoupon'].includes(e.target.name)) render();
+          if (['template','boxDimensionMode','slidingDimensionMode','lidPull','slidingGuideMarks','slidingFitCoupon','assemblyLabels'].includes(e.target.name)) render();
           else refreshDesignPreview();
         };
       }
