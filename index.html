@@ -245,6 +245,8 @@
   <div class="modal" id="gridModal"></div>
   <div class="modal" id="cellModal"></div>
   <div class="modal" id="testModal"></div>
+  <div class="modal" id="productionSettingModal"></div>
+  <div class="modal" id="productionEvidenceModal"></div>
   <div class="modal" id="materialTestWizardModal"></div>
   <div class="modal" id="projectWizardModal"></div>
   <div class="toast" id="undoToast"></div>
@@ -339,6 +341,10 @@
     const batchStatuses = ['planned', 'made', 'for-sale', 'sold-out', 'archived'];
     const materialTestTypes = ['engrave_matrix', 'interval', 'cut', 'kerf', 'photo', 'other'];
     const materialTestStatuses = ['recommended', 'experimental', 'failed', 'archived'];
+    const productionVerificationStatuses = ['untested', 'estimated', 'tested', 'verified', 'superseded'];
+    const productionMeasurementScopes = ['sheet', 'batch', 'material-general', 'unknown'];
+    const productionMachineKeys = ['genmitsu-l8-20w', 'genmitsu-l8-40w', 'custom'];
+    const productionEvidenceKinds = ['manufacturer', 'material-test', 'test-grid', 'joint-coupon', 'assembled-project', 'manual'];
     const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     const today = () => new Date().toISOString().slice(0, 10);
     const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -354,6 +360,8 @@
     let editingEntryId = null;
     let editingProfileId = null;
     let profileDraftTests = [];
+    let profileDraftProductionSettings = [];
+    let productionEvidenceDraft = [];
     let pendingGridPromotion = null;
     let inventoryBrowserSelectedId = '';
     let inventoryBrowserInStockOnly = false;
@@ -931,7 +939,7 @@
         overscanPercent: '', kerfOffset: '', ditherMode: 'none',
         materialHeightValue: '', materialHeightUnit: state.unit, software: ''
       };
-      if (kind === 'profile') return { ...base, tests: [] };
+      if (kind === 'profile') return { ...base, tests: [], productionSettings: [] };
       return base;
     }
     function render() {
@@ -1181,7 +1189,7 @@
       const inventoryHtml = inventory.length ? inventory.map(match => `<div class="small" style="margin-top:8px"><b>${esc(match.item.name || 'Unnamed Inventory material')}</b><br>${esc(stockUnitText(match.item.quantityOnHand, match.item.unit))} / ${esc(rawStockStatus(match.item).text)}${match.item.supplier ? `<br>Supplier: ${esc(match.item.supplier)}` : ''}<br><span class="muted">${esc(libraryInventoryMatchReason(match))}</span>${materialBrowserSafetyWarningHtml(match.item)}</div>`).join('') : '<div class="small muted">No matching Inventory material found.</div>';
       const relatedHtml = related.length ? related.map(match => `<div class="small" style="margin-top:8px"><b>${esc(match.project.name || 'Untitled Project')}</b><br>${esc(match.project.dateCreated || 'No date')} / ${esc(match.project.status || 'kept')} / ${esc(match.project.material || 'No material')}<br><span class="muted">${esc(match.reasons.join(' / '))}</span><div class="actions"><button type="button" data-library-related-project="${esc(match.project.id)}">Open Project</button></div></div>`).join('') : '<div class="small muted">No related Projects found.</div>';
       const provenance = latest?.sourceGridName ? `Test Grid: ${latest.sourceGridName}` : latest?.sourceKind ? `Source: ${latest.sourceKind}` : latest?.baselineSource ? `Baseline: ${latest.baselineSource}` : '';
-      return `<div class="panel nested-browser-detail"><div class="spread"><div><b>${esc(profile.material || 'Unspecified material')}</b><div class="small muted">${esc(fmt(profile.thicknessValue, profile.thicknessUnit))} - ${esc(operation.label)}</div></div><span class="pill">${esc(libraryProfileLeafBadge(profile))}</span></div>${browserHiddenSelectionNotice(hidden, 'Library profile')}${materialSafetyWarningHtml(profile.material)}${tags.length ? `<div class="row" style="margin-top:8px">${tags.map(tag => `<span class="pill">${esc(tag)}</span>`).join('')}</div>` : ''}<div class="metrics" style="margin-top:9px">${metric('Power', powerLabel(profile))}${metric('Speed', `${profile.speed} mm/min`)}${metric('Passes', profile.passes)}${metric('Line int.', fmt(profile.lineInterval, 'mm'))}</div><div class="small muted" style="margin-top:9px">Air: ${profile.airAssist ? 'On' : 'Off'} - Focus/Z-offset: ${fmt(profile.focusValue, profile.focusUnit)}${profile.software ? ` - ${esc(profile.software)}` : ''}</div>${profile.notes ? `<p class="small">${esc(profile.notes)}</p>` : ''}<div class="panel" style="margin-top:10px"><b>${esc(summary.statusText)}</b><div class="small muted">${summary.tests.length} Material Test${summary.tests.length === 1 ? '' : 's'} / ${summary.recommendedCount} recommended / ${summary.experimentalCount} experimental${summary.highestConfidence ? ` / highest confidence ${summary.highestConfidence}/5` : ''}</div>${latest ? `<div class="small" style="margin-top:8px">Latest valid test: ${esc(latest.date)} - ${esc(materialTestLabel(latest.testType))}<br>Result: ${esc(latest.overallResult || latest.resultSummary || latest.status || 'Recorded')}${provenance ? `<br><span class="muted">${esc(provenance)}</span>` : ''}</div>` : '<div class="small muted" style="margin-top:8px">No Material Test has a valid date.</div>'}</div><div class="actions"><button type="button" data-library-edit-profile="${esc(profile.id)}">Edit</button><button type="button" data-library-duplicate-profile="${esc(profile.id)}">Duplicate</button><button type="button" data-library-project-profile="${esc(profile.id)}">Save as project</button><button type="button" data-library-wizard-profile="${esc(profile.id)}">Material Test Wizard</button><button type="button" class="danger" data-library-delete-profile="${esc(profile.id)}">Delete</button></div><hr><b>Suggested Inventory</b>${inventoryHtml}<hr><b>Related Projects</b>${relatedHtml}</div>`;
+      return `<div class="panel nested-browser-detail"><div class="spread"><div><b>${esc(profile.material || 'Unspecified material')}</b><div class="small muted">${esc(fmt(profile.thicknessValue, profile.thicknessUnit))} - ${esc(operation.label)}</div></div><span class="pill">${esc(libraryProfileLeafBadge(profile))}</span></div>${browserHiddenSelectionNotice(hidden, 'Library profile')}${materialSafetyWarningHtml(profile.material)}${tags.length ? `<div class="row" style="margin-top:8px">${tags.map(tag => `<span class="pill">${esc(tag)}</span>`).join('')}</div>` : ''}<div class="metrics" style="margin-top:9px">${metric('Power', powerLabel(profile))}${metric('Speed', `${profile.speed} mm/min`)}${metric('Passes', profile.passes)}${metric('Line int.', fmt(profile.lineInterval, 'mm'))}</div><div class="small muted" style="margin-top:9px">Air: ${profile.airAssist ? 'On' : 'Off'} - Focus/Z-offset: ${fmt(profile.focusValue, profile.focusUnit)}${profile.software ? ` - ${esc(profile.software)}` : ''}</div>${profile.notes ? `<p class="small">${esc(profile.notes)}</p>` : ''}<div class="panel" style="margin-top:10px"><b>${esc(summary.statusText)}</b><div class="small muted">${summary.tests.length} Material Test${summary.tests.length === 1 ? '' : 's'} / ${summary.recommendedCount} recommended / ${summary.experimentalCount} experimental${summary.highestConfidence ? ` / highest confidence ${summary.highestConfidence}/5` : ''}</div>${latest ? `<div class="small" style="margin-top:8px">Latest valid test: ${esc(latest.date)} - ${esc(materialTestLabel(latest.testType))}<br>Result: ${esc(latest.overallResult || latest.resultSummary || latest.status || 'Recorded')}${provenance ? `<br><span class="muted">${esc(provenance)}</span>` : ''}</div>` : '<div class="small muted" style="margin-top:8px">No Material Test has a valid date.</div>'}</div><div class="panel" style="margin-top:10px"><b>Proven Production Settings</b>${productionSettingsSummaryHtml(profile.productionSettings)}</div><div class="actions"><button type="button" data-library-edit-profile="${esc(profile.id)}">Edit</button><button type="button" data-library-duplicate-profile="${esc(profile.id)}">Duplicate</button><button type="button" data-library-project-profile="${esc(profile.id)}">Save as project</button><button type="button" data-library-wizard-profile="${esc(profile.id)}">Material Test Wizard</button><button type="button" class="danger" data-library-delete-profile="${esc(profile.id)}">Delete</button></div><hr><b>Suggested Inventory</b>${inventoryHtml}<hr><b>Related Projects</b>${relatedHtml}</div>`;
     }
     function libraryBrowserResultsHtml() {
       const { filtered } = libraryViewData();
@@ -4572,6 +4580,118 @@
         baselineTestId: typeof test.baselineTestId === 'string' ? test.baselineTestId : ''
       })) : [];
     }
+    function strictOptionalNumber(value) {
+      if (value === '' || value == null) return '';
+      if (typeof value === 'number') return Number.isFinite(value) ? value : '';
+      if (typeof value !== 'string') return '';
+      const text = value.trim();
+      if (!text || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) return '';
+      const parsed = Number(text);
+      return Number.isFinite(parsed) ? parsed : '';
+    }
+    function boundedProductionNumber(value, minimum, maximum = Infinity) {
+      const parsed = strictOptionalNumber(value);
+      return parsed === '' || parsed < minimum || parsed > maximum ? '' : parsed;
+    }
+    function productionKnownValue(value, known, fallback) {
+      if (typeof value !== 'string') return fallback;
+      const text = value.trim();
+      return text ? text : fallback;
+    }
+    function productionMachineDefaultLabel(key) {
+      if (key === 'genmitsu-l8-20w') return 'Genmitsu L8 20W';
+      if (key === 'genmitsu-l8-40w') return 'Genmitsu L8 40W';
+      return '';
+    }
+    function normalizeProductionEvidence(evidence) {
+      return Array.isArray(evidence) ? evidence.filter(item => item && typeof item === 'object').map(item => ({
+        ...item,
+        id: item.id || uid(),
+        kind: productionKnownValue(item.kind, productionEvidenceKinds, 'manual'),
+        sourceId: typeof item.sourceId === 'string' ? item.sourceId : '',
+        sourceProfileId: typeof item.sourceProfileId === 'string' ? item.sourceProfileId : '',
+        sourceLabel: typeof item.sourceLabel === 'string' ? item.sourceLabel.trim() : '',
+        date: typeof item.date === 'string' ? item.date : '',
+        result: typeof item.result === 'string' ? item.result.trim() : '',
+        notes: typeof item.notes === 'string' ? item.notes.trim() : ''
+      })) : [];
+    }
+    function normalizeProductionSetting(setting) {
+      if (!setting || typeof setting !== 'object') return null;
+      const machineSource = setting.machine && typeof setting.machine === 'object' ? setting.machine : {};
+      const materialSource = setting.materialCondition && typeof setting.materialCondition === 'object' ? setting.materialCondition : {};
+      const cutSource = setting.cutSettings && typeof setting.cutSettings === 'object' ? setting.cutSettings : {};
+      const lightBurnSource = setting.lightBurn && typeof setting.lightBurn === 'object' ? setting.lightBurn : {};
+      const fitSource = setting.fitSettings && typeof setting.fitSettings === 'object' ? setting.fitSettings : {};
+      const machineKey = productionKnownValue(machineSource.key, productionMachineKeys, 'custom');
+      const passes = strictOptionalNumber(cutSource.passes);
+      const confidence = strictOptionalNumber(setting.confidence);
+      let powerMinPercent = boundedProductionNumber(cutSource.powerMinPercent, 0, 100);
+      let powerMaxPercent = boundedProductionNumber(cutSource.powerMaxPercent, 0, 100);
+      if (powerMinPercent !== '' && powerMaxPercent !== '' && powerMinPercent > powerMaxPercent) {
+        powerMinPercent = '';
+        powerMaxPercent = '';
+      }
+      return {
+        ...setting,
+        id: setting.id || uid(),
+        label: typeof setting.label === 'string' ? setting.label.trim() : '',
+        operation: typeof setting.operation === 'string' && setting.operation.trim() ? setting.operation.trim() : 'cut',
+        machine: {
+          ...machineSource,
+          key: machineKey,
+          label: typeof machineSource.label === 'string' && machineSource.label.trim() ? machineSource.label.trim() : productionMachineDefaultLabel(machineKey),
+          lens: typeof machineSource.lens === 'string' ? machineSource.lens.trim() : '',
+          focusMethod: typeof machineSource.focusMethod === 'string' ? machineSource.focusMethod.trim() : ''
+        },
+        materialCondition: {
+          ...materialSource,
+          nominalThicknessMm: boundedProductionNumber(materialSource.nominalThicknessMm, 0),
+          measuredThicknessMm: boundedProductionNumber(materialSource.measuredThicknessMm, 0),
+          measurementScope: productionKnownValue(materialSource.measurementScope, productionMeasurementScopes, 'unknown'),
+          measuredDate: typeof materialSource.measuredDate === 'string' ? materialSource.measuredDate : '',
+          inventoryItemId: typeof materialSource.inventoryItemId === 'string' ? materialSource.inventoryItemId : '',
+          inventoryItemName: typeof materialSource.inventoryItemName === 'string' ? materialSource.inventoryItemName.trim() : '',
+          supplier: typeof materialSource.supplier === 'string' ? materialSource.supplier.trim() : '',
+          product: typeof materialSource.product === 'string' ? materialSource.product.trim() : '',
+          batchLabel: typeof materialSource.batchLabel === 'string' ? materialSource.batchLabel.trim() : '',
+          finishOrCoating: typeof materialSource.finishOrCoating === 'string' ? materialSource.finishOrCoating.trim() : ''
+        },
+        cutSettings: {
+          ...cutSource,
+          speedMmPerMin: strictOptionalNumber(cutSource.speedMmPerMin),
+          powerMinPercent,
+          powerMaxPercent,
+          passes: passes === '' ? '' : Math.max(1, Math.round(passes)),
+          airAssist: !!cutSource.airAssist,
+          airPressurePsi: strictOptionalNumber(cutSource.airPressurePsi),
+          focusValue: strictOptionalNumber(cutSource.focusValue),
+          focusUnit: cutSource.focusUnit === 'in' ? 'in' : 'mm',
+          software: typeof cutSource.software === 'string' ? cutSource.software.trim() : ''
+        },
+        lightBurn: {
+          ...lightBurnSource,
+          kerfOffsetMm: strictOptionalNumber(lightBurnSource.kerfOffsetMm)
+        },
+        fitSettings: {
+          ...fitSource,
+          fingerJointClearanceMm: strictOptionalNumber(fitSource.fingerJointClearanceMm),
+          drawerTotalLateralClearanceMm: strictOptionalNumber(fitSource.drawerTotalLateralClearanceMm)
+        },
+        verificationStatus: productionKnownValue(setting.verificationStatus, productionVerificationStatuses, 'untested'),
+        preferred: !!setting.preferred,
+        confidence: confidence === '' ? '' : Math.max(1, Math.min(5, Math.round(confidence))),
+        verifiedDate: typeof setting.verifiedDate === 'string' ? setting.verifiedDate : '',
+        notes: typeof setting.notes === 'string' ? setting.notes.trim() : '',
+        evidence: normalizeProductionEvidence(setting.evidence),
+        supersededById: typeof setting.supersededById === 'string' ? setting.supersededById : '',
+        createdDate: typeof setting.createdDate === 'string' && setting.createdDate ? setting.createdDate : today(),
+        updatedDate: typeof setting.updatedDate === 'string' && setting.updatedDate ? setting.updatedDate : today()
+      };
+    }
+    function normalizeProductionSettings(settings) {
+      return Array.isArray(settings) ? settings.map(normalizeProductionSetting).filter(Boolean) : [];
+    }
     function gridTestTypeFromGrid(grid) {
       return grid?.jobType === 'engrave' || grid?.jobType === 'cut' ? (grid.jobType === 'cut' ? 'cut' : 'engrave_matrix') : 'other';
     }
@@ -4612,8 +4732,30 @@
         attachments: test.attachments.map(attachment => attachment && typeof attachment === 'object' ? { ...attachment } : attachment)
       }));
     }
+    function duplicateProductionSettings(settings) {
+      return normalizeProductionSettings(settings).map(setting => ({
+        ...setting,
+        id: uid(),
+        machine: { ...setting.machine },
+        materialCondition: { ...setting.materialCondition },
+        cutSettings: { ...setting.cutSettings },
+        lightBurn: { ...setting.lightBurn },
+        fitSettings: { ...setting.fitSettings },
+        verificationStatus: 'estimated',
+        preferred: false,
+        supersededById: '',
+        notes: [setting.notes, 'Copied from another Library profile; reverify for this material before production.'].filter(Boolean).join('\n\n'),
+        evidence: setting.evidence.map(item => ({ ...item, id: uid() })),
+        createdDate: today(),
+        updatedDate: today()
+      }));
+    }
     function normalizeLibraryProfiles(profiles) {
-      return Array.isArray(profiles) ? profiles.filter(profile => profile && typeof profile === 'object').map(profile => ({ ...profile, tests: normalizeMaterialTests(profile.tests) })) : [];
+      return Array.isArray(profiles) ? profiles.filter(profile => profile && typeof profile === 'object').map(profile => ({
+        ...profile,
+        tests: normalizeMaterialTests(profile.tests),
+        productionSettings: normalizeProductionSettings(profile.productionSettings)
+      })) : [];
     }
     function runMaterialTestNormalizationFixtures() {
       const futureFields = { overallResult: 'Excellent', observedTraits: ['Crisp detail'], futureMetadata: { source: 'newer-version' } };
@@ -4643,6 +4785,203 @@
       return { passed, failed, results };
     }
     window.runMaterialTestNormalizationFixtures = runMaterialTestNormalizationFixtures;
+    function runProductionSettingsFixtures() {
+      const fixture = (name, pass, actual = '') => ({ name, pass: !!pass, actual });
+      const evidence = { id: 'evidence-1', kind: 'joint-coupon', sourceId: 'coupon-1', sourceProfileId: 'profile-1', sourceLabel: 'Coupon -0.02 mm', date: '2026-07-16', result: 'winner', notes: 'Best fit', futureEvidence: { kept: true } };
+      const setting = {
+        id: 'setting-1', label: 'Verified basswood cut', operation: 'cut',
+        machine: { key: 'genmitsu-l8-20w', label: 'Genmitsu L8 20W', lens: 'standard', focusMethod: 'fixed', futureMachine: 'kept' },
+        materialCondition: { nominalThicknessMm: 3, measuredThicknessMm: 3.02, measurementScope: 'sheet', measuredDate: '2026-07-16', inventoryItemId: 'inventory-1', inventoryItemName: 'Basswood sheet', supplier: 'Supplier', product: 'Product', batchLabel: 'Batch A', finishOrCoating: '', futureMaterial: true },
+        cutSettings: { speedMmPerMin: 650, powerMinPercent: 100, powerMaxPercent: 100, passes: 1, airAssist: true, airPressurePsi: 15, focusValue: 7, focusUnit: 'mm', software: 'LightBurn', futureCut: true },
+        lightBurn: { kerfOffsetMm: .095, futureLightBurn: true },
+        fitSettings: { fingerJointClearanceMm: -.02, drawerTotalLateralClearanceMm: .45, futureFit: true },
+        verificationStatus: 'verified', preferred: true, confidence: 5, verifiedDate: '2026-07-16', notes: 'Physical result', evidence: [evidence], supersededById: '', createdDate: '2026-07-16', updatedDate: '2026-07-16', futureTop: { kept: true }
+      };
+      const sourceBefore = JSON.stringify(setting), normalized = normalizeProductionSetting(setting), repeated = normalizeProductionSetting(normalized);
+      const missingIdSource = { label: 'Missing ID', evidence: [{ kind: 'manual' }] };
+      const missingId = normalizeProductionSetting(missingIdSource), missingIdAgain = normalizeProductionSetting(missingId);
+      const malformedNumbers = normalizeProductionSetting({ cutSettings: { speedMmPerMin: 'fast', powerMinPercent: 'NaN', passes: 'many' }, lightBurn: { kerfOffsetMm: 'bad' }, fitSettings: { fingerJointClearanceMm: 'oops' }, confidence: 'high', materialCondition: { measuredThicknessMm: 'three' } });
+      const signed = normalizeProductionSetting({ lightBurn: { kerfOffsetMm: 0 }, fitSettings: { fingerJointClearanceMm: -.04, drawerTotalLateralClearanceMm: .45 } });
+      const boundedNumbers = normalizeProductionSetting({ cutSettings: { powerMinPercent: 0, powerMaxPercent: 100 }, materialCondition: { nominalThicknessMm: 0, measuredThicknessMm: 0 } });
+      const rejectedBounds = normalizeProductionSetting({ cutSettings: { powerMinPercent: -1, powerMaxPercent: 101 }, materialCondition: { nominalThicknessMm: -1, measuredThicknessMm: -0.01 } });
+      const invertedPower = normalizeProductionSetting({ cutSettings: { powerMinPercent: 80, powerMaxPercent: 60 } });
+      const unknownEnums = normalizeProductionSetting({ verificationStatus: 'future-verified', machine: { key: 'future-machine', label: 'Future machine' }, materialCondition: { measurementScope: 'future-scope' }, evidence: [{ id: 'future-evidence', kind: 'future-kind' }] });
+      const profileSource = { id: 'profile-1', material: 'Basswood', notes: 'Keep notes', tags: ['keep'], tests: [{ id: 'test-1', notes: 'Keep test' }], productionSettings: [setting], futureProfile: { kept: true } };
+      const profileSourceBefore = JSON.stringify(profileSource);
+      const built = buildLibraryProfileRecord(profileSource, { id: 'profile-1', material: 'Basswood updated', notes: 'Updated notes', tags: ['updated'] }, profileSource.tests, profileSource.productionSettings);
+      const listForFailure = [profileSource], listFailureBefore = JSON.stringify(listForFailure);
+      const failureSaved = saveProfileRecord(listForFailure, { ...profileSource, material: 'Should roll back' }, () => false);
+      const preferredOtherMachine = { ...setting, id: 'setting-40w', machine: { key: 'genmitsu-l8-40w', label: 'Genmitsu L8 40W' }, preferred: true };
+      const preferredSameMachine = { ...setting, id: 'setting-old', label: 'Old preferred', preferred: true };
+      const preferredNew = { ...setting, id: 'setting-new', label: 'New preferred', preferred: true };
+      const preferredDeclined = upsertProductionSettingDraft([preferredSameMachine, preferredOtherMachine], preferredNew, () => false);
+      const preferredAccepted = upsertProductionSettingDraft([preferredSameMachine, preferredOtherMachine], preferredNew, () => true);
+      let preferredConflictPrompt = '';
+      upsertProductionSettingDraft([preferredSameMachine], { ...preferredNew, materialCondition: { ...preferredNew.materialCondition, measurementScope: 'batch', batchLabel: 'Batch B', measuredThicknessMm: 3.08 } }, message => { preferredConflictPrompt = message; return false; });
+      const superseded = supersedeProductionSettingDraft([preferredSameMachine, preferredNew], preferredSameMachine.id, preferredNew.id);
+      const supersedeDifferentMachine = { ...preferredNew, id: 'different-machine', machine: { key: 'genmitsu-l8-40w', label: 'Genmitsu L8 40W' } };
+      const supersedeDifferentOperation = { ...preferredNew, id: 'different-operation', operation: 'engrave_vector' };
+      const supersedeAlreadySuperseded = { ...preferredNew, id: 'already-superseded', verificationStatus: 'superseded' };
+      const supersedeCandidates = [preferredSameMachine, preferredNew, supersedeDifferentMachine, supersedeDifferentOperation, supersedeAlreadySuperseded];
+      const supersedeBefore = JSON.stringify(supersedeCandidates);
+      const invalidSupersedes = [
+        supersedeProductionSettingDraft(supersedeCandidates, preferredSameMachine.id, ''),
+        supersedeProductionSettingDraft(supersedeCandidates, preferredSameMachine.id, preferredSameMachine.id),
+        supersedeProductionSettingDraft(supersedeCandidates, preferredSameMachine.id, 'missing'),
+        supersedeProductionSettingDraft(supersedeCandidates, preferredSameMachine.id, supersedeDifferentMachine.id),
+        supersedeProductionSettingDraft(supersedeCandidates, preferredSameMachine.id, supersedeDifferentOperation.id),
+        supersedeProductionSettingDraft(supersedeCandidates, preferredSameMachine.id, supersedeAlreadySuperseded.id)
+      ];
+      const inventorySnapshot = { inventoryItemId: 'deleted-inventory', inventoryItemName: 'Deleted basswood sheet', supplier: 'Old supplier', product: 'Old product', batchLabel: 'Batch A' };
+      const inventoryItems = [{ id: 'new-inventory', name: 'New basswood sheet', supplier: 'New supplier', product: 'New product' }];
+      const danglingInventory = productionInventorySelection(inventorySnapshot, inventorySnapshot.inventoryItemId, inventoryItems);
+      const clearedInventory = productionInventorySelection(inventorySnapshot, '', inventoryItems);
+      const replacedInventory = productionInventorySelection(inventorySnapshot, 'new-inventory', inventoryItems);
+      const danglingInventoryHtml = productionInventoryOptions(inventorySnapshot, inventoryItems);
+      const duplicateSourceBefore = JSON.stringify([setting]), duplicated = duplicateProductionSettings([setting]);
+      const local = [{
+        id: 'merge-profile', material: 'Local', localOnly: true,
+        tests: [{ id: 'local-test', notes: 'local' }, { id: 'shared-test', notes: 'old', localTestField: true }],
+        productionSettings: [{ ...setting, id: 'local-setting' }, { ...setting, id: 'shared-setting', label: 'Old', evidence: [{ ...evidence, id: 'local-evidence' }, { ...evidence, id: 'shared-evidence', result: 'old', localEvidenceField: true }], localSettingField: true }]
+      }];
+      const incoming = [{
+        id: 'merge-profile', material: 'Incoming', incomingOnly: true,
+        tests: [{ id: 'incoming-test', notes: 'incoming' }, { id: 'shared-test', notes: 'new', incomingTestField: true }],
+        productionSettings: [{ ...setting, id: 'incoming-setting' }, { ...setting, id: 'shared-setting', label: 'New', evidence: [{ ...evidence, id: 'incoming-evidence' }, { ...evidence, id: 'shared-evidence', result: 'new', incomingEvidenceField: true }], incomingSettingField: true }]
+      }, { id: 'new-profile', material: 'New', tests: [], productionSettings: [] }];
+      const merged = mergeLibraryProfiles(local, incoming), mergedReversed = mergeLibraryProfiles(local, [...incoming].reverse());
+      const mergedProfile = merged.find(item => item.id === 'merge-profile');
+      const mergedSetting = mergedProfile.productionSettings.find(item => item.id === 'shared-setting');
+      const mergedEvidence = mergedSetting.evidence.find(item => item.id === 'shared-evidence');
+      const adversarialLocal = [{
+        id: 'adversarial-profile',
+        productionSettings: [{
+          ...setting,
+          id: 'adversarial-setting',
+          label: 'Local label',
+          machine: { key: 'genmitsu-l8-20w', label: 'Local machine', localMachineUnknown: true },
+          materialCondition: { supplier: 'Local supplier' },
+          cutSettings: { speedMmPerMin: 650, localCutUnknown: true },
+          evidence: [{ id: 'local-only-evidence', kind: 'manual' }, { id: 'shared-adversarial-evidence', result: 'local' }]
+        }]
+      }];
+      const adversarialIncoming = [{
+        id: 'adversarial-profile',
+        productionSettings: [{
+          id: 'adversarial-setting',
+          label: 'Incoming label',
+          machine: { key: 'genmitsu-l8-20w', label: 'Incoming machine', incomingMachineUnknown: true },
+          materialCondition: { product: 'Incoming product' },
+          cutSettings: { speedMmPerMin: 700, incomingCutUnknown: true },
+          evidence: [{ id: 'incoming-only-evidence', kind: 'manual' }, { id: 'shared-adversarial-evidence', result: 'incoming' }]
+        }]
+      }];
+      const adversarialLocalBefore = JSON.stringify(adversarialLocal), adversarialIncomingBefore = JSON.stringify(adversarialIncoming);
+      const adversarialMerged = mergeLibraryProfiles(adversarialLocal, adversarialIncoming)[0].productionSettings[0];
+      const malformedParent = normalizeLibraryProfiles([{ id: 'parent-kept', material: 'Keep', productionSettings: [null, 'bad', { id: 'valid-child' }] }])[0];
+      const contexts = normalizeProductionSettings([setting, preferredOtherMachine, { ...setting, id: 'batch-b', materialCondition: { ...setting.materialCondition, measuredThicknessMm: 3.08, measurementScope: 'batch', batchLabel: 'Batch B' } }]);
+      const contextsReversed = [...contexts].reverse().sort((a, b) => compareText(a.id, b.id)).map(item => item.id).join('|');
+      const contextsSorted = [...contexts].sort((a, b) => compareText(a.id, b.id)).map(item => item.id).join('|');
+      const originalProfiles = state.profiles;
+      state.profiles = normalizeLibraryProfiles([profileSource]);
+      const backup = backupObject();
+      state.profiles = originalProfiles;
+      const backupRoundTrip = normalizeLibraryProfiles(JSON.parse(JSON.stringify(backup)).profiles)[0];
+      const unitProfile = normalizeLibraryProfiles([{ id: 'unit-profile', thicknessValue: 3, thicknessUnit: 'mm', productionSettings: [setting] }])[0];
+      const originalUnitProfiles = state.profiles;
+      state.profiles = [unitProfile];
+      const productionBeforeUnits = JSON.stringify(state.profiles[0].productionSettings);
+      convertStoredUnits('mm', 'in');
+      convertStoredUnits('in', 'mm');
+      const productionAfterUnits = JSON.stringify(state.profiles[0].productionSettings);
+      state.profiles = originalUnitProfiles;
+      const runtimeStateBefore = JSON.stringify(state);
+      replaceData({ profiles: [{ id: 'replace-profile', material: 'Replace', productionSettings: [setting, null] }], entries: [], grids: [], projects: [], inventory: { rawMaterials: [], finishedBatches: [] }, unit: 'mm' });
+      const replaceResult = state.profiles[0];
+      Object.assign(state, JSON.parse(runtimeStateBefore));
+      const mergeRuntimeBefore = JSON.stringify(state);
+      state.profiles = normalizeLibraryProfiles(local);
+      mergeData({ profiles: incoming });
+      const mergeDataResult = state.profiles.find(item => item.id === 'merge-profile');
+      Object.assign(state, JSON.parse(mergeRuntimeBefore));
+      const results = [
+        fixture('Old profile without production settings becomes empty array', Array.isArray(normalizeLibraryProfiles([{ id: 'old' }])[0].productionSettings) && normalizeLibraryProfiles([{ id: 'old' }])[0].productionSettings.length === 0),
+        fixture('Non-array production settings become empty array', normalizeProductionSettings({ bad: true }).length === 0),
+        fixture('Malformed production entries are omitted', normalizeProductionSettings([null, 'bad', 4, setting]).length === 1),
+        fixture('Valid production record is stable through repeated normalization', JSON.stringify(normalized) === JSON.stringify(repeated)),
+        fixture('Valid production and evidence IDs remain stable', normalized.id === 'setting-1' && normalized.evidence[0].id === 'evidence-1'),
+        fixture('Missing IDs are generated once', !!missingId.id && !!missingId.evidence[0].id && missingIdAgain.id === missingId.id && missingIdAgain.evidence[0].id === missingId.evidence[0].id),
+        fixture('Production normalization does not mutate source input', JSON.stringify(setting) === sourceBefore && !('id' in missingIdSource)),
+        fixture('Strict optional parser preserves zero', strictOptionalNumber(0) === 0 && signed.lightBurn.kerfOffsetMm === 0),
+        fixture('Strict optional parser preserves negative values', strictOptionalNumber('-.04') === -.04 && signed.fitSettings.fingerJointClearanceMm === -.04),
+        fixture('Strict optional parser rejects malformed and nonfinite values', strictOptionalNumber('12px') === '' && strictOptionalNumber(NaN) === '' && strictOptionalNumber(Infinity) === ''),
+        fixture('Production bounds accept zero and one hundred percent power', boundedNumbers.cutSettings.powerMinPercent === 0 && boundedNumbers.cutSettings.powerMaxPercent === 100),
+        fixture('Production bounds reject power below zero and above one hundred', rejectedBounds.cutSettings.powerMinPercent === '' && rejectedBounds.cutSettings.powerMaxPercent === ''),
+        fixture('Production bounds reject negative thickness values', rejectedBounds.materialCondition.nominalThicknessMm === '' && rejectedBounds.materialCondition.measuredThicknessMm === ''),
+        fixture('Production bounds preserve zero thickness values', boundedNumbers.materialCondition.nominalThicknessMm === 0 && boundedNumbers.materialCondition.measuredThicknessMm === 0),
+        fixture('Inverted persisted power range is rejected without swapping', invertedPower.cutSettings.powerMinPercent === '' && invertedPower.cutSettings.powerMaxPercent === ''),
+        fixture('Editor validation identifies inverted power range', productionSettingInputError({ powerMinPercent: '80', powerMaxPercent: '60', nominalThicknessMm: '3', measuredThicknessMm: '3' }) === 'Minimum power cannot be greater than maximum power.'),
+        fixture('Editor validation identifies out-of-range bounded values', productionSettingInputError({ powerMinPercent: '-1', powerMaxPercent: '100', nominalThicknessMm: '3', measuredThicknessMm: '3' }).includes('Minimum power')),
+        fixture('Signed kerf and fit values remain unchanged by bounded normalization', signed.lightBurn.kerfOffsetMm === 0 && signed.fitSettings.fingerJointClearanceMm === -.04 && signed.fitSettings.drawerTotalLateralClearanceMm === .45),
+        fixture('Malformed production numbers become blank, not zero', malformedNumbers.cutSettings.speedMmPerMin === '' && malformedNumbers.cutSettings.powerMinPercent === '' && malformedNumbers.cutSettings.passes === '' && malformedNumbers.lightBurn.kerfOffsetMm === '' && malformedNumbers.fitSettings.fingerJointClearanceMm === '' && malformedNumbers.confidence === '' && malformedNumbers.materialCondition.measuredThicknessMm === ''),
+        fixture('Blank optional production numbers remain blank', strictOptionalNumber('') === '' && strictOptionalNumber(null) === '' && strictOptionalNumber(undefined) === ''),
+        fixture('Unknown status and enum values remain recoverable', unknownEnums.verificationStatus === 'future-verified' && unknownEnums.machine.key === 'future-machine' && unknownEnums.materialCondition.measurementScope === 'future-scope' && unknownEnums.evidence[0].kind === 'future-kind'),
+        fixture('Nonstring invalid status defaults safely', normalizeProductionSetting({ verificationStatus: 7 }).verificationStatus === 'untested'),
+        fixture('Unknown top-level and nested production fields survive', normalized.futureTop.kept && normalized.machine.futureMachine === 'kept' && normalized.materialCondition.futureMaterial && normalized.cutSettings.futureCut && normalized.lightBurn.futureLightBurn && normalized.fitSettings.futureFit && normalized.evidence[0].futureEvidence.kept),
+        fixture('Profile record overlay preserves unknown fields', built.futureProfile.kept && built.tests[0].id === 'test-1' && built.productionSettings[0].id === 'setting-1'),
+        fixture('Profile record overlay updates recognized fields', built.material === 'Basswood updated' && built.notes === 'Updated notes' && built.tags[0] === 'updated'),
+        fixture('Profile build does not mutate original profile', JSON.stringify(profileSource) === profileSourceBefore),
+        fixture('Persist failure restores previous profile', !failureSaved && JSON.stringify(listForFailure) === listFailureBefore),
+        fixture('Declining preferred demotion cancels the update', preferredDeclined === null),
+        fixture('Accepted preferred change demotes only conflict', preferredAccepted.find(item => item.id === 'setting-old').preferred === false && preferredAccepted.find(item => item.id === 'setting-new').preferred === true && preferredAccepted.find(item => item.id === 'setting-40w').preferred === true),
+        fixture('Preferred conflict prompt identifies record context', preferredConflictPrompt.includes('Old preferred') && preferredConflictPrompt.includes('scope sheet') && preferredConflictPrompt.includes('batch Batch A') && preferredConflictPrompt.includes('3.02 mm measured') && preferredConflictPrompt.includes('Genmitsu L8 20W')),
+        fixture('Superseding preserves old record and evidence', superseded.length === 2 && superseded.find(item => item.id === 'setting-old').verificationStatus === 'superseded' && superseded.find(item => item.id === 'setting-old').supersededById === 'setting-new' && superseded.find(item => item.id === 'setting-old').evidence[0].id === 'evidence-1'),
+        fixture('Supersede accepts same-operation same-machine replacement', !!supersedeProductionSettingDraft(supersedeCandidates, preferredSameMachine.id, preferredNew.id)),
+        fixture('Supersede rejects missing, self, incompatible, and superseded replacements', invalidSupersedes.every(result => result === null)),
+        fixture('Rejected supersede attempts do not mutate source records', JSON.stringify(supersedeCandidates) === supersedeBefore),
+        fixture('Dangling Inventory reference remains after unrelated selection handling', danglingInventory.inventoryItemId === 'deleted-inventory' && danglingInventory.inventoryItemName === 'Deleted basswood sheet'),
+        fixture('Dangling Inventory snapshots remain intact', danglingInventory.supplier === 'Old supplier' && danglingInventory.product === 'Old product' && danglingInventory.batchLabel === 'Batch A'),
+        fixture('Explicit Inventory clearing removes only the link ID', clearedInventory.inventoryItemId === '' && clearedInventory.inventoryItemName === 'Deleted basswood sheet' && clearedInventory.supplier === 'Old supplier' && clearedInventory.product === 'Old product'),
+        fixture('Selecting available Inventory replaces link and intended snapshots', replacedInventory.inventoryItemId === 'new-inventory' && replacedInventory.inventoryItemName === 'New basswood sheet' && replacedInventory.supplier === 'New supplier' && replacedInventory.product === 'New product'),
+        fixture('Dangling Inventory option remains selected and visible', danglingInventoryHtml.includes('value="deleted-inventory" selected') && danglingInventoryHtml.includes('Unavailable: Deleted basswood sheet')),
+        fixture('Deleting one draft record leaves unrelated records', [preferredSameMachine, preferredNew].filter(item => item.id !== preferredSameMachine.id).map(item => item.id).join('|') === 'setting-new'),
+        fixture('Duplicate creates new production and evidence IDs', duplicated[0].id !== setting.id && duplicated[0].evidence[0].id !== evidence.id),
+        fixture('Duplicate clears preferred and downgrades verification', duplicated[0].preferred === false && duplicated[0].verificationStatus === 'estimated'),
+        fixture('Duplicate preserves values and source snapshots', duplicated[0].cutSettings.speedMmPerMin === 650 && duplicated[0].evidence[0].sourceId === 'coupon-1' && duplicated[0].evidence[0].sourceLabel === 'Coupon -0.02 mm'),
+        fixture('Duplicate adds reverify note', duplicated[0].notes.includes('Copied from another Library profile')),
+        fixture('Duplicate does not mutate original records', JSON.stringify([setting]) === duplicateSourceBefore),
+        fixture('Multiple machines remain separate', contexts.filter(item => item.machine.key === 'genmitsu-l8-20w').length === 2 && contexts.some(item => item.machine.key === 'genmitsu-l8-40w')),
+        fixture('Different sheet and batch measurements remain separate', contexts.some(item => item.materialCondition.measuredThicknessMm === 3.02 && item.materialCondition.measurementScope === 'sheet') && contexts.some(item => item.materialCondition.measuredThicknessMm === 3.08 && item.materialCondition.measurementScope === 'batch')),
+        fixture('Context ordering can be deterministic', contextsSorted === contextsReversed),
+        fixture('Merge retains distinct Material Tests', mergedProfile.tests.map(item => item.id).join('|') === 'incoming-test|local-test|shared-test'),
+        fixture('Merge retains distinct Production Settings', mergedProfile.productionSettings.map(item => item.id).join('|') === 'incoming-setting|local-setting|shared-setting'),
+        fixture('Merge retains distinct Evidence records', mergedSetting.evidence.map(item => item.id).join('|') === 'incoming-evidence|local-evidence|shared-evidence'),
+        fixture('Merge matching nested IDs uses incoming-wins conflicts', mergedProfile.material === 'Incoming' && mergedProfile.tests.find(item => item.id === 'shared-test').notes === 'new' && mergedSetting.label === 'New' && mergedEvidence.result === 'new'),
+        fixture('Merge preserves nonconflicting unknown fields from both sides', mergedProfile.localOnly && mergedProfile.incomingOnly && mergedProfile.tests.find(item => item.id === 'shared-test').localTestField && mergedProfile.tests.find(item => item.id === 'shared-test').incomingTestField && mergedSetting.localSettingField && mergedSetting.incomingSettingField && mergedEvidence.localEvidenceField && mergedEvidence.incomingEvidenceField),
+        fixture('Adversarial nested merge preserves divergent subobject fields', adversarialMerged.materialCondition.supplier === 'Local supplier' && adversarialMerged.materialCondition.product === 'Incoming product' && adversarialMerged.machine.localMachineUnknown && adversarialMerged.machine.incomingMachineUnknown && adversarialMerged.cutSettings.localCutUnknown && adversarialMerged.cutSettings.incomingCutUnknown && adversarialMerged.label === 'Incoming label' && adversarialMerged.machine.label === 'Incoming machine' && adversarialMerged.cutSettings.speedMmPerMin === 700 && adversarialMerged.evidence.map(item => item.id).join('|') === 'incoming-only-evidence|local-only-evidence|shared-adversarial-evidence' && adversarialMerged.evidence.find(item => item.id === 'shared-adversarial-evidence').result === 'incoming'),
+        fixture('Adversarial nested merge leaves source objects unmutated', JSON.stringify(adversarialLocal) === adversarialLocalBefore && JSON.stringify(adversarialIncoming) === adversarialIncomingBefore),
+        fixture('Merge output is independent of incoming profile order', JSON.stringify(merged) === JSON.stringify(mergedReversed)),
+        fixture('Malformed nested record does not discard parent profile', malformedParent.id === 'parent-kept' && malformedParent.productionSettings.length === 1 && malformedParent.productionSettings[0].id === 'valid-child'),
+        fixture('Backup automatically includes production settings and evidence', backup.profiles[0].productionSettings[0].id === 'setting-1' && backup.profiles[0].productionSettings[0].evidence[0].id === 'evidence-1'),
+        fixture('Backup JSON round trip preserves nested values and IDs', JSON.stringify(backupRoundTrip.productionSettings) === JSON.stringify(normalizeProductionSettings(profileSource.productionSettings))),
+        fixture('Signed values survive backup round trip', backupRoundTrip.productionSettings[0].lightBurn.kerfOffsetMm === .095 && backupRoundTrip.productionSettings[0].fitSettings.fingerJointClearanceMm === -.02),
+        fixture('Unknown future fields survive backup round trip', backupRoundTrip.productionSettings[0].futureTop.kept && backupRoundTrip.productionSettings[0].evidence[0].futureEvidence.kept),
+        fixture('Replace import path reproduces normalized production data', replaceResult.id === 'replace-profile' && replaceResult.productionSettings.length === 1 && replaceResult.productionSettings[0].id === 'setting-1'),
+        fixture('Merge import path uses nested Library merge behavior', mergeDataResult.tests.length === 3 && mergeDataResult.productionSettings.length === 3 && mergeDataResult.productionSettings.find(item => item.id === 'shared-setting').evidence.length === 3),
+        fixture('Unit conversion does not rewrite production evidence', productionBeforeUnits === productionAfterUnits),
+        fixture('Production summary exposes preferred status without redefining Best Known', productionSettingsSummaryHtml([setting]).includes('1 saved / 1 preferred') && productionSettingsSummaryHtml([setting]).includes('Verified production setting') && libraryProfileStatusLabel({ speed: 400, tests: [], productionSettings: [setting] }) === 'Saved setting'),
+        fixture('Storage key and schema remain unchanged', STORAGE_KEY === 'genmitsu-l8-tracker-v1' && SCHEMA_VERSION === 2)
+      ];
+      const passed = results.filter(result => result.pass).length;
+      const failed = results.length - passed;
+      console.group('Production settings fixtures');
+      console.table(results);
+      console.log(`${passed} passed`);
+      console.log(`${failed} failed`);
+      console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runProductionSettingsFixtures = runProductionSettingsFixtures;
     function runGridPromotionFixtures() {
       const grid = overrides => ({ id: 'grid-1', name: 'Fixture Grid', createdDate: '2026-07-14', jobType: 'engrave', passes: 2, lineInterval: .12, airAssist: true, software: 'LightBurn', ditherMode: 'none', ...overrides });
       const cell = overrides => ({ rating: 4, best: false, notes: 'Clean result', ...overrides });
@@ -4758,6 +5097,253 @@
         if (index >= 0) profileDraftTests[index] = normalized; else profileDraftTests.unshift(normalized);
         closeModal('testModal');
         refreshMaterialTestsEditor();
+      };
+    }
+    function productionEnumOptions(values, current, labels = {}) {
+      const options = values.includes(current) || !current ? values : [current, ...values];
+      return options.map(value => `<option value="${esc(value)}" ${value === current ? 'selected' : ''}>${esc(labels[value] || (values.includes(value) ? materialTestLabel(value) : `Unrecognized: ${value}`))}</option>`).join('');
+    }
+    function productionStatusLabel(status) {
+      const labels = { untested: 'Untested setting', estimated: 'Estimated setting', tested: 'Tested production setting', verified: 'Verified production setting', superseded: 'Superseded' };
+      return labels[status] || `Unrecognized: ${status || 'unknown'}`;
+    }
+    function productionMachineLabel(setting) {
+      return setting?.machine?.label || productionMachineDefaultLabel(setting?.machine?.key) || setting?.machine?.key || 'Machine not recorded';
+    }
+    function productionPowerLabel(setting) {
+      const cut = setting?.cutSettings || {};
+      if (cut.powerMinPercent === '' || cut.powerMinPercent == null) return '-';
+      return cut.powerMaxPercent !== '' && cut.powerMaxPercent != null && cut.powerMaxPercent !== cut.powerMinPercent ? `${cut.powerMinPercent}-${cut.powerMaxPercent}%` : `${cut.powerMinPercent}%`;
+    }
+    function productionSettingSummaryHtml(setting, options = {}) {
+      const item = normalizeProductionSetting(setting);
+      if (!item) return '';
+      const material = item.materialCondition, cut = item.cutSettings, fit = item.fitSettings;
+      const evidence = item.evidence.length ? `<details style="margin-top:8px"><summary class="small"><b>Evidence (${item.evidence.length})</b></summary>${item.evidence.map(entry => `<div class="small" style="margin-top:7px"><b>${esc(productionEvidenceKinds.includes(entry.kind) ? materialTestLabel(entry.kind) : `Unrecognized: ${entry.kind}`)}</b>${entry.date ? ` - ${esc(entry.date)}` : ''}${entry.sourceLabel ? `<br>${esc(entry.sourceLabel)}` : ''}${entry.sourceId ? `<br><span class="muted">Source ID: ${esc(entry.sourceId)}</span>` : ''}${entry.result ? `<br>Result: ${esc(entry.result)}` : ''}${entry.notes ? `<br><span class="muted">${esc(entry.notes)}</span>` : ''}</div>`).join('')}</details>` : '<div class="small muted" style="margin-top:7px">No evidence entries.</div>';
+      const controls = options.editor ? `<div class="actions"><button type="button" data-edit-production-setting="${esc(item.id)}">Edit</button><button type="button" data-supersede-production-setting="${esc(item.id)}" ${item.verificationStatus === 'superseded' ? 'disabled' : ''}>Supersede</button><button type="button" class="danger" data-delete-production-setting="${esc(item.id)}">Delete</button></div>` : '';
+      return `<div class="panel" style="margin-top:8px"><div class="spread"><div><b>${esc(item.label || 'Production setting')}</b><div class="small muted">${esc(productionMachineLabel(item))} - ${esc(materialTestLabel(item.operation))}</div></div><span class="pill ${item.verificationStatus === 'verified' ? 'good' : item.verificationStatus === 'tested' ? 'warn' : item.verificationStatus === 'superseded' ? 'softbad' : ''}">${esc(productionStatusLabel(item.verificationStatus))}</span></div><div class="small" style="margin-top:7px">${item.preferred ? '<b>Preferred</b> / ' : ''}${material.measuredThicknessMm === '' ? 'Measured thickness not recorded' : `Measured ${esc(material.measuredThicknessMm)} mm (${esc(material.measurementScope)})`}${item.verifiedDate ? ` / ${esc(item.verifiedDate)}` : ''}</div><div class="small muted" style="margin-top:5px">${cut.speedMmPerMin === '' ? 'Speed -' : `${esc(cut.speedMmPerMin)} mm/min`} / Power ${esc(productionPowerLabel(item))} / ${cut.passes === '' ? '-' : esc(cut.passes)} pass${Number(cut.passes) === 1 ? '' : 'es'} / Air ${cut.airAssist ? 'On' : 'Off'}</div><div class="small muted" style="margin-top:5px">LightBurn kerf: ${esc(fmt(item.lightBurn.kerfOffsetMm, ' mm'))} / Joint: ${esc(fmt(fit.fingerJointClearanceMm, ' mm'))} / Drawer lateral: ${esc(fmt(fit.drawerTotalLateralClearanceMm, ' mm'))}</div>${evidence}${controls}</div>`;
+    }
+    function productionSettingsSummaryHtml(settings, options = {}) {
+      const normalized = normalizeProductionSettings(settings);
+      const preferred = normalized.filter(item => item.preferred && item.verificationStatus !== 'superseded');
+      if (!normalized.length) return '<div class="small muted">No proven production settings yet.</div>';
+      const shown = options.all ? normalized : preferred.slice(0, 1);
+      return `<div class="small muted">${normalized.length} saved / ${preferred.length} preferred</div>${shown.length ? shown.map(item => productionSettingSummaryHtml(item, options)).join('') : '<div class="small muted" style="margin-top:8px">No active preferred setting.</div>'}`;
+    }
+    function productionSettingsEditorHtml() {
+      const settings = normalizeProductionSettings(profileDraftProductionSettings);
+      return `<details id="productionSettingsSection" class="span2" style="margin-top:8px"><summary><b>Proven Production Settings</b> <span class="small muted">(${settings.length})</span></summary><div style="margin-top:10px">${productionSettingsSummaryHtml(settings, { all: true, editor: true })}<button type="button" id="addProductionSetting" style="margin-top:10px">Add setting</button><div class="small muted" style="margin-top:8px">Production settings are material-, machine-, and test-condition-specific. Designs does not apply these records yet.</div></div></details>`;
+    }
+    function refreshProductionSettingsEditor() {
+      const section = document.getElementById('productionSettingsSection');
+      if (!section) return;
+      const replacement = document.createElement('div');
+      replacement.innerHTML = productionSettingsEditorHtml();
+      section.replaceWith(replacement.firstElementChild);
+      bindProductionSettingsEditor();
+    }
+    function productionSettingConflict(setting, settings = profileDraftProductionSettings) {
+      return normalizeProductionSettings(settings).filter(item => item.id !== setting.id && item.preferred && item.verificationStatus !== 'superseded' && item.operation === setting.operation && item.machine.key === setting.machine.key);
+    }
+    function productionSettingContextLabel(setting) {
+      const material = setting?.materialCondition || {};
+      const details = [
+        setting?.label || 'Unnamed production setting',
+        material.measurementScope ? `scope ${material.measurementScope}` : '',
+        material.batchLabel ? `batch ${material.batchLabel}` : '',
+        material.measuredThicknessMm !== '' && material.measuredThicknessMm != null ? `${material.measuredThicknessMm} mm measured` : '',
+        productionMachineLabel(setting)
+      ].filter(Boolean);
+      return details.join(' / ');
+    }
+    function productionPreferredConflictMessage(setting, conflicts) {
+      const identified = conflicts.map(productionSettingContextLabel).join('\n- ');
+      return `Selecting "${setting.label || 'this production setting'}" as preferred will demote the following existing preferred record${conflicts.length === 1 ? '' : 's'}:\n- ${identified}\n\nContinue?`;
+    }
+    function upsertProductionSettingDraft(settings, setting, confirmDemotion = message => confirm(message)) {
+      const normalized = normalizeProductionSetting(setting);
+      if (!normalized) return null;
+      const next = normalizeProductionSettings(settings);
+      const conflicts = normalized.preferred ? productionSettingConflict(normalized, next) : [];
+      if (conflicts.length && !confirmDemotion(productionPreferredConflictMessage(normalized, conflicts))) return null;
+      conflicts.forEach(conflict => {
+        const index = next.findIndex(item => item.id === conflict.id);
+        next[index] = { ...conflict, preferred: false, updatedDate: today() };
+      });
+      const index = next.findIndex(item => item.id === normalized.id);
+      if (index >= 0) next[index] = normalized; else next.unshift(normalized);
+      return next;
+    }
+    function productionSettingsCanSupersede(oldSetting, replacement) {
+      return !!oldSetting && !!replacement &&
+        oldSetting.id !== replacement.id &&
+        replacement.verificationStatus !== 'superseded' &&
+        oldSetting.operation === replacement.operation &&
+        oldSetting.machine.key === replacement.machine.key;
+    }
+    function supersedeProductionSettingDraft(settings, oldId, replacementId) {
+      const next = normalizeProductionSettings(settings);
+      const index = next.findIndex(item => item.id === oldId);
+      const replacement = next.find(item => item.id === replacementId);
+      if (index < 0 || !productionSettingsCanSupersede(next[index], replacement)) return null;
+      next[index] = { ...next[index], verificationStatus: 'superseded', preferred: false, supersededById: replacementId, updatedDate: today() };
+      return next;
+    }
+    function bindProductionSettingsEditor() {
+      const add = document.getElementById('addProductionSetting');
+      if (add) add.onclick = () => openProductionSetting();
+      document.querySelectorAll('[data-edit-production-setting]').forEach(button => button.onclick = () => openProductionSetting(profileDraftProductionSettings.find(item => item.id === button.dataset.editProductionSetting)));
+      document.querySelectorAll('[data-delete-production-setting]').forEach(button => button.onclick = () => {
+        if (!confirm('Delete only this production setting? Its source records will not be changed.')) return;
+        profileDraftProductionSettings = profileDraftProductionSettings.filter(item => item.id !== button.dataset.deleteProductionSetting);
+        refreshProductionSettingsEditor();
+      });
+      document.querySelectorAll('[data-supersede-production-setting]').forEach(button => button.onclick = () => openSupersedeProductionSetting(button.dataset.supersedeProductionSetting));
+    }
+    function productionEvidenceEditorHtml() {
+      return `<div id="productionEvidenceEditor" class="span2"><div class="spread"><b>Evidence</b><button type="button" id="addProductionEvidence">Add evidence</button></div>${productionEvidenceDraft.length ? productionEvidenceDraft.map(item => `<div class="panel" style="margin-top:8px"><div class="spread"><div><b>${esc(productionEvidenceKinds.includes(item.kind) ? materialTestLabel(item.kind) : `Unrecognized: ${item.kind}`)}</b><div class="small muted">${esc(item.date || 'No date')}${item.sourceLabel ? ` - ${esc(item.sourceLabel)}` : ''}</div></div></div>${item.result ? `<div class="small" style="margin-top:6px">Result: ${esc(item.result)}</div>` : ''}${item.notes ? `<div class="small muted" style="margin-top:4px">${esc(item.notes)}</div>` : ''}<div class="actions"><button type="button" data-edit-production-evidence="${esc(item.id)}">Edit</button><button type="button" class="danger" data-delete-production-evidence="${esc(item.id)}">Delete</button></div></div>`).join('') : '<div class="small muted" style="margin-top:8px">No evidence entries. Manual evidence can be added without modifying its source record.</div>'}</div>`;
+    }
+    function refreshProductionEvidenceEditor() {
+      const section = document.getElementById('productionEvidenceEditor');
+      if (!section) return;
+      const replacement = document.createElement('div');
+      replacement.innerHTML = productionEvidenceEditorHtml();
+      section.replaceWith(replacement.firstElementChild);
+      bindProductionEvidenceEditor();
+    }
+    function bindProductionEvidenceEditor() {
+      const add = document.getElementById('addProductionEvidence');
+      if (add) add.onclick = () => openProductionEvidence();
+      document.querySelectorAll('[data-edit-production-evidence]').forEach(button => button.onclick = () => openProductionEvidence(productionEvidenceDraft.find(item => item.id === button.dataset.editProductionEvidence)));
+      document.querySelectorAll('[data-delete-production-evidence]').forEach(button => button.onclick = () => {
+        if (!confirm('Delete only this evidence entry?')) return;
+        productionEvidenceDraft = productionEvidenceDraft.filter(item => item.id !== button.dataset.deleteProductionEvidence);
+        refreshProductionEvidenceEditor();
+      });
+    }
+    function openProductionEvidence(evidence) {
+      const data = normalizeProductionEvidence(evidence ? [evidence] : [{ id: uid(), kind: 'manual', date: today() }])[0];
+      openModal('productionEvidenceModal', `<div class="dialog"><div class="spread"><h2>${evidence ? 'Edit evidence' : 'Add evidence'}</h2><button data-close>&times;</button></div><form id="productionEvidenceForm" class="formgrid"><label>Evidence kind<select name="kind">${productionEnumOptions(productionEvidenceKinds, data.kind)}</select></label>${field('date','Date',data.date,'date')}${field('sourceId','Source ID',data.sourceId,'text','','Optional stable ID of a Material Test, Test Grid, Project, or other source.')}${field('sourceProfileId','Source profile ID',data.sourceProfileId,'text','','Optional Library profile ID retained for provenance.')}${field('sourceLabel','Source snapshot label',data.sourceLabel,'text','','Readable snapshot retained even if the source is later deleted.')}${field('result','Result',data.result,'text','','Short physical or test outcome.')}<label class="span2">${labelText('Evidence notes')}<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label><div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save evidence</button></div></form></div>`);
+      bindModal('productionEvidenceModal');
+      document.getElementById('productionEvidenceForm').onsubmit = event => {
+        event.preventDefault();
+        const normalized = normalizeProductionEvidence([{ ...data, ...readForm(event.target), id: data.id }])[0];
+        const index = productionEvidenceDraft.findIndex(item => item.id === normalized.id);
+        if (index >= 0) productionEvidenceDraft[index] = normalized; else productionEvidenceDraft.unshift(normalized);
+        closeModal('productionEvidenceModal');
+        refreshProductionEvidenceEditor();
+      };
+    }
+    function productionInventoryLinkState(material, inventory = rawInventoryMaterials()) {
+      const selectedId = typeof material?.inventoryItemId === 'string' ? material.inventoryItemId : '';
+      const item = inventory.find(value => value.id === selectedId) || null;
+      return { selectedId, item, dangling: !!selectedId && !item };
+    }
+    function productionInventoryOptions(material, inventory = rawInventoryMaterials()) {
+      const link = productionInventoryLinkState(material, inventory);
+      const dangling = link.dangling ? `<option value="${esc(link.selectedId)}" selected>Unavailable: ${esc(material.inventoryItemName || link.selectedId)}</option>` : '';
+      return `<option value="">No Inventory link</option>${dangling}${inventory.map(item => `<option value="${esc(item.id)}" ${item.id === link.selectedId ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}`;
+    }
+    function productionInventorySelection(material, selectedId, inventory = rawInventoryMaterials()) {
+      if (!selectedId) return { ...material, inventoryItemId: '' };
+      const item = inventory.find(value => value.id === selectedId);
+      if (!item) return { ...material };
+      return {
+        ...material,
+        inventoryItemId: item.id,
+        inventoryItemName: item.name || '',
+        supplier: item.supplier || '',
+        product: item.product == null ? material.product : item.product
+      };
+    }
+    function productionSettingInputError(values) {
+      const boundedFields = [
+        ['Minimum power', values.powerMinPercent, 0, 100],
+        ['Maximum power', values.powerMaxPercent, 0, 100],
+        ['Nominal thickness', values.nominalThicknessMm, 0, Infinity],
+        ['Measured thickness', values.measuredThicknessMm, 0, Infinity]
+      ];
+      for (const [label, value, minimum, maximum] of boundedFields) {
+        if (value !== '' && value != null && boundedProductionNumber(value, minimum, maximum) === '') return `${label} is outside its allowed range.`;
+      }
+      const minimumPower = strictOptionalNumber(values.powerMinPercent);
+      const maximumPower = strictOptionalNumber(values.powerMaxPercent);
+      if (minimumPower !== '' && maximumPower !== '' && minimumPower > maximumPower) return 'Minimum power cannot be greater than maximum power.';
+      return '';
+    }
+    function productionSettingFields(data) {
+      const machine = data.machine, material = data.materialCondition, cut = data.cutSettings, fit = data.fitSettings;
+      const inventoryLink = productionInventoryLinkState(material);
+      const inventoryNotice = inventoryLink.dangling ? `<div class="span2 small warn">Linked Inventory item is no longer available - retained reference: ${esc(material.inventoryItemName || inventoryLink.selectedId)}. Choose No Inventory link to clear only the stored link ID.</div>` : '';
+      const kerfHelp = 'Signed LightBurn kerf offset used for the red through-cut layer under these exact material, machine, focus, air-assist, power, speed, and pass conditions. The sign is preserved exactly as entered. Verify direction in LightBurn Preview. This value is not applied to blue score/engrave geometry and is not baked into generated SVG dimensions.';
+      return `<div class="span2"><b>Identity</b></div>${field('label','Label',data.label)}<label>Machine<select name="machineKey">${productionEnumOptions(productionMachineKeys, machine.key, { 'genmitsu-l8-20w':'Genmitsu L8 20W', 'genmitsu-l8-40w':'Genmitsu L8 40W', custom:'Custom' })}</select></label>${field('machineLabel','Machine label',machine.label,'text','','Required for a custom machine; retained as a readable snapshot.')}${field('machineLens','Lens',machine.lens)}${field('focusMethod','Focus method',machine.focusMethod)}<label>Operation<select name="operation"><option value="cut" selected>Cut</option></select></label><div class="span2"><hr><b>Material condition</b><div class="small muted">Stored canonically in millimeters and not rewritten when the app display unit changes.</div></div>${field('nominalThicknessMm','Nominal thickness (mm)',material.nominalThicknessMm,'number','step="any" min="0"')}${field('measuredThicknessMm','Measured thickness (mm)',material.measuredThicknessMm,'number','step="any" min="0"')}<label>Measurement scope<select name="measurementScope">${productionEnumOptions(productionMeasurementScopes, material.measurementScope)}</select></label>${field('measuredDate','Measured date',material.measuredDate,'date')}<label class="span2">Inventory item<select name="inventoryItemId">${productionInventoryOptions(material)}</select></label>${inventoryNotice}${field('inventoryItemName','Inventory snapshot name',material.inventoryItemName)}${field('supplier','Supplier',material.supplier)}${field('product','Product',material.product)}${field('batchLabel','Batch label',material.batchLabel)}${field('finishOrCoating','Finish or coating',material.finishOrCoating)}<div class="span2"><hr><b>Cut settings</b></div>${field('speedMmPerMin','Speed (mm/min)',cut.speedMmPerMin,'number','step="any" min="0"')}${field('powerMinPercent','Minimum power (%)',cut.powerMinPercent,'number','step="any" min="0" max="100"')}${field('powerMaxPercent','Maximum power (%)',cut.powerMaxPercent,'number','step="any" min="0" max="100"')}${field('productionPasses','Passes',cut.passes,'number','step="1" min="1"')}<label class="row" style="margin-top:20px"><input name="productionAirAssist" type="checkbox" ${cut.airAssist ? 'checked' : ''} style="width:auto"> Air assist on</label>${field('airPressurePsi','Air pressure (PSI)',cut.airPressurePsi,'number','step="any" min="0"')}${field('productionFocusValue','Focus value',cut.focusValue,'number','step="any"')}<label>Focus unit<select name="productionFocusUnit"><option value="mm" ${cut.focusUnit === 'mm' ? 'selected' : ''}>mm</option><option value="in" ${cut.focusUnit === 'in' ? 'selected' : ''}>in</option></select></label>${field('productionSoftware','Software',cut.software)}<div class="span2"><hr><b>LightBurn</b></div>${field('kerfOffsetMm','Signed kerf offset (mm)',data.lightBurn.kerfOffsetMm,'number','step="any"',kerfHelp)}<div class="span2 small muted">${esc(kerfHelp)}</div><div class="span2"><hr><b>Fit settings</b></div>${field('fingerJointClearanceMm','Finger-joint clearance (mm)',fit.fingerJointClearanceMm,'number','step="any"')}${field('drawerTotalLateralClearanceMm','Drawer Cabinet total lateral clearance (mm)',fit.drawerTotalLateralClearanceMm,'number','step="any"')}<div class="span2"><hr><b>Verification</b></div><label>Status<select name="verificationStatus">${productionEnumOptions(productionVerificationStatuses, data.verificationStatus)}</select></label><label class="row" style="margin-top:20px"><input name="preferred" type="checkbox" ${data.preferred ? 'checked' : ''} style="width:auto"> Preferred for this machine and operation</label>${field('productionConfidence','Confidence (1-5)',data.confidence,'number','step="1" min="1" max="5"')}${field('verifiedDate','Verified date',data.verifiedDate,'date')}<label class="span2">${labelText('Notes')}<textarea name="productionNotes" rows="3">${esc(data.notes)}</textarea></label>${productionEvidenceEditorHtml()}`;
+    }
+    function productionSettingFromForm(form, data) {
+      const f = readForm(form);
+      return normalizeProductionSetting({
+        ...data,
+        label: f.label,
+        operation: 'cut',
+        machine: { ...data.machine, key: f.machineKey, label: f.machineLabel, lens: f.machineLens, focusMethod: f.focusMethod },
+        materialCondition: { ...data.materialCondition, nominalThicknessMm: f.nominalThicknessMm, measuredThicknessMm: f.measuredThicknessMm, measurementScope: f.measurementScope, measuredDate: f.measuredDate, inventoryItemId: f.inventoryItemId, inventoryItemName: f.inventoryItemName, supplier: f.supplier, product: f.product, batchLabel: f.batchLabel, finishOrCoating: f.finishOrCoating },
+        cutSettings: { ...data.cutSettings, speedMmPerMin: f.speedMmPerMin, powerMinPercent: f.powerMinPercent, powerMaxPercent: f.powerMaxPercent, passes: f.productionPasses, airAssist: !!form.productionAirAssist.checked, airPressurePsi: f.airPressurePsi, focusValue: f.productionFocusValue, focusUnit: f.productionFocusUnit, software: f.productionSoftware },
+        lightBurn: { ...data.lightBurn, kerfOffsetMm: f.kerfOffsetMm },
+        fitSettings: { ...data.fitSettings, fingerJointClearanceMm: f.fingerJointClearanceMm, drawerTotalLateralClearanceMm: f.drawerTotalLateralClearanceMm },
+        verificationStatus: f.verificationStatus,
+        preferred: !!form.preferred.checked,
+        confidence: f.productionConfidence,
+        verifiedDate: f.verifiedDate,
+        notes: f.productionNotes,
+        evidence: productionEvidenceDraft,
+        updatedDate: today()
+      });
+    }
+    function openProductionSetting(setting) {
+      const parent = editingProfileId ? state.profiles.find(item => item.id === editingProfileId) : null;
+      const nominalMm = parent?.thicknessValue === '' || parent?.thicknessValue == null ? '' : parent?.thicknessUnit === 'in' ? roundUnitValue(num(parent.thicknessValue) * 25.4) : parent?.thicknessValue;
+      const data = normalizeProductionSetting(setting || { id: uid(), operation: 'cut', machine: { key: state.machineProfile === '40W' ? 'genmitsu-l8-40w' : 'genmitsu-l8-20w' }, materialCondition: { nominalThicknessMm: nominalMm, measurementScope: 'unknown' }, verificationStatus: 'untested', createdDate: today(), updatedDate: today() });
+      productionEvidenceDraft = normalizeProductionEvidence(data.evidence);
+      openModal('productionSettingModal', `<div class="dialog"><div class="spread"><h2>${setting ? 'Edit production setting' : 'Add production setting'}</h2><button data-close>&times;</button></div><form id="productionSettingForm" class="formgrid">${productionSettingFields(data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save setting</button></div></form></div>`);
+      bindModal('productionSettingModal');
+      bindProductionEvidenceEditor();
+      const form = document.getElementById('productionSettingForm');
+      form.elements.machineKey.onchange = () => {
+        if (productionMachineKeys.includes(form.elements.machineKey.value) && form.elements.machineKey.value !== 'custom') form.elements.machineLabel.value = productionMachineDefaultLabel(form.elements.machineKey.value);
+      };
+      form.elements.inventoryItemId.onchange = () => {
+        const selection = productionInventorySelection(data.materialCondition, form.elements.inventoryItemId.value);
+        form.elements.inventoryItemName.value = selection.inventoryItemName || '';
+        form.elements.supplier.value = selection.supplier || '';
+        form.elements.product.value = selection.product || '';
+      };
+      form.onsubmit = event => {
+        event.preventDefault();
+        const inputError = productionSettingInputError(readForm(form));
+        if (inputError) return alert(inputError);
+        const normalized = productionSettingFromForm(form, data);
+        if (normalized.machine.key === 'custom' && !normalized.machine.label) return alert('Add a custom machine label first.');
+        const updated = upsertProductionSettingDraft(profileDraftProductionSettings, normalized);
+        if (!updated) return;
+        profileDraftProductionSettings = updated;
+        closeModal('productionSettingModal');
+        productionEvidenceDraft = [];
+        refreshProductionSettingsEditor();
+      };
+    }
+    function openSupersedeProductionSetting(oldId) {
+      const settings = normalizeProductionSettings(profileDraftProductionSettings);
+      const oldSetting = settings.find(item => item.id === oldId);
+      const choices = settings.filter(item => productionSettingsCanSupersede(oldSetting, item));
+      if (!choices.length) return alert('Add another active production setting before superseding this one.');
+      openModal('productionSettingModal', `<div class="dialog"><div class="spread"><h2>Supersede production setting</h2><button data-close>&times;</button></div><form id="supersedeProductionSettingForm" class="formgrid"><label class="span2">Replacement setting<select name="replacementId">${choices.map(item => `<option value="${esc(item.id)}">${esc(item.label || 'Production setting')} - ${esc(productionMachineLabel(item))}</option>`).join('')}</select></label><div class="span2 small muted">The old setting and all evidence remain stored. It will be marked Superseded and linked to the selected replacement.</div><div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Supersede</button></div></form></div>`);
+      bindModal('productionSettingModal');
+      document.getElementById('supersedeProductionSettingForm').onsubmit = event => {
+        event.preventDefault();
+        const updated = supersedeProductionSettingDraft(profileDraftProductionSettings, oldId, event.target.elements.replacementId.value);
+        if (!updated) return alert('Choose a valid replacement setting.');
+        profileDraftProductionSettings = updated;
+        closeModal('productionSettingModal');
+        refreshProductionSettingsEditor();
       };
     }
     const wizardTestTypes = [
@@ -5974,6 +6560,7 @@
         <div class="small muted" style="margin-top:9px">Focus: ${fmt(p.focusValue, p.focusUnit)} - Air: ${p.airAssist ? 'On' : 'Off'}${p.software ? ' - ' + esc(p.software) : ''}</div>
         ${p.notes ? `<p class="small">${esc(p.notes)}</p>` : ''}
         <div class="panel" style="margin-top:10px"><b>Material Tests</b>${materialTestsSummaryHtml(p.tests)}</div>
+        <div class="panel" style="margin-top:10px"><b>Proven Production Settings</b>${productionSettingsSummaryHtml(p.productionSettings)}</div>
         <div class="actions"><button data-wizard-profile="${p.id}">Material Test Wizard</button><button data-edit-profile="${p.id}">Edit</button><button data-duplicate-profile="${p.id}">Duplicate</button><button data-project-profile="${p.id}">Save as project</button><button class="danger" data-delete-profile="${p.id}">Delete</button></div>
       </article>`;
     }
@@ -6409,6 +6996,11 @@
     function closeModal(id) {
       if (id === 'profileModal') pendingGridPromotion = null;
       if (id === 'profileModal') libraryBrowserSelectNewProfile = false;
+      if (id === 'profileModal') {
+        profileDraftTests = [];
+        profileDraftProductionSettings = [];
+      }
+      if (id === 'productionSettingModal') productionEvidenceDraft = [];
       if (id === 'projectWizardModal') projectWizard = null;
       document.getElementById(id).classList.remove('open');
       document.getElementById(id).innerHTML = '';
@@ -6505,7 +7097,7 @@
         ${kind === 'profile' ? `<label>${labelText('Tags, comma-separated', 'Short labels used for filtering and search.')}<input name="tags" value="${esc(tagString(data.tags))}" placeholder="gift, acrylic, holiday"></label><div class="span2 small muted">Use short tags for filtering, separated by commas.</div>` : ''}
         ${kind === 'entry' ? `<label class="span2">${labelText('Settings file / profile name', 'Saved LightBurn or settings file reference so you can find it later.')}<input name="settingsFile" value="${esc(data.settingsFile)}"></label><div class="span2"><b class="small">Result quality</b><div class="stars">${[1,2,3,4,5].map(n => `<div class="star ${n <= data.rating ? 'on' : ''}" data-rating="${n}">${n}</div>`).join('')}</div><input name="rating" value="${esc(data.rating)}" hidden></div>` : ''}
         <label class="span2">${labelText('Notes', 'Record what worked, what failed, and anything to remember next time.')}<textarea name="notes" rows="3">${esc(data.notes)}</textarea></label>
-        ${kind === 'profile' ? materialTestsEditorHtml() : ''}
+        ${kind === 'profile' ? `${materialTestsEditorHtml()}${productionSettingsEditorHtml()}` : ''}
         <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>`;
     }
     function unitField(valueName, unitName, label, value, unit, tip = '') {
@@ -6552,36 +7144,48 @@
         closeModal('entryModal');
       };
     }
+    function buildLibraryProfileRecord(previous, recognized, tests, productionSettings) {
+      return {
+        ...(previous || {}),
+        ...(recognized || {}),
+        tests: normalizeMaterialTests(tests),
+        productionSettings: normalizeProductionSettings(productionSettings)
+      };
+    }
+    function saveProfileRecord(list, profileObj, persistFn = persist) {
+      const index = list.findIndex(item => item.id === profileObj.id);
+      const previous = index >= 0 ? list[index] : null;
+      if (index >= 0) list[index] = profileObj; else list.unshift(profileObj);
+      if (persistFn()) return true;
+      if (index >= 0) list[index] = previous; else list.shift();
+      return false;
+    }
     function openProfile(profile, options = {}) {
       if (!options.keepPendingGridPromotion) pendingGridPromotion = null;
       editingProfileId = profile && profile.id ? profile.id : null;
       const data = { ...formDefaults('profile'), ...(profile || {}) };
       profileDraftTests = normalizeMaterialTests(data.tests);
+      profileDraftProductionSettings = normalizeProductionSettings(data.productionSettings);
       openModal('profileModal', `<div class="dialog"><div class="spread"><h2>${editingProfileId ? 'Edit material' : 'Add material'}</h2><button data-close>&times;</button></div><form id="profileForm" class="formgrid">${modalFields('profile', data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save material</button></div></form></div>`);
       bindModal('profileModal');
       bindMaterialTestsEditor();
+      bindProductionSettingsEditor();
       bindMaterialSuggestions(document.getElementById('profileForm'));
       document.getElementById('profileForm').oninput = e => bindMaterialSafetyWarning(e.currentTarget);
       document.getElementById('profileForm').onsubmit = e => {
         e.preventDefault();
         const f = readForm(e.target);
         if (!f.material.trim()) return alert('Add a material name first.');
-        const profileObj = normalizeSetting(f, editingProfileId);
-        profileObj.tests = normalizeMaterialTests(profileDraftTests);
+        const current = editingProfileId ? state.profiles.find(item => item.id === editingProfileId) : null;
+        const profileObj = buildLibraryProfileRecord({ ...(profile || {}), ...(current || {}) }, normalizeSetting(f, editingProfileId), profileDraftTests, profileDraftProductionSettings);
         const promotion = pendingGridPromotion;
         const duplicate = promotion?.recordTest && findGridPromotionTest(profileObj.tests, promotion);
         if (promotion?.recordTest && !duplicate) profileObj.tests.push(buildGridCellMaterialTestRecord(promotion.grid, promotion.cellKey, promotion.cell, promotion.machine));
-        const index = state.profiles.findIndex(item => item.id === profileObj.id);
-        const previous = index >= 0 ? state.profiles[index] : null;
-        if (index >= 0) state.profiles[index] = profileObj; else state.profiles.unshift(profileObj);
-        if (!persist()) {
-          if (index >= 0) state.profiles[index] = previous;
-          else state.profiles.shift();
-          return;
-        }
+        if (!saveProfileRecord(state.profiles, profileObj)) return;
         if (!editingProfileId && libraryBrowserSelectNewProfile) libraryBrowserSelectedId = profileObj.id;
         libraryBrowserSelectNewProfile = false;
         profileDraftTests = [];
+        profileDraftProductionSettings = [];
         closeModal('profileModal');
         render();
         if (duplicate) showInfoToast('Material Test for this grid cell already exists.');
@@ -7691,6 +8295,48 @@
       });
       return merged;
     }
+    function mergeNestedRecordsById(existing, incoming, mergeRecord = (current, next) => ({ ...current, ...next })) {
+      const records = new Map();
+      [...(existing || []), ...(incoming || [])].filter(item => item && typeof item === 'object' && item.id).forEach(item => {
+        const current = records.get(item.id);
+        records.set(item.id, current ? mergeRecord(current, item) : item);
+      });
+      return [...records.values()].sort((a, b) => compareText(a.id, b.id) || String(a.id).localeCompare(String(b.id)));
+    }
+    function mergeProductionSettingRecord(existing, incoming) {
+      return normalizeProductionSetting({
+        ...existing,
+        ...incoming,
+        machine: { ...(existing.machine || {}), ...(incoming.machine || {}) },
+        materialCondition: { ...(existing.materialCondition || {}), ...(incoming.materialCondition || {}) },
+        cutSettings: { ...(existing.cutSettings || {}), ...(incoming.cutSettings || {}) },
+        lightBurn: { ...(existing.lightBurn || {}), ...(incoming.lightBurn || {}) },
+        fitSettings: { ...(existing.fitSettings || {}), ...(incoming.fitSettings || {}) },
+        evidence: mergeNestedRecordsById(existing.evidence, incoming.evidence)
+      });
+    }
+    function mergeLibraryProfileRecord(existing, incoming) {
+      return {
+        ...existing,
+        ...incoming,
+        tests: mergeNestedRecordsById(normalizeMaterialTests(existing.tests), normalizeMaterialTests(incoming.tests)),
+        productionSettings: mergeNestedRecordsById(
+          Array.isArray(existing.productionSettings) ? existing.productionSettings : [],
+          Array.isArray(incoming.productionSettings) ? incoming.productionSettings : [],
+          mergeProductionSettingRecord
+        )
+      };
+    }
+    function mergeLibraryProfiles(existingProfiles, incomingProfiles) {
+      const prepare = profiles => Array.isArray(profiles) ? profiles.filter(profile => profile && typeof profile === 'object').map(profile => ({
+        ...profile,
+        tests: normalizeMaterialTests(profile.tests),
+        productionSettings: Array.isArray(profile.productionSettings) ? profile.productionSettings.filter(setting => setting && typeof setting === 'object') : []
+      })) : [];
+      const existing = prepare(existingProfiles);
+      const incoming = prepare(incomingProfiles);
+      return normalizeLibraryProfiles(mergeNestedRecordsById(existing, incoming, mergeLibraryProfileRecord));
+    }
     function mergeListStats(existing, incoming) {
       let added = 0, updated = 0;
       (incoming || []).forEach(item => {
@@ -7768,7 +8414,7 @@
         batches: mergeListStats(inventoryList('finishedBatches'), incomingInventory.finishedBatches)
       };
       state.entries = mergeList(state.entries, data.entries);
-      state.profiles = normalizeLibraryProfiles(mergeList(state.profiles, data.profiles));
+      state.profiles = mergeLibraryProfiles(state.profiles, data.profiles);
       state.grids = mergeList(state.grids, data.grids);
       state.projects = mergeList(state.projects, data.projects);
       state.inventory = {
@@ -7874,7 +8520,7 @@
     function duplicateProfile(id) {
       const p = state.profiles.find(x => x.id === id);
       if (!p) return;
-      openProfile({ ...p, id: null, tests: duplicateMaterialTests(p.tests), notes: p.notes ? `Duplicated from Library profile. ${p.notes}` : 'Duplicated from Library profile.' });
+      openProfile({ ...p, id: null, tests: duplicateMaterialTests(p.tests), productionSettings: duplicateProductionSettings(p.productionSettings), notes: p.notes ? `Duplicated from Library profile. ${p.notes}` : 'Duplicated from Library profile.' });
     }
     function saveReference(refKey) {
       const [watts, index] = refKey.split(':');
@@ -7981,6 +8627,7 @@
     const selftest = new URLSearchParams(window.location.search).get('selftest');
     if (selftest === 'baseline' || selftest === 'all') runBaselineResolutionFixtures();
     if (selftest === 'normalization' || selftest === 'all') runMaterialTestNormalizationFixtures();
+    if (selftest === 'production' || selftest === 'all') runProductionSettingsFixtures();
     if (selftest === 'grid' || selftest === 'all') runGridPromotionFixtures();
     if (selftest === 'grid-browser' || selftest === 'all') runGridBrowserFixtures();
     if (selftest === 'materials' || selftest === 'all') window.runMaterialBrowserFixtures();
