@@ -383,6 +383,8 @@
     let pendingUndo = null;
     let storageWarningShown = false;
     let designDraft = designDefaults();
+    let designProductionSession = designProductionSessionDefaults();
+    let designProductionNotice = '';
     let pricingPersistTimer = null;
     const PRICING_PERSIST_DELAY = 400;
 
@@ -402,6 +404,17 @@
     }
     function designDefaults() {
       return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated', slidingGuideMarks: false, slidingFitCoupon: false, drawerInsideWidth: '100', drawerInsideDepth: '70', drawerInsideHeight: '30', drawerRows: '1', cabinetJointClearance: '0.10', drawerJointClearance: '0.10', drawerPreferredFingerWidth: '12', drawerLateralClearance: '0.45', drawerVerticalClearance: '0.30', drawerRearClearance: '0.50', jointCouponEdgeLength: '45', jointCouponBodyDepth: '22', jointCouponPreferredFingerWidth: '9', jointCouponClearances: '0.06, 0.04, 0.02, 0.00, -0.02, -0.04', jointCouponLabels: true, assemblyLabels: false };
+    }
+    function designProductionSessionDefaults() {
+      return { profileId: '', settingId: '', checkedTargets: {}, showSuperseded: false, reviewFingerprint: '', staleReason: '' };
+    }
+    function resetDesignWorkspaceSession() {
+      designDraft = designDefaults();
+      designProductionSession = designProductionSessionDefaults();
+      designProductionNotice = '';
+    }
+    function designProductionSessionForTemplateChange(session = designProductionSessionDefaults()) {
+      return { ...session, checkedTargets: {}, staleReason: '' };
     }
     function normalizeInventoryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function normalizeLibraryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
@@ -1464,6 +1477,320 @@
       if (template === 'joint-fit-coupon') return 'Coupon clearance and laser kerf are separate adjustments. Establish kerf through material testing; it is not automatically included in generated dimensions.';
       return 'Fit clearance and laser kerf are separate adjustments. Establish kerf through material testing; it is not automatically included in generated dimensions.';
     }
+    function designProductionMachineKey(machineProfile = '') {
+      if (machineProfile === '20W') return 'genmitsu-l8-20w';
+      if (machineProfile === '40W') return 'genmitsu-l8-40w';
+      return '';
+    }
+    function designProductionEvidenceSnapshots(evidence = []) {
+      const fields = ['id','kind','sourceId','sourceProfileId','sourceLabel','date','result','notes'];
+      return (Array.isArray(evidence) ? evidence : []).map(entry => ({
+        id: entry?.id || '', kind: entry?.kind || '', sourceId: entry?.sourceId || '', sourceProfileId: entry?.sourceProfileId || '',
+        sourceLabel: entry?.sourceLabel || '', date: entry?.date || '', result: entry?.result || '', notes: entry?.notes || ''
+      })).sort((a, b) => {
+        for (const field of fields) {
+          const compared = String(a[field]).localeCompare(String(b[field]));
+          if (compared) return compared;
+        }
+        return 0;
+      });
+    }
+    function designProductionFingerprint(profile, setting) {
+      if (!profile || !setting) return '';
+      const material = setting.materialCondition || {}, fit = setting.fitSettings || {}, cut = setting.cutSettings || {}, lightBurn = setting.lightBurn || {};
+      return JSON.stringify({
+        profileId: profile.id || '', settingId: setting.id || '', label: setting.label || '', operation: setting.operation || '',
+        machineKey: setting.machine?.key || '', machineLabel: setting.machine?.label || '', machineLens: setting.machine?.lens || '', focusMethod: setting.machine?.focusMethod || '',
+        verificationStatus: setting.verificationStatus || '', preferred: !!setting.preferred, confidence: setting.confidence ?? '', verifiedDate: setting.verifiedDate || '',
+        supersededById: setting.supersededById || '', notes: setting.notes || '',
+        nominalThicknessMm: material.nominalThicknessMm ?? '', measuredThicknessMm: material.measuredThicknessMm ?? '', measurementScope: material.measurementScope || '', measuredDate: material.measuredDate || '',
+        inventoryItemId: material.inventoryItemId || '', inventoryItemName: material.inventoryItemName || '', supplier: material.supplier || '', product: material.product || '', batchLabel: material.batchLabel || '', finishOrCoating: material.finishOrCoating || '',
+        fingerJointClearanceMm: fit.fingerJointClearanceMm ?? '', drawerTotalLateralClearanceMm: fit.drawerTotalLateralClearanceMm ?? '',
+        kerfOffsetMm: lightBurn.kerfOffsetMm ?? '', updatedDate: setting.updatedDate || '',
+        cutSettings: {
+          speedMmPerMin: cut.speedMmPerMin ?? '', powerMinPercent: cut.powerMinPercent ?? '', powerMaxPercent: cut.powerMaxPercent ?? '',
+          passes: cut.passes ?? '', airAssist: !!cut.airAssist, airPressurePsi: cut.airPressurePsi ?? '', focusValue: cut.focusValue ?? '',
+          focusUnit: cut.focusUnit || '', software: cut.software || ''
+        },
+        evidence: designProductionEvidenceSnapshots(setting.evidence)
+      });
+    }
+    function designProductionNominalThicknessMm(profile) {
+      if (profile?.thicknessValue === null || profile?.thicknessValue === undefined || String(profile.thicknessValue).trim() === '') return Number.POSITIVE_INFINITY;
+      const value = Number(profile?.thicknessValue);
+      if (!Number.isFinite(value) || value < 0) return Number.POSITIVE_INFINITY;
+      if (profile?.thicknessUnit === 'mm') return value;
+      if (profile?.thicknessUnit === 'in') return value * 25.4;
+      return Number.POSITIVE_INFINITY;
+    }
+    function compareDesignProductionRanks(a = [], b = []) {
+      const length = Math.max(a.length, b.length);
+      for (let index = 0; index < length; index++) {
+        if (typeof a[index] === 'number' && typeof b[index] === 'number') {
+          if (a[index] !== b[index]) return a[index] < b[index] ? -1 : 1;
+        } else {
+          const compared = String(a[index] ?? '').localeCompare(String(b[index] ?? ''));
+          if (compared) return compared;
+        }
+      }
+      return 0;
+    }
+    function designProductionSettingGroups(choices = []) {
+      const groups = [];
+      (Array.isArray(choices) ? choices : []).forEach(choice => {
+        let group = groups.find(item => item.profileId === choice.profileId);
+        if (!group) {
+          group = { profileId: choice.profileId, profile: choice.profile, choices: [] };
+          groups.push(group);
+        }
+        group.choices.push(choice);
+      });
+      groups.forEach(group => group.choices.sort((a, b) => compareDesignProductionRanks(a.rank, b.rank)));
+      return groups.sort((a, b) => {
+        const bestCompared = compareDesignProductionRanks(a.choices[0]?.rank?.slice(0, -1), b.choices[0]?.rank?.slice(0, -1));
+        if (bestCompared) return bestCompared;
+        const materialCompared = String(a.profile?.material || '').toLowerCase().localeCompare(String(b.profile?.material || '').toLowerCase());
+        if (materialCompared) return materialCompared;
+        const aThickness = designProductionNominalThicknessMm(a.profile), bThickness = designProductionNominalThicknessMm(b.profile);
+        if (aThickness !== bThickness) return aThickness < bThickness ? -1 : 1;
+        const profileCompared = String(a.profileId).localeCompare(String(b.profileId));
+        if (profileCompared) return profileCompared;
+        return String(a.choices[0]?.settingId || '').localeCompare(String(b.choices[0]?.settingId || ''));
+      });
+    }
+    function designProductionSettingChoices(profiles = [], options = {}) {
+      const currentMachineKey = options.currentMachineKey || '';
+      const showSuperseded = !!options.showSuperseded;
+      const selectedProfileId = options.selectedProfileId || '', selectedSettingId = options.selectedSettingId || '';
+      const statusRank = { verified: 0, tested: 1, estimated: 2, untested: 3, superseded: 4 };
+      const choices = [];
+      (Array.isArray(profiles) ? profiles : []).forEach(profile => {
+        if (!profile || typeof profile !== 'object' || !profile.id) return;
+        (Array.isArray(profile.productionSettings) ? profile.productionSettings : []).forEach(setting => {
+          if (!setting || typeof setting !== 'object' || !setting.id || setting.operation !== 'cut') return;
+          const selected = profile.id === selectedProfileId && setting.id === selectedSettingId;
+          if (setting.verificationStatus === 'superseded' && !showSuperseded && !selected) return;
+          const machineKey = setting.machine?.key || '';
+          choices.push({ profileId: profile.id, settingId: setting.id, profile, setting, selected, rank: [
+            machineKey && machineKey === currentMachineKey ? 0 : 1,
+            setting.verificationStatus === 'superseded' ? 1 : 0,
+            setting.preferred ? 0 : 1,
+            statusRank[setting.verificationStatus] ?? 5,
+            String(setting.label || '').toLowerCase(), String(setting.id)
+          ] });
+        });
+      });
+      return designProductionSettingGroups(choices).flatMap(group => group.choices);
+    }
+    function resolveDesignProductionSelection(session = designProductionSessionDefaults(), profiles = []) {
+      if (!session?.profileId && !session?.settingId) return { status: 'empty', profile: null, setting: null, fingerprint: '' };
+      if (!session?.profileId || !session?.settingId) return { status: 'invalid-ids', profile: null, setting: null, fingerprint: '' };
+      const profile = (Array.isArray(profiles) ? profiles : []).find(item => item?.id === session.profileId);
+      if (!profile) return { status: 'profile-missing', profile: null, setting: null, fingerprint: '' };
+      const setting = (Array.isArray(profile.productionSettings) ? profile.productionSettings : []).find(item => item?.id === session.settingId);
+      if (!setting) {
+        const wrongParent = (Array.isArray(profiles) ? profiles : []).some(item => item?.id !== profile.id && Array.isArray(item?.productionSettings) && item.productionSettings.some(candidate => candidate?.id === session.settingId));
+        return { status: wrongParent ? 'wrong-parent' : 'setting-missing', profile, setting: null, fingerprint: '' };
+      }
+      return { status: 'ok', profile, setting, fingerprint: designProductionFingerprint(profile, setting) };
+    }
+    function designProductionSessionForSelection(session, profileId, settingId, profiles = []) {
+      const showSuperseded = !!session?.showSuperseded;
+      if (!profileId || !settingId) return { ...designProductionSessionDefaults(), showSuperseded };
+      const next = { ...designProductionSessionDefaults(), profileId, settingId, showSuperseded };
+      const resolved = resolveDesignProductionSelection(next, profiles);
+      next.reviewFingerprint = resolved.status === 'ok' ? resolved.fingerprint : '';
+      return next;
+    }
+    function designProductionScopeWarning(scope) {
+      if (scope === 'sheet') return 'Verified for one measured sheet; confirm this is the same sheet or remeasure.';
+      if (scope === 'batch') return 'Verified for one batch; variation may exist within or between sheets.';
+      if (scope === 'material-general') return "Recorded as material-general evidence; it does not guarantee this sheet's thickness or fit.";
+      return 'Measurement scope is unknown; treat this as limited evidence.';
+    }
+    function designProductionVerificationText(setting) {
+      const status = setting?.verificationStatus;
+      if (status === 'verified') return 'Physically verified under the recorded condition. Fit remains material- and setup-specific.';
+      if (status === 'tested') return 'Tested result; assembled production verification is not recorded.';
+      if (status === 'estimated') return 'Estimated or copied starting point; physical verification is required.';
+      if (status === 'untested') return 'Untested saved record; use only as a starting point.';
+      if (status === 'superseded') return 'Superseded historical record; application is disabled.';
+      return 'Unrecognized verification status; application is disabled until reviewed in Library.';
+    }
+    function designProductionValuePresent(value) {
+      return value !== '' && value !== null && value !== undefined && Number.isFinite(Number(value));
+    }
+    function designProductionTarget(key, draftKey, label, value, draft, enabled, blockReason = '') {
+      const present = designProductionValuePresent(value), proposedValue = present ? designNumberText(Number(value)) : '';
+      const currentValue = String(draft?.[draftKey] ?? '');
+      const currentNumber = Number(currentValue), proposedNumber = Number(proposedValue);
+      const delta = present && currentValue.trim() !== '' && Number.isFinite(currentNumber) ? designRound(proposedNumber - currentNumber) : null;
+      return { key, draftKey, label, currentValue, proposedValue, resultingValue: proposedValue, delta, enabled: !!enabled && present, blockReason: present ? blockReason : `${label} is not recorded.` };
+    }
+    function productionSettingDesignApplicability({ profile, setting, draft = designDefaults(), currentMachineKey = '', inventoryItems = [] } = {}) {
+      const warnings = ['Designs does not verify material identity. Selecting this record confirms that you intend to use the shown Library material and condition.'];
+      const targets = [], references = [];
+      if (!profile || !setting) return { validSelection: false, blockReasons: ['No valid production setting is selected.'], warnings: [], references, targets };
+      const material = setting.materialCondition || {}, fit = setting.fitSettings || {}, cut = setting.cutSettings || {}, status = setting.verificationStatus || '';
+      const knownStatuses = ['verified','tested','estimated','untested'], operationAllowed = setting.operation === 'cut';
+      const statusAllowed = knownStatuses.includes(status), active = status !== 'superseded';
+      const recordMachineKey = setting.machine?.key || '', knownCurrent = ['genmitsu-l8-20w','genmitsu-l8-40w'].includes(currentMachineKey), knownRecord = ['genmitsu-l8-20w','genmitsu-l8-40w'].includes(recordMachineKey);
+      const exactMachine = knownCurrent && knownRecord && currentMachineKey === recordMachineKey;
+      const generalAllowed = operationAllowed && statusAllowed && active;
+      const fitAllowed = generalAllowed && exactMachine;
+      const blockReasons = [];
+      if (!operationAllowed) blockReasons.push('This production setting is not a cut record.');
+      if (!active) blockReasons.push('Superseded historical record; application is disabled.');
+      else if (!statusAllowed) blockReasons.push('Unrecognized verification status; application is disabled until reviewed in Library.');
+      warnings.push(designProductionVerificationText(setting), designProductionScopeWarning(material.measurementScope));
+      if (status === 'verified' && !setting.verifiedDate) warnings.push('Verified status has no verified date.');
+      if (!exactMachine) {
+        const recordLabel = productionMachineLabel(setting), currentLabel = productionMachineDefaultLabel(currentMachineKey) || 'Custom or unknown machine';
+        warnings.push(`Machine mismatch: this record was verified for ${recordLabel}, while the current app machine is ${currentLabel}. Mechanical fit values cannot be applied across machine profiles.`);
+      }
+      if (material.inventoryItemId && !inventoryItems.some(item => item?.id === material.inventoryItemId)) warnings.push('Linked Inventory item is no longer available.');
+      const mappings = {
+        'finger-box': [
+          ['materialThickness','materialThickness','Material thickness',material.measuredThicknessMm,'thickness'],
+          ['jointClearance','jointClearance','Finger-joint clearance',fit.fingerJointClearanceMm,'fit']
+        ],
+        'drawer-cabinet': [
+          ['materialThickness','materialThickness','Material thickness',material.measuredThicknessMm,'thickness'],
+          ['cabinetJointClearance','cabinetJointClearance','Cabinet joint clearance',fit.fingerJointClearanceMm,'fit'],
+          ['drawerJointClearance','drawerJointClearance','Drawer joint clearance',fit.fingerJointClearanceMm,'fit'],
+          ['drawerLateralClearance','drawerLateralClearance','Total drawer lateral clearance',fit.drawerTotalLateralClearanceMm,'fit']
+        ],
+        'joint-fit-coupon': [['materialThickness','materialThickness','Material thickness',material.measuredThicknessMm,'thickness']],
+        'sliding-lid-box': [['materialThickness','materialThickness','Material thickness',material.measuredThicknessMm,'thickness']],
+        'qr-stand': [['materialThickness','materialThickness','Material thickness',material.measuredThicknessMm,'thickness']],
+        'dice-tray': [['materialThickness','materialThickness','Material thickness',material.measuredThicknessMm,'thickness']],
+        'divider-tray': [['materialThickness','materialThickness','Material thickness',material.measuredThicknessMm,'thickness']]
+      };
+      (mappings[draft.template] || []).forEach(([key,draftKey,label,value,kind]) => {
+        const allowed = kind === 'fit' ? fitAllowed : generalAllowed;
+        const reason = !generalAllowed ? blockReasons[0] || 'Application is disabled.' : kind === 'fit' && !exactMachine ? 'Mechanical fit values cannot be applied across machine profiles.' : '';
+        targets.push(designProductionTarget(key,draftKey,label,value,draft,allowed,reason));
+      });
+      if (draft.template === 'joint-fit-coupon' && designProductionValuePresent(fit.fingerJointClearanceMm)) references.push(`Reference winner: ${designNumberText(Number(fit.fingerJointClearanceMm))} mm`);
+      const referenceValues = {
+        speedMmPerMin: cut.speedMmPerMin ?? '', powerMinPercent: cut.powerMinPercent ?? '', powerMaxPercent: cut.powerMaxPercent ?? '', passes: cut.passes ?? '',
+        airAssist: !!cut.airAssist, airPressurePsi: cut.airPressurePsi ?? '', focusValue: cut.focusValue ?? '', focusUnit: cut.focusUnit || 'mm', software: cut.software || '', kerfOffsetMm: setting.lightBurn?.kerfOffsetMm ?? ''
+      };
+      return { validSelection: true, blockReasons, warnings, references, targets, referenceValues, exactMachine, fitAllowed };
+    }
+    function applyDesignProductionValues(draft, applicability, checkedTargets = {}) {
+      const next = { ...draft }, applied = [];
+      (applicability?.targets || []).forEach(target => {
+        if (!target.enabled || !checkedTargets[target.key]) return;
+        next[target.draftKey] = target.proposedValue;
+        applied.push({ key: target.key, draftKey: target.draftKey, label: target.label, value: target.proposedValue });
+      });
+      return { draft: next, applied };
+    }
+    function syncDesignProductionSession() {
+      const resolved = resolveDesignProductionSelection(designProductionSession, state.profiles);
+      if (resolved.status === 'empty') { designProductionSession.staleReason = ''; return resolved; }
+      if (resolved.status !== 'ok') {
+        designProductionSession.checkedTargets = {};
+        designProductionSession.staleReason = resolved.status;
+        return resolved;
+      }
+      if (resolved.setting.verificationStatus === 'superseded') {
+        designProductionSession.checkedTargets = {};
+        designProductionSession.staleReason = 'superseded';
+      } else if (designProductionSession.reviewFingerprint && designProductionSession.reviewFingerprint !== resolved.fingerprint) {
+        designProductionSession.checkedTargets = {};
+        designProductionSession.staleReason = 'changed';
+      } else if (designProductionSession.staleReason) designProductionSession.staleReason = '';
+      return resolved;
+    }
+    function designProductionChoiceLabel(choice) {
+      const setting = choice.setting, material = setting.materialCondition || {};
+      return [setting.label || 'Production setting', productionMachineLabel(setting), productionStatusLabel(setting.verificationStatus), setting.preferred ? 'Preferred' : '', designProductionValuePresent(material.measuredThicknessMm) ? `${designNumberText(Number(material.measuredThicknessMm))} mm measured` : 'No measured thickness', material.measurementScope || 'unknown scope', material.batchLabel || ''].filter(Boolean).join(' - ');
+    }
+    function designProductionStaleMessage(status) {
+      if (status === 'profile-missing') return 'The selected Library profile is no longer available. Already applied Design values are unchanged.';
+      if (status === 'setting-missing') return 'The selected production setting is no longer available. Already applied Design values are unchanged.';
+      if (status === 'wrong-parent') return 'The selected production setting no longer belongs to the selected Library profile. Already applied Design values are unchanged.';
+      if (status === 'invalid-ids') return 'The saved session selection is incomplete. Clear it and select the production setting again.';
+      if (status === 'superseded') return 'This production setting is now superseded. Already applied Design values are unchanged.';
+      if (status === 'changed') return 'This production setting changed in Library. Review the latest values before applying again.';
+      return '';
+    }
+    function designProductionReferenceHtml(applicability) {
+      const r = applicability.referenceValues || {};
+      const value = (item, suffix = '') => designProductionValuePresent(item) ? `${esc(designNumberText(Number(item)))}${suffix}` : 'Not recorded';
+      return `<div class="panel" style="margin-top:10px"><b>Production reference only</b><div class="small muted" style="margin-top:5px">Speed ${value(r.speedMmPerMin, ' mm/min')} / Power ${value(r.powerMinPercent, '%')}${designProductionValuePresent(r.powerMaxPercent) && r.powerMaxPercent !== r.powerMinPercent ? `-${value(r.powerMaxPercent, '%')}` : ''} / Passes ${value(r.passes)} / Air ${r.airAssist ? 'On' : 'Off'}${designProductionValuePresent(r.airPressurePsi) ? ` at ${value(r.airPressurePsi, ' PSI')}` : ''}</div><div class="small muted" style="margin-top:5px">Focus ${value(r.focusValue, ` ${esc(r.focusUnit || 'mm')}`)} / Software ${esc(r.software || 'Not recorded')} / Signed LightBurn kerf ${value(r.kerfOffsetMm, ' mm')}</div><div class="small muted" style="margin-top:7px">Apply the signed kerf offset to the red through-cut layer in LightBurn after verifying the direction in Preview. It is not included in SVG geometry.</div></div>`;
+    }
+    function designProductionPanelHtml() {
+      if (designDraft.template === 'hanging-sign') return '';
+      const resolved = syncDesignProductionSession();
+      const currentMachineKey = designProductionMachineKey(state.machineProfile);
+      const choices = designProductionSettingChoices(state.profiles, { currentMachineKey, showSuperseded: designProductionSession.showSuperseded, selectedProfileId: designProductionSession.profileId, selectedSettingId: designProductionSession.settingId });
+      const groups = designProductionSettingGroups(choices);
+      const options = groups.map(group => `<optgroup label="${esc(`${group.profile.material || 'Unnamed material'}${group.profile.thicknessValue !== '' && group.profile.thicknessValue != null ? ` - ${fmt(group.profile.thicknessValue, group.profile.thicknessUnit)}` : ''}`)}">${group.choices.map(choice => `<option value="${esc(choice.settingId)}" data-profile-id="${esc(choice.profileId)}" data-setting-id="${esc(choice.settingId)}" ${choice.selected ? 'selected' : ''}>${esc(designProductionChoiceLabel(choice))}</option>`).join('')}</optgroup>`).join('');
+      let detail = '';
+      if (resolved.status !== 'empty' && resolved.status !== 'ok') detail = `<div class="panel softbad" style="margin-top:10px"><b>Selection unavailable</b><div class="small">${esc(designProductionStaleMessage(resolved.status))}</div></div>`;
+      if (resolved.status === 'ok') {
+        const profile = resolved.profile, setting = resolved.setting, material = setting.materialCondition || {};
+        const applicability = productionSettingDesignApplicability({ profile, setting, draft: designDraft, currentMachineKey, inventoryItems: normalizeInventory(state.inventory).rawMaterials });
+        const reviewBlocked = designProductionSession.staleReason === 'changed' || designProductionSession.staleReason === 'superseded';
+        const targetRows = applicability.targets.length ? applicability.targets.map(target => {
+          const checked = !!designProductionSession.checkedTargets[target.key], delta = target.delta == null ? '' : `${target.delta >= 0 ? '+' : ''}${designNumberText(target.delta)} mm`;
+          return `<label class="panel" style="display:block;margin-top:8px"><span class="row"><input type="checkbox" data-design-production-target="${esc(target.key)}" style="width:auto" ${checked ? 'checked' : ''} ${!target.enabled || reviewBlocked ? 'disabled' : ''}><b>${esc(target.label)}</b></span><span class="small muted">Current: ${target.currentValue === '' ? 'blank' : `${esc(target.currentValue)} mm`} &nbsp; Proposed: ${target.proposedValue === '' ? 'Not recorded' : `${esc(target.proposedValue)} mm`} &nbsp; ${delta ? `Change: ${esc(delta)} &nbsp; ` : ''}Result after apply: ${target.proposedValue === '' ? 'unchanged' : `${esc(target.proposedValue)} mm`}</span>${target.blockReason ? `<span class="small softbad" style="display:block;margin-top:4px">${esc(target.blockReason)}</span>` : ''}</label>`;
+        }).join('') : '<div class="small muted" style="margin-top:8px">No production values map to this template.</div>';
+        const evidence = Array.isArray(setting.evidence) && setting.evidence.length ? setting.evidence.map(entry => `<div class="small" style="margin-top:5px"><b>${esc(materialTestLabel(entry.kind || 'manual'))}</b>${entry.date ? ` - ${esc(entry.date)}` : ''}${entry.sourceLabel ? ` - ${esc(entry.sourceLabel)}` : ''}${entry.result ? `<br>Result: ${esc(entry.result)}` : ''}${entry.notes ? `<br><span class="muted">${esc(entry.notes)}</span>` : ''}</div>`).join('') : '<div class="small muted">No evidence entries.</div>';
+        const stale = designProductionStaleMessage(designProductionSession.staleReason);
+        const enabledChecked = applicability.targets.some(target => target.enabled && designProductionSession.checkedTargets[target.key]);
+        const condition = [material.inventoryItemName, material.supplier, material.product, material.batchLabel, material.finishOrCoating].filter(Boolean).join(' / ');
+        detail = `<div class="panel" style="margin-top:10px"><div class="spread"><div><b>${esc(setting.label || 'Production setting')}</b><div class="small muted">${esc(profile.material || 'Unnamed material')} / Library nominal ${profile.thicknessValue !== '' && profile.thicknessValue != null ? esc(fmt(profile.thicknessValue, profile.thicknessUnit)) : 'not recorded'}</div></div><span class="pill">${esc(productionStatusLabel(setting.verificationStatus))}${setting.preferred ? ' / Preferred' : ''}</span></div><div class="small" style="margin-top:7px">${esc(productionMachineLabel(setting))} / Cut / ${material.measuredThicknessMm === '' || material.measuredThicknessMm == null ? 'Measured thickness not recorded' : `${esc(designNumberText(Number(material.measuredThicknessMm)))} mm measured`} / ${esc(material.measurementScope || 'unknown')}${material.batchLabel ? ` / ${esc(material.batchLabel)}` : ''}${setting.verifiedDate ? ` / Verified ${esc(setting.verifiedDate)}` : ''}</div>${condition ? `<div class="small muted" style="margin-top:5px">Condition snapshot: ${esc(condition)}</div>` : ''}${stale ? `<div class="panel softbad" style="margin-top:8px"><b>Review required</b><div class="small">${esc(stale)}</div></div>` : ''}${applicability.warnings.map(warning => `<div class="small muted" style="margin-top:6px">${esc(warning)}</div>`).join('')}${designDraft.template === 'drawer-cabinet' ? '<div class="small muted" style="margin-top:7px">This production record stores one finger-joint clearance. Cabinet and drawer targets are separate so you can decide whether the same tested value applies to either or both.</div>' : ''}${applicability.references.map(reference => `<div class="small" style="margin-top:7px"><b>${esc(reference)}</b></div>`).join('')}${targetRows}<div class="actions" style="margin-top:10px">${designProductionSession.staleReason === 'changed' ? '<button type="button" id="reviewDesignProduction">Review current values</button>' : ''}<button type="button" class="primary" id="applyDesignProduction" ${!enabledChecked || reviewBlocked || applicability.blockReasons.length ? 'disabled' : ''}>Apply checked values</button></div>${designProductionReferenceHtml(applicability)}<details style="margin-top:10px"><summary class="small"><b>Evidence (${Array.isArray(setting.evidence) ? setting.evidence.length : 0})</b></summary>${evidence}</details></div>`;
+      }
+      return `<details id="designProductionPanel" class="panel" style="margin-bottom:14px" ${designProductionSession.settingId ? 'open' : ''}><summary><b>Production setting</b> <span class="small muted">session-only, explicit application</span></summary><div style="margin-top:10px"><label>Saved Cut production setting<select id="designProductionChoice"><option value="">Select saved setting...</option>${options}</select></label><label class="row" style="margin-top:8px"><input id="designProductionShowSuperseded" type="checkbox" style="width:auto" ${designProductionSession.showSuperseded ? 'checked' : ''}> Show superseded</label>${designProductionSession.settingId ? '<button type="button" id="clearDesignProduction" style="margin-top:8px">Clear selection</button>' : ''}${designProductionNotice ? `<div class="panel good" style="margin-top:8px"><div class="small">${esc(designProductionNotice)}</div></div>` : ''}${detail}</div></details>`;
+    }
+    function bindDesignProductionActions() {
+      const choice = document.getElementById('designProductionChoice');
+      if (choice) choice.onchange = () => {
+        const option = choice.selectedOptions[0];
+        designProductionSession = designProductionSessionForSelection(designProductionSession, option?.dataset.profileId || '', option?.dataset.settingId || '', state.profiles);
+        designProductionNotice = '';
+        render();
+      };
+      const showSuperseded = document.getElementById('designProductionShowSuperseded');
+      if (showSuperseded) showSuperseded.onchange = () => { designProductionSession.showSuperseded = !!showSuperseded.checked; designProductionNotice = ''; render(); };
+      const clear = document.getElementById('clearDesignProduction');
+      if (clear) clear.onclick = () => {
+        const showSupersededValue = designProductionSession.showSuperseded;
+        designProductionSession = { ...designProductionSessionDefaults(), showSuperseded: showSupersededValue };
+        designProductionNotice = '';
+        render();
+      };
+      const review = document.getElementById('reviewDesignProduction');
+      if (review) review.onclick = () => {
+        const resolved = resolveDesignProductionSelection(designProductionSession, state.profiles);
+        if (resolved.status !== 'ok' || resolved.setting.verificationStatus === 'superseded') return;
+        designProductionSession.reviewFingerprint = resolved.fingerprint;
+        designProductionSession.checkedTargets = {};
+        designProductionSession.staleReason = '';
+        designProductionNotice = 'Current Library values reviewed. Choose any values you want to apply.';
+        render();
+      };
+      const apply = document.getElementById('applyDesignProduction');
+      document.querySelectorAll('[data-design-production-target]').forEach(input => input.onchange = () => {
+        designProductionSession.checkedTargets = { ...designProductionSession.checkedTargets, [input.dataset.designProductionTarget]: !!input.checked };
+        if (apply) apply.disabled = !document.querySelector('[data-design-production-target]:checked:not(:disabled)');
+      });
+      if (apply) apply.onclick = () => {
+        const resolved = resolveDesignProductionSelection(designProductionSession, state.profiles);
+        if (resolved.status !== 'ok' || resolved.fingerprint !== designProductionSession.reviewFingerprint || resolved.setting.verificationStatus === 'superseded') return;
+        const applicability = productionSettingDesignApplicability({ profile: resolved.profile, setting: resolved.setting, draft: designDraft, currentMachineKey: designProductionMachineKey(state.machineProfile), inventoryItems: normalizeInventory(state.inventory).rawMaterials });
+        const result = applyDesignProductionValues(designDraft, applicability, designProductionSession.checkedTargets);
+        if (!result.applied.length) return;
+        designDraft = result.draft;
+        designProductionSession.checkedTargets = {};
+        designProductionNotice = `Applied ${result.applied.length} value${result.applied.length === 1 ? '' : 's'}: ${result.applied.map(item => item.label).join(', ')}. Values remain editable and are not a fit guarantee.`;
+        render();
+      };
+    }
     function renderDesigns() {
       const d = designDraft, box = d.template === 'finger-box', sliding = d.template === 'sliding-lid-box', cabinet = d.template === 'drawer-cabinet', jointCoupon = d.template === 'joint-fit-coupon', tray = d.template === 'dice-tray' || d.template === 'divider-tray', hanging = d.template === 'hanging-sign';
       const result = buildDesignResult(d);
@@ -1538,6 +1865,7 @@
         : 'Freestanding sign exports a base and upright with matching centered slots. The upright is intentionally blank for your QR, logo, or text in LightBurn.';
       return `
         <div class="toolbar" style="margin-bottom:14px"><div><b>Designs</b><div class="small muted">Session-only offline SVG layouts for LightBurn, including true finger-jointed and sliding-lid boxes. Designs are excluded from JSON backups.</div></div></div>
+        ${designProductionPanelHtml()}
         <form id="designForm" class="panel" onsubmit="return false">
           <div class="formgrid">
             ${templateField}
@@ -2733,6 +3061,13 @@
       const result = buildDesignResult(designDraft), results = document.getElementById('designResults'), download = document.getElementById('downloadDesignSvg');
       if (results) results.innerHTML = designResultsHtml(result);
       if (download) download.disabled = !result.valid;
+      return result;
+    }
+    function downloadCurrentDesignSvg(download = downloadTextFile) {
+      updateDesignDraft(document.getElementById('designForm'));
+      const result = refreshDesignPreview(), validation = result.valid ? designSvgValidation(result.svg, result.widthMm, result.heightMm) : { valid:false };
+      if (!result.valid || !validation.valid) return result;
+      download(`l8-${fileSlug(designDraft.template)}-${today()}.svg`, result.svg, 'image/svg+xml;charset=utf-8');
       return result;
     }
     function updateDesignDraft(form) {
@@ -4982,6 +5317,281 @@
       return { passed, failed, results };
     }
     window.runProductionSettingsFixtures = runProductionSettingsFixtures;
+    function runDesignProductionSettingsFixtures() {
+      const results = [], add = (name, pass) => results.push({ name, pass: !!pass });
+      const profile = {
+        id: 'design-profile', material: 'Basswood plywood', thicknessValue: 3, thicknessUnit: 'mm',
+        productionSettings: [{
+          id: 'design-setting', label: 'Preferred sheet result', operation: 'cut',
+          machine: { key: 'genmitsu-l8-20w', label: 'Genmitsu L8 20W' },
+          materialCondition: { nominalThicknessMm: 3, measuredThicknessMm: 3.02, measurementScope: 'sheet', inventoryItemId: 'inventory-1', inventoryItemName: 'Basswood sheet', supplier: 'Supplier', product: 'Product', batchLabel: 'Batch A' },
+          cutSettings: { speedMmPerMin: 650, powerMinPercent: 95, powerMaxPercent: 100, passes: 2, airAssist: true, airPressurePsi: 20, focusValue: 3, focusUnit: 'mm', software: 'LightBurn' },
+          lightBurn: { kerfOffsetMm: -.095 }, fitSettings: { fingerJointClearanceMm: -.02, drawerTotalLateralClearanceMm: .45 },
+          verificationStatus: 'verified', preferred: true, verifiedDate: '2026-07-16', updatedDate: '2026-07-16',
+          evidence: [{ id: 'evidence-1', kind: 'joint-coupon', date: '2026-07-16', sourceLabel: 'Coupon -0.02', result: 'winner', notes: 'Good fit' }], futureField: { kept: true }
+        }]
+      };
+      const setting = profile.productionSettings[0], sourceBefore = JSON.stringify(profile), defaults = designDefaults();
+      const session = designProductionSessionDefaults();
+      const selectedSession = designProductionSessionForSelection(session, profile.id, setting.id, [profile]);
+      const resolved = resolveDesignProductionSelection(selectedSession, [profile]);
+      const app = (template, machineKey = 'genmitsu-l8-20w', source = setting, draftOverrides = {}) => productionSettingDesignApplicability({ profile, setting: source, draft: { ...defaults, template, ...draftOverrides }, currentMachineKey: machineKey, inventoryItems: [{ id: 'inventory-1' }] });
+      const finger = app('finger-box'), drawer = app('drawer-cabinet'), coupon = app('joint-fit-coupon'), sliding = app('sliding-lid-box');
+      const qr = app('qr-stand'), dice = app('dice-tray'), divider = app('divider-tray'), hanging = app('hanging-sign');
+      const keys = applicability => applicability.targets.map(target => target.key).join('|');
+      const applied = (draft, applicability, checked) => applyDesignProductionValues(draft, applicability, checked).draft;
+      const fixtureDraft = { ...defaults, template: 'drawer-cabinet', materialThickness: '3', cabinetJointClearance: '.10', drawerJointClearance: '.11', drawerLateralClearance: '.40' };
+      const drawerFixture = app('drawer-cabinet', 'genmitsu-l8-20w', setting, fixtureDraft);
+      const sourceDraftBefore = JSON.stringify(fixtureDraft), sourceSettingBefore = JSON.stringify(setting);
+      const oneField = applied(fixtureDraft, drawerFixture, { cabinetJointClearance: true });
+      const allFields = applied(fixtureDraft, drawerFixture, { materialThickness: true, cabinetJointClearance: true, drawerJointClearance: true, drawerLateralClearance: true });
+      const noFields = applied(fixtureDraft, drawerFixture, {});
+      const repeated = applied(allFields, drawerFixture, { materialThickness: true, cabinetJointClearance: true, drawerJointClearance: true, drawerLateralClearance: true });
+      const mismatchFinger = app('finger-box', 'genmitsu-l8-40w'), customFinger = app('finger-box', ''), missingMachineSetting = { ...setting, machine: { key: '', label: '' } };
+      const missingThicknessSetting = { ...setting, materialCondition: { ...setting.materialCondition, measuredThicknessMm: '' } };
+      const superseded = { ...setting, verificationStatus: 'superseded', preferred: false }, unknownStatus = { ...setting, verificationStatus: 'future-status' }, nonCut = { ...setting, operation: 'engrave' };
+      const choiceProfiles = [profile, { id: 'other-profile', material: 'Acrylic', thicknessValue: 3, thicknessUnit: 'mm', productionSettings: [{ ...setting, id: 'other-setting', label: 'Other', preferred: false, verificationStatus: 'tested' }, { ...superseded, id: 'old-setting', label: 'Old' }] }];
+      const choices = designProductionSettingChoices(choiceProfiles, { currentMachineKey: 'genmitsu-l8-20w' });
+      const choicesReversed = designProductionSettingChoices([...choiceProfiles].reverse(), { currentMachineKey: 'genmitsu-l8-20w' });
+      const showOld = designProductionSettingChoices(choiceProfiles, { currentMachineKey: 'genmitsu-l8-20w', showSuperseded: true });
+      const choiceSetting = (id, label, machineKey = 'genmitsu-l8-20w', overrides = {}) => ({ ...setting, id, label, machine: { ...setting.machine, key: machineKey }, preferred: true, verificationStatus: 'verified', ...overrides });
+      const groupedProfiles = [
+        { id: 'group-a', material: 'Basswood', thicknessValue: 3, thicknessUnit: 'mm', productionSettings: [choiceSetting('a-mismatch', 'Zulu mismatch', 'genmitsu-l8-40w'), choiceSetting('a-exact', 'Alpha exact')] },
+        { id: 'group-b', material: 'Basswood', thicknessValue: 3, thicknessUnit: 'mm', productionSettings: [choiceSetting('b-exact', 'Beta exact')] }
+      ];
+      const groupedProfilesBefore = JSON.stringify(groupedProfiles);
+      const groupedChoices = designProductionSettingChoices(groupedProfiles, { currentMachineKey: 'genmitsu-l8-20w' });
+      const groupedShuffled = designProductionSettingChoices(groupedProfiles.map(item => ({ ...item, productionSettings: [...item.productionSettings].reverse() })).reverse(), { currentMachineKey: 'genmitsu-l8-20w' });
+      const duplicateIdProfiles = [
+        { id: 'duplicate-parent-a', material: 'Basswood', thicknessValue: 3, thicknessUnit: 'mm', productionSettings: [choiceSetting('shared-setting', 'Shared A')] },
+        { id: 'duplicate-parent-b', material: 'Basswood', thicknessValue: 3, thicknessUnit: 'mm', productionSettings: [choiceSetting('shared-setting', 'Shared B')] }
+      ];
+      const thicknessProfiles = [
+        { id: 'metric-3', material: 'Same material', thicknessValue: 3, thicknessUnit: 'mm', productionSettings: [choiceSetting('same-setting', 'Same rank')] },
+        { id: 'inch-0124', material: 'Same material', thicknessValue: .124, thicknessUnit: 'in', productionSettings: [choiceSetting('same-setting', 'Same rank')] },
+        { id: 'inch-0125', material: 'Same material', thicknessValue: .125, thicknessUnit: 'in', productionSettings: [choiceSetting('same-setting', 'Same rank')] },
+        { id: 'metric-3175', material: 'Same material', thicknessValue: 3.175, thicknessUnit: 'mm', productionSettings: [choiceSetting('same-setting', 'Same rank')] },
+        { id: 'missing-thickness', material: 'Same material', thicknessValue: '', thicknessUnit: 'mm', productionSettings: [choiceSetting('same-setting', 'Same rank')] },
+        { id: 'malformed-thickness', material: 'Same material', thicknessValue: 'not-a-number', thicknessUnit: 'in', productionSettings: [choiceSetting('same-setting', 'Same rank')] }
+      ];
+      const thicknessProfilesBefore = JSON.stringify(thicknessProfiles);
+      const thicknessOrder = list => designProductionSettingChoices(list, { currentMachineKey: 'genmitsu-l8-20w' }).map(choice => choice.profileId).join('|');
+      const expectedThicknessOrder = 'metric-3|inch-0124|inch-0125|metric-3175|malformed-thickness|missing-thickness';
+      const evidenceSet = [
+        { id: 'evidence-b', kind: 'manual', sourceId: 'b', sourceProfileId: 'p2', sourceLabel: 'B', date: '2026-07-15', result: 'pass', notes: 'Second' },
+        { id: '', kind: 'joint-coupon', sourceId: 'missing-id', sourceProfileId: 'p1', sourceLabel: 'No ID', date: '2026-07-14', result: 'winner', notes: 'Missing stable ID' },
+        { id: 'duplicate-id', kind: 'manual', sourceId: '2', sourceProfileId: 'p1', sourceLabel: 'Duplicate 2', date: '2026-07-13', result: 'pass', notes: 'Later secondary key' },
+        { id: 'evidence-a', kind: 'project', sourceId: 'a', sourceProfileId: 'p1', sourceLabel: 'A', date: '2026-07-12', result: 'pass', notes: 'First' },
+        { id: 'duplicate-id', kind: 'manual', sourceId: '1', sourceProfileId: 'p1', sourceLabel: 'Duplicate 1', date: '2026-07-13', result: 'pass', notes: 'Earlier secondary key' }
+      ];
+      const evidenceSource = { ...setting, evidence: evidenceSet }, evidenceBefore = JSON.stringify(evidenceSource);
+      const evidenceFingerprint = designProductionFingerprint(profile, evidenceSource);
+      add('Default production session has no selection', !session.profileId && !session.settingId && !session.reviewFingerprint && !session.staleReason && Object.keys(session.checkedTargets).length === 0 && !session.showSuperseded);
+      add('Selection session helper preserves Design draft bytes', JSON.stringify(defaults) === JSON.stringify(designDefaults()) && selectedSession.profileId === profile.id && selectedSession.settingId === setting.id && selectedSession.reviewFingerprint === resolved.fingerprint);
+      add('Production session is absent from persisted state', !Object.prototype.hasOwnProperty.call(state, 'designProductionSession') && !Object.prototype.hasOwnProperty.call(state, 'designProductionSelection'));
+      add('Production session is absent from backup', !Object.keys(backupObject()).some(key => /designProduction|productionSession|productionSelection/i.test(key)));
+      add('Fresh-session helper recreates no selection or checked state', (() => { const fresh = designProductionSessionDefaults(); return !fresh.profileId && !fresh.settingId && !fresh.reviewFingerprint && !fresh.staleReason && !fresh.showSuperseded && Object.keys(fresh.checkedTargets).length === 0; })());
+      add('Imported application-state shapes do not represent Design production session', !Object.prototype.hasOwnProperty.call(freshState(), 'designProductionSession') && !Object.prototype.hasOwnProperty.call(backupObject(), 'designProductionSession'));
+      add('Shared Reset helper clears draft session and apply notice', (() => {
+        const savedDraft = designDraft, savedSession = designProductionSession, savedNotice = designProductionNotice;
+        designDraft = { ...defaults, template: 'finger-box', materialThickness: '9' };
+        designProductionSession = { ...selectedSession, checkedTargets: { materialThickness: true }, showSuperseded: true, staleReason: 'changed' };
+        designProductionNotice = 'Applied value';
+        resetDesignWorkspaceSession();
+        const pass = JSON.stringify(designDraft) === JSON.stringify(designDefaults()) && JSON.stringify(designProductionSession) === JSON.stringify(designProductionSessionDefaults()) && designProductionNotice === '';
+        designDraft = savedDraft; designProductionSession = savedSession; designProductionNotice = savedNotice;
+        return pass;
+      })());
+      add('Template session transition preserves identity and review while clearing checks', (() => {
+        const transitioned = designProductionSessionForTemplateChange({ ...selectedSession, checkedTargets: { materialThickness: true }, showSuperseded: true, staleReason: 'changed' });
+        return transitioned.profileId === profile.id && transitioned.settingId === setting.id && transitioned.showSuperseded && transitioned.reviewFingerprint === selectedSession.reviewFingerprint && !Object.keys(transitioned.checkedTargets).length && !transitioned.staleReason;
+      })());
+      add('Machine preference maps 20W exactly', designProductionMachineKey('20W') === 'genmitsu-l8-20w');
+      add('Machine preference maps 40W exactly', designProductionMachineKey('40W') === 'genmitsu-l8-40w');
+      add('Custom machine preference has no cross-machine key', designProductionMachineKey('custom') === '');
+      add('Chooser includes active Cut settings', choices.some(choice => choice.settingId === 'design-setting'));
+      add('Chooser excludes superseded settings by default', !choices.some(choice => choice.settingId === 'old-setting'));
+      add('Chooser can show superseded settings explicitly', showOld.some(choice => choice.settingId === 'old-setting'));
+      add('Chooser order is deterministic under reversed profiles', choices.map(choice => `${choice.profileId}/${choice.settingId}`).join('|') === choicesReversed.map(choice => `${choice.profileId}/${choice.settingId}`).join('|'));
+      add('Chooser uses stable record IDs', new Set(showOld.map(choice => `${choice.profileId}/${choice.settingId}`)).size === showOld.length);
+      add('Chooser ranks each profile group by its best eligible child', groupedChoices.map(choice => `${choice.profileId}/${choice.settingId}`).join('|') === 'group-a/a-exact|group-a/a-mismatch|group-b/b-exact');
+      add('Chooser keeps profile children together and sorts exact machine first', groupedChoices[0].profileId === groupedChoices[1].profileId && groupedChoices[0].settingId === 'a-exact' && groupedChoices[1].settingId === 'a-mismatch');
+      add('Chooser grouped order survives reversed profiles and shuffled children', groupedChoices.map(choice => `${choice.profileId}/${choice.settingId}`).join('|') === groupedShuffled.map(choice => `${choice.profileId}/${choice.settingId}`).join('|'));
+      add('Grouped chooser leaves profile and setting arrays unmutated', JSON.stringify(groupedProfiles) === groupedProfilesBefore);
+      add('Duplicate setting IDs remain independently selectable by parent', resolveDesignProductionSelection({ ...session, profileId: 'duplicate-parent-a', settingId: 'shared-setting' }, duplicateIdProfiles).setting?.label === 'Shared A' && resolveDesignProductionSelection({ ...session, profileId: 'duplicate-parent-b', settingId: 'shared-setting' }, duplicateIdProfiles).setting?.label === 'Shared B');
+      add('Selected identity never resolves under the wrong parent', resolveDesignProductionSelection({ ...session, profileId: 'duplicate-parent-a', settingId: 'missing-from-a' }, duplicateIdProfiles).setting === null);
+      add('Canonical thickness helper converts inches without changing profile', designProductionNominalThicknessMm(thicknessProfiles[1]) === .124 * 25.4 && thicknessProfiles[1].thicknessValue === .124 && thicknessProfiles[1].thicknessUnit === 'in');
+      add('Mixed-unit chooser sorts nominal thickness in canonical millimeters', thicknessOrder(thicknessProfiles) === expectedThicknessOrder);
+      add('Equivalent 3.175 mm and 0.125 in thicknesses use stable profile IDs', thicknessOrder(thicknessProfiles).indexOf('inch-0125|metric-3175') >= 0);
+      add('Missing and malformed nominal thicknesses sort deterministically last', thicknessOrder(thicknessProfiles).endsWith('malformed-thickness|missing-thickness'));
+      add('Mixed-unit chooser order survives reversed input', thicknessOrder(thicknessProfiles) === thicknessOrder([...thicknessProfiles].reverse()));
+      add('Mixed-unit chooser order survives shuffled input', thicknessOrder(thicknessProfiles) === thicknessOrder([thicknessProfiles[3], thicknessProfiles[0], thicknessProfiles[5], thicknessProfiles[2], thicknessProfiles[4], thicknessProfiles[1]]));
+      add('Global unit preference does not affect chooser order', (() => {
+        const originalUnit = state.unit;
+        state.unit = 'mm'; const mmOrder = thicknessOrder(thicknessProfiles);
+        state.unit = 'in'; const inOrder = thicknessOrder(thicknessProfiles);
+        state.unit = originalUnit;
+        return mmOrder === inOrder && mmOrder === expectedThicknessOrder;
+      })());
+      add('Mixed-unit chooser leaves source profiles and settings unmutated', JSON.stringify(thicknessProfiles) === thicknessProfilesBefore);
+      add('Resolver finds setting only under selected parent', resolved.status === 'ok' && resolved.profile === profile && resolved.setting === setting);
+      add('Resolver detects missing parent', resolveDesignProductionSelection({ ...session, profileId: 'missing', settingId: setting.id }, [profile]).status === 'profile-missing');
+      add('Resolver detects missing setting', resolveDesignProductionSelection({ ...session, profileId: profile.id, settingId: 'missing' }, [profile]).status === 'setting-missing');
+      add('Resolver detects setting ID under wrong parent', resolveDesignProductionSelection({ ...session, profileId: profile.id, settingId: 'other-setting' }, choiceProfiles).status === 'wrong-parent');
+      add('Resolver never substitutes another record', resolveDesignProductionSelection({ ...session, profileId: profile.id, settingId: 'other-setting' }, choiceProfiles).setting === null);
+      add('Review fingerprint changes with measured thickness', designProductionFingerprint(profile, { ...setting, materialCondition: { ...setting.materialCondition, measuredThicknessMm: 3.03 } }) !== resolved.fingerprint);
+      add('Review fingerprint changes with fit value', designProductionFingerprint(profile, { ...setting, fitSettings: { ...setting.fitSettings, fingerJointClearanceMm: -.03 } }) !== resolved.fingerprint);
+      add('Review fingerprint changes with reference kerf', designProductionFingerprint(profile, { ...setting, lightBurn: { kerfOffsetMm: -.1 } }) !== resolved.fingerprint);
+      add('Evidence fingerprint is stable under reversed order', designProductionFingerprint(profile, { ...evidenceSource, evidence: [...evidenceSet].reverse() }) === evidenceFingerprint);
+      add('Evidence fingerprint is stable under shuffled order', designProductionFingerprint(profile, { ...evidenceSource, evidence: [evidenceSet[2], evidenceSet[4], evidenceSet[0], evidenceSet[3], evidenceSet[1]] }) === evidenceFingerprint);
+      add('Evidence field changes alter the fingerprint', designProductionFingerprint(profile, { ...evidenceSource, evidence: evidenceSet.map((entry, index) => index === 0 ? { ...entry, notes: 'Changed evidence' } : entry) }) !== evidenceFingerprint);
+      add('Evidence additions alter the fingerprint', designProductionFingerprint(profile, { ...evidenceSource, evidence: [...evidenceSet, { id: 'added', kind: 'manual', notes: 'Added' }] }) !== evidenceFingerprint);
+      add('Evidence deletions alter the fingerprint', designProductionFingerprint(profile, { ...evidenceSource, evidence: evidenceSet.slice(1) }) !== evidenceFingerprint);
+      add('Missing evidence IDs remain order-stable through secondary keys', designProductionFingerprint(profile, { ...evidenceSource, evidence: [evidenceSet[1], { ...evidenceSet[1], sourceId: 'another' }] }) === designProductionFingerprint(profile, { ...evidenceSource, evidence: [{ ...evidenceSet[1], sourceId: 'another' }, evidenceSet[1]] }));
+      add('Duplicate evidence IDs remain order-stable through secondary keys', designProductionFingerprint(profile, { ...evidenceSource, evidence: [evidenceSet[2], evidenceSet[4]] }) === designProductionFingerprint(profile, { ...evidenceSource, evidence: [evidenceSet[4], evidenceSet[2]] }));
+      add('Fingerprint sorting leaves evidence source objects unmutated', JSON.stringify(evidenceSource) === evidenceBefore);
+      add('Finger Box exposes thickness and joint only', keys(finger) === 'materialThickness|jointClearance');
+      add('Finger Box omits Drawer lateral clearance', !keys(finger).includes('drawerLateralClearance'));
+      add('Finger Box applies thickness only', applied({ ...defaults, template: 'finger-box' }, finger, { materialThickness: true }).materialThickness === '3.02');
+      add('Finger Box applies signed joint only', applied({ ...defaults, template: 'finger-box' }, finger, { jointClearance: true }).jointClearance === '-0.02');
+      add('Finger Box applies both explicit targets', (() => { const value = applied({ ...defaults, template: 'finger-box' }, finger, { materialThickness: true, jointClearance: true }); return value.materialThickness === '3.02' && value.jointClearance === '-0.02'; })());
+      add('Finger Box preserves zero joint value', app('finger-box', 'genmitsu-l8-20w', { ...setting, fitSettings: { ...setting.fitSettings, fingerJointClearanceMm: 0 } }).targets.find(target => target.key === 'jointClearance').proposedValue === '0');
+      add('Finger Box preserves negative joint value', finger.targets.find(target => target.key === 'jointClearance').proposedValue === '-0.02');
+      add('Known machine mismatch allows thickness', mismatchFinger.targets.find(target => target.key === 'materialThickness').enabled);
+      add('Known machine mismatch blocks finger fit', !mismatchFinger.targets.find(target => target.key === 'jointClearance').enabled);
+      add('Custom current machine blocks fit without scaling', !customFinger.targets.find(target => target.key === 'jointClearance').enabled && customFinger.targets.find(target => target.key === 'jointClearance').proposedValue === '-0.02');
+      add('Missing record machine blocks fit', !app('finger-box', 'genmitsu-l8-20w', missingMachineSetting).targets.find(target => target.key === 'jointClearance').enabled);
+      add('Drawer Cabinet exposes four explicit targets', keys(drawer) === 'materialThickness|cabinetJointClearance|drawerJointClearance|drawerLateralClearance');
+      add('Drawer Cabinet cabinet joint applies independently', oneField.cabinetJointClearance === '-0.02' && oneField.drawerJointClearance === '.11');
+      add('Drawer Cabinet drawer joint applies independently', (() => { const value = applied(fixtureDraft, drawerFixture, { drawerJointClearance: true }); return value.cabinetJointClearance === '.10' && value.drawerJointClearance === '-0.02'; })());
+      add('Drawer Cabinet both joint values require both checks', allFields.cabinetJointClearance === '-0.02' && allFields.drawerJointClearance === '-0.02');
+      add('Drawer Cabinet lateral applies independently', (() => { const value = applied(fixtureDraft, drawerFixture, { drawerLateralClearance: true }); return value.drawerLateralClearance === '0.45' && value.cabinetJointClearance === '.10'; })());
+      add('Drawer Cabinet thickness applies independently', (() => { const value = applied(fixtureDraft, drawerFixture, { materialThickness: true }); return value.materialThickness === '3.02' && value.drawerLateralClearance === '.40'; })());
+      add('Drawer Cabinet mismatch blocks both joint targets', ['cabinetJointClearance','drawerJointClearance'].every(key => !app('drawer-cabinet', 'genmitsu-l8-40w').targets.find(target => target.key === key).enabled));
+      add('Drawer Cabinet mismatch still allows thickness', app('drawer-cabinet', 'genmitsu-l8-40w').targets.find(target => target.key === 'materialThickness').enabled);
+      add('Joint Fit Coupon exposes thickness only', keys(coupon) === 'materialThickness');
+      add('Joint Fit Coupon displays stored winner as reference only', coupon.references.join('').includes('Reference winner: -0.02 mm'));
+      add('Joint Fit Coupon application preserves candidates', applied({ ...defaults, template: 'joint-fit-coupon' }, coupon, { materialThickness: true }).jointCouponClearances === defaults.jointCouponClearances);
+      add('Sliding Lid Box exposes thickness only', keys(sliding) === 'materialThickness');
+      add('Sliding Lid application preserves all fit clearances', (() => { const value = applied({ ...defaults, template: 'sliding-lid-box' }, sliding, { materialThickness: true }); return value.slidingJointClearance === defaults.slidingJointClearance && value.lidSideClearance === defaults.lidSideClearance && value.lidVerticalClearance === defaults.lidVerticalClearance && value.frontInsertionClearance === defaults.frontInsertionClearance; })());
+      add('QR stand receives measured thickness only', keys(qr) === 'materialThickness');
+      add('Dice tray receives measured thickness only', keys(dice) === 'materialThickness');
+      add('Divider tray receives measured thickness only', keys(divider) === 'materialThickness');
+      add('Legacy fitClearance never receives production joint value', applied({ ...defaults, template: 'dice-tray' }, dice, { materialThickness: true }).fitClearance === defaults.fitClearance);
+      add('Hanging sign exposes no production targets', hanging.targets.length === 0);
+      add('Missing measured thickness disables only thickness target', !app('finger-box', 'genmitsu-l8-20w', missingThicknessSetting).targets.find(target => target.key === 'materialThickness').enabled && app('finger-box', 'genmitsu-l8-20w', missingThicknessSetting).targets.find(target => target.key === 'jointClearance').enabled);
+      add('Measured thickness reports exact signed delta', finger.targets.find(target => target.key === 'materialThickness').delta === .02);
+      add('Blank current thickness remains explicit without an invented delta', (() => { const target = app('finger-box', 'genmitsu-l8-20w', setting, { materialThickness: '' }).targets.find(item => item.key === 'materialThickness'); return target.currentValue === '' && target.delta === null; })());
+      add('Nominal thickness does not replace measured thickness', finger.targets.find(target => target.key === 'materialThickness').proposedValue === '3.02');
+      add('Sheet scope warning is present', app('finger-box').warnings.some(warning => warning.includes('same sheet')));
+      add('Batch scope warning is present', app('finger-box', 'genmitsu-l8-20w', { ...setting, materialCondition: { ...setting.materialCondition, measurementScope: 'batch' } }).warnings.some(warning => warning.includes('one batch')));
+      add('Material-general scope warning is present', app('finger-box', 'genmitsu-l8-20w', { ...setting, materialCondition: { ...setting.materialCondition, measurementScope: 'material-general' } }).warnings.some(warning => warning.includes('does not guarantee')));
+      add('Unknown scope warning is present', app('finger-box', 'genmitsu-l8-20w', { ...setting, materialCondition: { ...setting.materialCondition, measurementScope: 'unknown' } }).warnings.some(warning => warning.includes('scope is unknown')));
+      add('Verified status allows application', finger.targets.every(target => target.enabled));
+      add('Verified without date warns without rewriting', app('finger-box', 'genmitsu-l8-20w', { ...setting, verifiedDate: '' }).warnings.some(warning => warning.includes('no verified date')));
+      add('Tested status remains applicable', app('finger-box', 'genmitsu-l8-20w', { ...setting, verificationStatus: 'tested' }).targets.every(target => target.enabled));
+      add('Estimated status remains applicable', app('finger-box', 'genmitsu-l8-20w', { ...setting, verificationStatus: 'estimated' }).targets.every(target => target.enabled));
+      add('Untested status remains applicable', app('finger-box', 'genmitsu-l8-20w', { ...setting, verificationStatus: 'untested' }).targets.every(target => target.enabled));
+      add('Superseded status blocks application', app('finger-box', 'genmitsu-l8-20w', superseded).targets.every(target => !target.enabled));
+      add('Unknown status blocks application', app('finger-box', 'genmitsu-l8-20w', unknownStatus).targets.every(target => !target.enabled));
+      add('Non-Cut operation blocks application', app('finger-box', 'genmitsu-l8-20w', nonCut).targets.every(target => !target.enabled));
+      add('Dangling Inventory link produces warning only', productionSettingDesignApplicability({ profile, setting, draft: { ...defaults, template: 'finger-box' }, currentMachineKey: 'genmitsu-l8-20w', inventoryItems: [] }).warnings.some(warning => warning.includes('no longer available')));
+      add('Zero checked targets leave draft byte-identical', JSON.stringify(noFields) === sourceDraftBefore);
+      add('One checked target leaves unchecked fields byte-identical', oneField.materialThickness === fixtureDraft.materialThickness && oneField.drawerJointClearance === fixtureDraft.drawerJointClearance && oneField.drawerLateralClearance === fixtureDraft.drawerLateralClearance);
+      add('Multiple checked targets apply exactly mapped fields', allFields.materialThickness === '3.02' && allFields.cabinetJointClearance === '-0.02' && allFields.drawerJointClearance === '-0.02' && allFields.drawerLateralClearance === '0.45');
+      add('Manual override remains until a target is explicitly reapplied', applied({ ...fixtureDraft, cabinetJointClearance: '-0.01' }, drawerFixture, { materialThickness: true }).cabinetJointClearance === '-0.01');
+      add('Repeated application is deterministic and idempotent', JSON.stringify(allFields) === JSON.stringify(repeated));
+      add('Apply returns a new draft object', oneField !== fixtureDraft);
+      add('Source draft remains unmutated', JSON.stringify(fixtureDraft) === sourceDraftBefore);
+      add('Profile setting and evidence remain unmutated', JSON.stringify(setting) === sourceSettingBefore && JSON.stringify(profile) === sourceBefore);
+      add('Choice and applicability helpers do not mutate Library data', JSON.stringify(profile) === sourceBefore);
+      const storageBefore = localStorage.getItem(STORAGE_KEY);
+      applyDesignProductionValues(fixtureDraft, drawerFixture, { materialThickness: true });
+      buildDesignResult({ ...defaults, template: 'finger-box' });
+      const storageAfter = localStorage.getItem(STORAGE_KEY);
+      add('Selection and apply helpers do not write localStorage', storageBefore === storageAfter);
+      const fingerDraft = { ...defaults, template: 'finger-box' }, fingerSvgBefore = buildDesignResult(fingerDraft).svg;
+      add('Selection session transition preserves exact generated SVG bytes', (() => {
+        const draftBefore = JSON.stringify(fingerDraft);
+        const nextSession = designProductionSessionForSelection(designProductionSessionDefaults(), profile.id, setting.id, [profile]);
+        return nextSession.settingId === setting.id && JSON.stringify(fingerDraft) === draftBefore && buildDesignResult(fingerDraft).svg === fingerSvgBefore;
+      })());
+      add('Checked session target without Apply preserves exact generated SVG bytes', (() => {
+        const checkedSession = { ...selectedSession, checkedTargets: { materialThickness: true } };
+        return checkedSession.checkedTargets.materialThickness && JSON.stringify(fingerDraft) === JSON.stringify({ ...defaults, template: 'finger-box' }) && buildDesignResult(fingerDraft).svg === fingerSvgBefore;
+      })());
+      const kerfSource = { ...setting, lightBurn: { ...setting.lightBurn, kerfOffsetMm: -.12 } };
+      const cutReferenceSource = { ...setting, cutSettings: { ...setting.cutSettings, speedMmPerMin: 710, powerMinPercent: 91, powerMaxPercent: 97, passes: 3, airAssist: false, airPressurePsi: 14, focusValue: 2.8, software: 'Other software' } };
+      const kerfApplicability = app('finger-box', 'genmitsu-l8-20w', kerfSource), cutReferenceApplicability = app('finger-box', 'genmitsu-l8-20w', cutReferenceSource);
+      const ordinaryValues = applicability => applicability.targets.map(target => `${target.key}:${target.proposedValue}`).join('|');
+      add('Kerf-only source review preserves ordinary mappings and generated SVG', ordinaryValues(kerfApplicability) === ordinaryValues(finger) && JSON.stringify(fingerDraft) === JSON.stringify({ ...defaults, template: 'finger-box' }) && buildDesignResult(fingerDraft).svg === fingerSvgBefore);
+      add('Cut-reference-only source review preserves ordinary mappings and generated SVG', ordinaryValues(cutReferenceApplicability) === ordinaryValues(finger) && JSON.stringify(fingerDraft) === JSON.stringify({ ...defaults, template: 'finger-box' }) && buildDesignResult(fingerDraft).svg === fingerSvgBefore);
+      add('Kerf and cut-reference review leaves source records unmutated', kerfSource.lightBurn.kerfOffsetMm === -.12 && cutReferenceSource.cutSettings.speedMmPerMin === 710 && JSON.stringify(setting) === sourceSettingBefore);
+      add('Crafted blocked fit target cannot bypass machine mismatch', (() => {
+        const mismatch = app('finger-box', 'genmitsu-l8-40w');
+        const result = applyDesignProductionValues(fingerDraft, mismatch, { materialThickness: true, jointClearance: true }).draft;
+        return result.materialThickness === '3.02' && result.jointClearance === fingerDraft.jointClearance && JSON.stringify(setting) === sourceSettingBefore;
+      })());
+      add('Changed-record synchronization clears checks and disables Apply pending review', (() => {
+        const savedProfiles = state.profiles, savedDraft = designDraft, savedSession = designProductionSession;
+        const changedSetting = { ...setting, materialCondition: { ...setting.materialCondition, measuredThicknessMm: 3.03 } };
+        state.profiles = [{ ...profile, productionSettings: [changedSetting] }];
+        designDraft = { ...fingerDraft, materialThickness: '3.02', jointClearance: '-0.02' };
+        const draftBefore = JSON.stringify(designDraft);
+        designProductionSession = { ...selectedSession, checkedTargets: { materialThickness: true, jointClearance: true } };
+        syncDesignProductionSession();
+        const panel = designProductionPanelHtml();
+        const pass = designProductionSession.staleReason === 'changed' && !Object.keys(designProductionSession.checkedTargets).length && panel.includes('id="applyDesignProduction" disabled') && JSON.stringify(designDraft) === draftBefore && designProductionFingerprint(profile, changedSetting) !== selectedSession.reviewFingerprint;
+        state.profiles = savedProfiles; designDraft = savedDraft; designProductionSession = savedSession;
+        return pass;
+      })());
+      const thicknessApplied = applied(fingerDraft, finger, { materialThickness: true }), jointApplied = applied(fingerDraft, finger, { jointClearance: true });
+      add('Applied thickness changes consuming template SVG', buildDesignResult(thicknessApplied).svg !== fingerSvgBefore);
+      add('Applied joint value changes expected finger geometry', buildDesignResult(jointApplied).svg !== fingerSvgBefore);
+      add('Rendered preview source matches intercepted download text after application', (() => {
+        const savedDraft = designDraft;
+        const ids = ['designForm','designResults','downloadDesignSvg'];
+        const existing = ids.map(id => document.getElementById(id));
+        existing.forEach((element, index) => { if (element) element.id = `${ids[index]}-fixture-saved`; });
+        const fixtureRoot = document.createElement('div');
+        fixtureRoot.innerHTML = '<form id="designForm"></form><button id="downloadDesignSvg" type="button"></button><div id="designResults"></div>';
+        document.body.appendChild(fixtureRoot);
+        designDraft = allFields;
+        let downloaded = '';
+        const previewResult = refreshDesignPreview();
+        const data = fixtureRoot.querySelector('object')?.getAttribute('data') || '';
+        const previewSvg = data.includes(',') ? decodeURIComponent(data.slice(data.indexOf(',') + 1)) : '';
+        const downloadResult = downloadCurrentDesignSvg((filename, text) => { downloaded = text; });
+        fixtureRoot.remove();
+        existing.forEach((element, index) => { if (element) element.id = ids[index]; });
+        designDraft = savedDraft;
+        return previewResult.valid && downloadResult.valid && previewSvg === downloaded && downloaded === previewResult.svg && !/production(setting|profile|evidence)/i.test(downloaded);
+      })());
+      add('Global mm and in preferences produce identical applied drafts and SVG bytes', (() => {
+        const originalUnit = state.unit, storageBeforeUnits = localStorage.getItem(STORAGE_KEY), evidenceBeforeUnits = JSON.stringify(setting.evidence);
+        state.unit = 'mm';
+        const mmDraft = applied(fixtureDraft, drawerFixture, { materialThickness: true, cabinetJointClearance: true });
+        const mmSvg = buildDesignResult(mmDraft).svg;
+        state.unit = 'in';
+        const inDraft = applied(fixtureDraft, drawerFixture, { materialThickness: true, cabinetJointClearance: true });
+        const inSvg = buildDesignResult(inDraft).svg;
+        state.unit = originalUnit;
+        return JSON.stringify(mmDraft) === JSON.stringify(inDraft) && mmSvg === inSvg && JSON.stringify(setting.evidence) === evidenceBeforeUnits && localStorage.getItem(STORAGE_KEY) === storageBeforeUnits;
+      })());
+      add('Global unit is not consulted by machine or apply helpers', designProductionMachineKey('20W') === 'genmitsu-l8-20w' && allFields.materialThickness === '3.02');
+      add('Signed clearance precision is preserved', allFields.cabinetJointClearance === '-0.02');
+      add('Signed kerf remains reference-only precision', drawerFixture.referenceValues.kerfOffsetMm === -.095 && !drawerFixture.targets.some(target => target.key.toLowerCase().includes('kerf')));
+      add('Storage key and schema remain unchanged', STORAGE_KEY === 'genmitsu-l8-tracker-v1' && SCHEMA_VERSION === 2);
+      add('Protected Library data remains identical after all fixture actions', JSON.stringify(profile) === sourceBefore);
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Design production settings fixtures');
+      console.table(results);
+      console.log(`${passed} passed`);
+      console.log(`${failed} failed`);
+      console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runDesignProductionSettingsFixtures = runDesignProductionSettingsFixtures;
     function runGridPromotionFixtures() {
       const grid = overrides => ({ id: 'grid-1', name: 'Fixture Grid', createdDate: '2026-07-14', jobType: 'engrave', passes: 2, lineInterval: .12, airAssist: true, software: 'LightBurn', ditherMode: 'none', ...overrides });
       const cell = overrides => ({ rating: 4, best: false, notes: 'Clean result', ...overrides });
@@ -5132,7 +5742,7 @@
     }
     function productionSettingsEditorHtml() {
       const settings = normalizeProductionSettings(profileDraftProductionSettings);
-      return `<details id="productionSettingsSection" class="span2" style="margin-top:8px"><summary><b>Proven Production Settings</b> <span class="small muted">(${settings.length})</span></summary><div style="margin-top:10px">${productionSettingsSummaryHtml(settings, { all: true, editor: true })}<button type="button" id="addProductionSetting" style="margin-top:10px">Add setting</button><div class="small muted" style="margin-top:8px">Production settings are material-, machine-, and test-condition-specific. Designs does not apply these records yet.</div></div></details>`;
+      return `<details id="productionSettingsSection" class="span2" style="margin-top:8px"><summary><b>Proven Production Settings</b> <span class="small muted">(${settings.length})</span></summary><div style="margin-top:10px">${productionSettingsSummaryHtml(settings, { all: true, editor: true })}<button type="button" id="addProductionSetting" style="margin-top:10px">Add setting</button><div class="small muted" style="margin-top:8px">Production settings are material-, machine-, and test-condition-specific. Designs can review them and copy only explicitly checked compatible values into its session-only form.</div></div></details>`;
     }
     function refreshProductionSettingsEditor() {
       const section = document.getElementById('productionSettingsSection');
@@ -6960,19 +7570,19 @@
         };
         designForm.onchange = e => {
           updateDesignDraft(designForm);
+          if (e.target.name === 'template') {
+            designProductionSession = designProductionSessionForTemplateChange(designProductionSession);
+            designProductionNotice = '';
+          }
           if (['template','boxDimensionMode','slidingDimensionMode','lidPull','slidingGuideMarks','slidingFitCoupon','assemblyLabels'].includes(e.target.name)) render();
           else refreshDesignPreview();
         };
       }
+      bindDesignProductionActions();
       const downloadDesignSvg = document.getElementById('downloadDesignSvg');
-      if (downloadDesignSvg) downloadDesignSvg.onclick = () => {
-        updateDesignDraft(document.getElementById('designForm'));
-        const result = refreshDesignPreview(), validation = result.valid ? designSvgValidation(result.svg, result.widthMm, result.heightMm) : { valid:false };
-        if (!result.valid || !validation.valid) return;
-        downloadTextFile(`l8-${fileSlug(designDraft.template)}-${today()}.svg`, result.svg, 'image/svg+xml;charset=utf-8');
-      };
+      if (downloadDesignSvg) downloadDesignSvg.onclick = () => downloadCurrentDesignSvg();
       const resetDesign = document.getElementById('resetDesign');
-      if (resetDesign) resetDesign.onclick = () => { designDraft = designDefaults(); render(); };
+      if (resetDesign) resetDesign.onclick = () => { resetDesignWorkspaceSession(); render(); };
       const back = document.getElementById('backGrids');
       if (back) back.onclick = () => { activeGridId = null; render(); };
       const delGrid = document.getElementById('deleteGrid');
@@ -8628,6 +9238,7 @@
     if (selftest === 'baseline' || selftest === 'all') runBaselineResolutionFixtures();
     if (selftest === 'normalization' || selftest === 'all') runMaterialTestNormalizationFixtures();
     if (selftest === 'production' || selftest === 'all') runProductionSettingsFixtures();
+    if (selftest === 'design-production' || selftest === 'all') runDesignProductionSettingsFixtures();
     if (selftest === 'grid' || selftest === 'all') runGridPromotionFixtures();
     if (selftest === 'grid-browser' || selftest === 'all') runGridBrowserFixtures();
     if (selftest === 'materials' || selftest === 'all') window.runMaterialBrowserFixtures();
@@ -8636,7 +9247,7 @@
     if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
     if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
-    if (selftest === 'design' || selftest === 'all') runDesignGeometryFixtures();
+    if (selftest === 'design' || selftest === 'designs' || selftest === 'all') runDesignGeometryFixtures();
     render();
   })();
   </script>
