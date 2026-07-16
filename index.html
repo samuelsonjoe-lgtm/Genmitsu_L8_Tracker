@@ -393,7 +393,7 @@
       return { status: 'ok', data };
     }
     function designDefaults() {
-      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated', slidingGuideMarks: false, slidingFitCoupon: false, assemblyLabels: false };
+      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated', slidingGuideMarks: false, slidingFitCoupon: false, drawerInsideWidth: '100', drawerInsideDepth: '70', drawerInsideHeight: '30', drawerRows: '1', cabinetJointClearance: '0.10', drawerJointClearance: '0.10', drawerPreferredFingerWidth: '12', drawerLateralClearance: '0.40', drawerVerticalClearance: '0.30', drawerRearClearance: '0.50', assemblyLabels: false };
     }
     function normalizeInventoryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function normalizeLibraryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
@@ -1449,10 +1449,16 @@
     function designSelect(name, label, value, options, tip = '') {
       return `<label>${labelText(label, tip)}<select name="${name}">${options.map(([key, text]) => `<option value="${esc(key)}" ${key === value ? 'selected' : ''}>${esc(text)}</option>`).join('')}</select></label>`;
     }
+    function designKerfGuidance(template) {
+      if (template === 'finger-box') return 'Joint clearance and laser kerf are separate adjustments. Establish kerf through material testing; it is not automatically included in generated dimensions.';
+      if (template === 'sliding-lid-box') return 'Joint clearance, lid clearances, and laser kerf are separate adjustments. Establish kerf through material testing; it is not automatically included in generated dimensions.';
+      if (template === 'drawer-cabinet') return 'Cabinet joint clearance, drawer joint clearance, drawer running clearances, and laser kerf are separate adjustments. Establish kerf through material testing; it is not automatically included in generated dimensions.';
+      return 'Fit clearance and laser kerf are separate adjustments. Establish kerf through material testing; it is not automatically included in generated dimensions.';
+    }
     function renderDesigns() {
-      const d = designDraft, box = d.template === 'finger-box', sliding = d.template === 'sliding-lid-box', tray = d.template === 'dice-tray' || d.template === 'divider-tray', hanging = d.template === 'hanging-sign';
+      const d = designDraft, box = d.template === 'finger-box', sliding = d.template === 'sliding-lid-box', cabinet = d.template === 'drawer-cabinet', tray = d.template === 'dice-tray' || d.template === 'divider-tray', hanging = d.template === 'hanging-sign';
       const result = buildDesignResult(d);
-      const templateField = designSelect('template', 'Template', d.template, [['qr-stand','Freestanding QR / sign stand'],['hanging-sign','Hanging sign'],['dice-tray','Dice tray'],['divider-tray','Divider tray'],['finger-box','Finger-jointed box'],['sliding-lid-box','Sliding-lid finger box']]);
+      const templateField = designSelect('template', 'Template', d.template, [['qr-stand','Freestanding QR / sign stand'],['hanging-sign','Hanging sign'],['dice-tray','Dice tray'],['divider-tray','Divider tray'],['finger-box','Finger-jointed box'],['sliding-lid-box','Sliding-lid finger box'],['drawer-cabinet','Drawer Cabinet']]);
       const boxFields = designSelect('boxDimensionMode', 'Dimension basis', d.boxDimensionMode, [['inside','Inside dimensions'],['outside','Outside body dimensions']], 'Outside height is underside of bottom to wall top; inside height starts at the inside face of the bottom.')
         + field('boxWidth', `${d.boxDimensionMode === 'outside' ? 'Outside body' : 'Inside'} width (mm)`, d.boxWidth, 'number', 'min="0.01" step="0.1"')
         + field('boxDepth', `${d.boxDimensionMode === 'outside' ? 'Outside body' : 'Inside'} depth (mm)`, d.boxDepth, 'number', 'min="0.01" step="0.1"')
@@ -1479,6 +1485,18 @@
         + '<div class="small muted" style="grid-column:1/-1">Adds small identification marks to intended inside or concealed faces. Run the blue score layer before cutting. Verify label visibility and face orientation during the first assembly; these are assembly aids, not decorative engraving. Deterministic vector glyph paths are used so no font is required.</div>'
         + '<label class="row"><input name="slidingFitCoupon" type="checkbox" style="width:auto" ' + (d.slidingFitCoupon ? 'checked' : '') + '> Include six-piece sliding-fit coupon</label>'
         + '<div class="small muted" style="grid-column:1/-1">Adds a six-piece glue-up test for the current lid side and vertical clearances. Allow the glue to cure before judging the fit.</div>';
+      const cabinetFields = field('drawerInsideWidth', 'Drawer inside width (mm)', d.drawerInsideWidth, 'number', 'min="0.01" step="0.1"')
+        + field('drawerInsideDepth', 'Drawer inside depth (mm)', d.drawerInsideDepth, 'number', 'min="0.01" step="0.1"')
+        + field('drawerInsideHeight', 'Drawer inside height (mm)', d.drawerInsideHeight, 'number', 'min="0.01" step="0.1"')
+        + designSelect('drawerRows', 'Drawer rows', String(d.drawerRows), [['1','1'],['2','2'],['3','3']], 'Phase 5.1 supports one vertical column with one to three equal drawers.')
+        + field('cabinetJointClearance', 'Cabinet joint clearance (mm)', d.cabinetJointClearance, 'number', 'min="0" step="0.01"', 'Adjusts only the five-panel cabinet shell finger joints.')
+        + field('drawerJointClearance', 'Drawer joint clearance (mm)', d.drawerJointClearance, 'number', 'min="0" step="0.01"', 'Adjusts only the removable open-top drawer finger joints.')
+        + field('drawerPreferredFingerWidth', 'Preferred finger width (mm)', d.drawerPreferredFingerWidth, 'number', 'min="0.01" step="0.1"', 'A target only; exact widths use valid odd segment counts.')
+        + field('drawerLateralClearance', 'Total drawer lateral clearance (mm)', d.drawerLateralClearance, 'number', 'min="0" step="0.01"', 'Split equally between the left and right sides of each drawer.')
+        + field('drawerVerticalClearance', 'Drawer vertical clearance (mm)', d.drawerVerticalClearance, 'number', 'min="0" step="0.01"', 'Free space above each drawer within its row.')
+        + field('drawerRearClearance', 'Rear clearance (mm)', d.drawerRearClearance, 'number', 'min="0" step="0.01"', 'Free space between each drawer back and the cabinet back.')
+        + '<label class="row"><input name="assemblyLabels" type="checkbox" style="width:auto" ' + (d.assemblyLabels ? 'checked' : '') + '> Add assembly labels (blue score layer)</label>'
+        + '<div class="small muted" style="grid-column:1/-1">Adds deterministic vector labels only where they safely fit. Run blue score before red cut; labels are assembly aids for concealed faces, not decorative engraving.</div>';
       const legacyFields = tray
         ? field('trayWidth','Inside tray width (mm)',d.trayWidth,'number','min="20" step="1"')
           + field('trayDepth','Inside tray depth (mm)',d.trayDepth,'number','min="20" step="1"')
@@ -1492,7 +1510,9 @@
               + field('hangingInset','Hole inset (mm)',d.hangingInset,'number','min="3" step="0.1"')
             : field('baseDepth','Base depth (mm)',d.baseDepth,'number','min="20" step="1"')
               + field('slotDepth','Stand slot depth (mm)',d.slotDepth,'number','min="10" step="1"'));
-      const note = sliding
+      const note = cabinet
+        ? 'A five-panel open-front cabinet shell holds one to three equal open-top finger-jointed drawers. Upper drawers use full-width edge-glued support shelves; prototype the shelf glue-up and drawer fit on scrap before production. Every physical drawer and shelf is emitted separately.'
+        : sliding
         ? 'Eight through-cut pieces form a Front-loading box: five body panels, one shouldered lid, and two identical glue-on inner channel rails. Optional guide marks are blue score geometry; the marks sit slightly inward from the end joinery so they remain on retained material, and the complete Right side panel is mirrored with its guides. The optional coupon adds six non-interlocking fit-test pieces. All fit values are experimental starting points; test the body joints and sliding fit on scrap.'
         : box
         ? 'The open-top body uses complementary rectangular fingers at all four corners and all four bottom joints. A loose lid is a separate plain panel with no retention.'
@@ -1504,14 +1524,15 @@
         <form id="designForm" class="panel" onsubmit="return false">
           <div class="formgrid">
             ${templateField}
-            ${box || sliding ? '' : tray ? select('jointStyle','Tray joint style',d.jointStyle,['finger','tab-slot']) : '<div></div>'}
+            ${box || sliding || cabinet ? '' : tray ? select('jointStyle','Tray joint style',d.jointStyle,['finger','tab-slot']) : '<div></div>'}
             ${field('materialThickness','Measured material thickness (mm)',d.materialThickness,'number','min="0.1" step="0.01"','Measure the actual sheet; nominal plywood thickness can differ.')}
-            ${sliding ? slidingFields : box ? boxFields : field('fitClearance','Slot clearance (mm)',d.fitClearance,'number','min="0" step="0.01"','Added to legacy slot width. Start small and test on scrap.') + legacyFields}
+            ${cabinet ? cabinetFields : sliding ? slidingFields : box ? boxFields : field('fitClearance','Slot clearance (mm)',d.fitClearance,'number','min="0" step="0.01"','Added to legacy slot width. Start small and test on scrap.') + legacyFields}
           </div>
           <div class="small muted" style="margin-top:10px">${note}</div>
-          <div class="small muted" style="margin-top:8px"><b>Kerf is separate:</b> SVG geometry is nominal centerline geometry. Joint clearance controls body assembly fit; lid side clearance controls lateral sliding fit; lid vertical clearance controls channel height; Front insertion clearance prevents sill scraping. Test material-specific kerf on scrap and apply it separately in LightBurn.</div>
+          <div class="small muted" style="margin-top:8px"><b>Kerf is separate:</b> ${esc(designKerfGuidance(d.template))}</div>
           ${box ? '<div class="small muted" style="margin-top:8px">Outside body height runs from the underside of the bottom to the top of the walls. Inside height runs from the inside face of the bottom to the wall top. A loose lid adds one material thickness to overall closed height.</div>' : ''}
           ${sliding ? '<div class="small muted" style="margin-top:8px"><b>Open end:</b> Front &nbsp; <b>Slide direction:</b> Front toward Back &nbsp; <b>Rails:</b> two laminated through-cut inner channels. Glue the rails top-flush and back-flush with both channels facing inward. Kerf is not included in generated geometry.</div>' : ''}
+          ${cabinet ? '<div class="small muted" style="margin-top:8px"><b>Construction:</b> The cabinet front is open and its back is closed. The bottom drawer rests on the cabinet bottom; upper drawers rest on full-width edge-glued shelves. Clearances are nominal geometry only. Dry-fit, square, clamp, and physically test the cabinet before production use.</div>' : ''}
           <div class="actions" style="margin-top:12px"><button class="primary" id="downloadDesignSvg" type="button" ${result.valid ? '' : 'disabled'}>Download LightBurn SVG</button><button id="resetDesign" type="button">Reset defaults</button></div>
         </form>
         <div id="designResults">${designResultsHtml(result)}</div>
@@ -1593,12 +1614,25 @@
     }
     function normalizeDesignDraft(rawDraft = {}) {
       const draft = { ...rawDraft }, errors = [], warnings = [];
-      const templates = ['qr-stand','hanging-sign','dice-tray','divider-tray','finger-box','sliding-lid-box'];
+      const templates = ['qr-stand','hanging-sign','dice-tray','divider-tray','finger-box','sliding-lid-box','drawer-cabinet'];
       const template = String(draft.template || '');
       if (!templates.includes(template)) errors.push('Choose a recognized Designs template.');
       const values = { template };
       values.materialThickness = designRequiredNumber(draft, 'materialThickness', 'Material thickness', errors, .1, true);
-      if (template === 'sliding-lid-box') {
+      if (template === 'drawer-cabinet') {
+        values.drawerInsideWidth = designRequiredNumber(draft, 'drawerInsideWidth', 'Drawer inside width', errors, 0);
+        values.drawerInsideDepth = designRequiredNumber(draft, 'drawerInsideDepth', 'Drawer inside depth', errors, 0);
+        values.drawerInsideHeight = designRequiredNumber(draft, 'drawerInsideHeight', 'Drawer inside height', errors, 0);
+        values.rows = Number(draft.drawerRows);
+        if (!Number.isInteger(values.rows) || values.rows < 1 || values.rows > 3) errors.push('Drawer rows must be a whole number from 1 to 3.');
+        values.cabinetClearance = designRequiredNumber(draft, 'cabinetJointClearance', 'Cabinet joint clearance', errors, 0, true);
+        values.drawerClearance = designRequiredNumber(draft, 'drawerJointClearance', 'Drawer joint clearance', errors, 0, true);
+        values.preferredFingerWidth = designRequiredNumber(draft, 'drawerPreferredFingerWidth', 'Preferred finger width', errors, 0);
+        values.lateralClearance = designRequiredNumber(draft, 'drawerLateralClearance', 'Total drawer lateral clearance', errors, 0, true);
+        values.verticalClearance = designRequiredNumber(draft, 'drawerVerticalClearance', 'Drawer vertical clearance', errors, 0, true);
+        values.rearClearance = designRequiredNumber(draft, 'drawerRearClearance', 'Rear clearance', errors, 0, true);
+        values.assemblyLabels = draft.assemblyLabels === true || draft.assemblyLabels === 'true' || draft.assemblyLabels === 'on';
+      } else if (template === 'sliding-lid-box') {
         values.dimensionMode = String(draft.slidingDimensionMode || '');
         values.openEnd = String(draft.slidingOpenEnd || '');
         values.railMode = String(draft.slidingRailMode || '');
@@ -1757,6 +1791,63 @@
       const panels = definitions.map(buildFingerPanel);
       if (panels.some(panel => !panel.path || panel.points.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y)))) errors.push('Generated panel geometry contains a non-finite or non-orthogonal coordinate.');
       return { valid: !errors.length, errors, warnings, dimensions, patterns, panels, metrics: { requestedFingerWidth: parameters.preferredFingerWidth, requiredWeb, clearance: parameters.clearance, closedHeight: dimensions.outsideHeight + (parameters.lid === 'loose' ? t : 0) } };
+    }
+    function drawerCabinetDimensions(parameters) {
+      const t = parameters.materialThickness;
+      const drawerOutsideWidth = parameters.drawerInsideWidth + 2 * t, drawerOutsideDepth = parameters.drawerInsideDepth + 2 * t, drawerOutsideHeight = parameters.drawerInsideHeight + t;
+      const cellWidth = drawerOutsideWidth + parameters.lateralClearance, cellHeight = drawerOutsideHeight + parameters.verticalClearance;
+      const cabinetInsideWidth = cellWidth, cabinetInsideDepth = drawerOutsideDepth + parameters.rearClearance, cabinetInsideHeight = parameters.rows * cellHeight + (parameters.rows - 1) * t;
+      return {
+        drawerInsideWidth:designRound(parameters.drawerInsideWidth), drawerInsideDepth:designRound(parameters.drawerInsideDepth), drawerInsideHeight:designRound(parameters.drawerInsideHeight),
+        drawerOutsideWidth:designRound(drawerOutsideWidth), drawerOutsideDepth:designRound(drawerOutsideDepth), drawerOutsideHeight:designRound(drawerOutsideHeight),
+        cellWidth:designRound(cellWidth), cellHeight:designRound(cellHeight),
+        cabinetInsideWidth:designRound(cabinetInsideWidth), cabinetInsideDepth:designRound(cabinetInsideDepth), cabinetInsideHeight:designRound(cabinetInsideHeight),
+        cabinetOutsideWidth:designRound(cabinetInsideWidth + 2 * t), cabinetOutsideDepth:designRound(cabinetInsideDepth + t), cabinetOutsideHeight:designRound(cabinetInsideHeight + 2 * t)
+      };
+    }
+    function namespaceDesignPanel(panel, prefix, namePrefix) {
+      return { ...panel, id:`${prefix}-${panel.id}`, name:`${namePrefix} ${panel.name}`, points:(panel.points || []).map(point=>({...point})), edges:(panel.edges || []).map(edge=>edge ? {...edge} : edge) };
+    }
+    function buildDrawerCabinetModel(parameters) {
+      const errors = [], warnings = [], t = parameters.materialThickness, dimensions = drawerCabinetDimensions(parameters), requiredWeb = Math.max(.5, t * .25);
+      if (!Number.isInteger(parameters.rows) || parameters.rows < 1 || parameters.rows > 3) errors.push('Drawer rows must be a whole number from 1 to 3.');
+      if (parameters.lateralClearance >= dimensions.drawerOutsideWidth) errors.push('Total drawer lateral clearance must be smaller than the drawer outside width.');
+      if (parameters.verticalClearance >= dimensions.drawerOutsideHeight) errors.push('Drawer vertical clearance must be smaller than the drawer outside height.');
+      if (parameters.rearClearance >= dimensions.drawerOutsideDepth) errors.push('Rear clearance must be smaller than the drawer outside depth.');
+      const positiveDimensions = Object.values(dimensions);
+      if (positiveDimensions.some(value=>!Number.isFinite(value)||value<=0)) errors.push('Calculated drawer, cell, and cabinet dimensions must all be positive.');
+      const cabinetWidthPattern = buildFingerPattern(dimensions.cabinetOutsideWidth, parameters.preferredFingerWidth, t, errors, 'Cabinet width');
+      const cabinetDepthPattern = buildFingerPattern(dimensions.cabinetOutsideDepth, parameters.preferredFingerWidth, t, errors, 'Cabinet depth');
+      const cabinetHeightPattern = buildFingerPattern(dimensions.cabinetOutsideHeight, parameters.preferredFingerWidth, t, errors, 'Cabinet height');
+      const cabinetPatterns = { width:cabinetWidthPattern, depth:cabinetDepthPattern, height:cabinetHeightPattern };
+      Object.entries(cabinetPatterns).forEach(([name,pattern])=>{ if (pattern && pattern.actualWidth - parameters.cabinetClearance < requiredWeb - 1e-9) errors.push(`Cabinet ${name} fingers collapse below the ${designNumberText(requiredWeb)} mm required web at this clearance.`); });
+      const drawerModel = buildBoxModel({ materialThickness:t, dimensionMode:'inside', width:parameters.drawerInsideWidth, depth:parameters.drawerInsideDepth, height:parameters.drawerInsideHeight, clearance:parameters.drawerClearance, preferredFingerWidth:parameters.preferredFingerWidth, lid:'open', assemblyLabels:false });
+      errors.push(...drawerModel.errors.map(message=>`Drawer: ${message}`));
+      warnings.push(...drawerModel.warnings.map(message=>`Drawer: ${message}`));
+      if (parameters.cabinetClearance > t * .25) warnings.push('Cabinet joint clearance is unusually loose relative to material thickness; cut a scrap fit test first.');
+      if (parameters.lateralClearance === 0) warnings.push('Zero drawer lateral clearance is unlikely to slide reliably after cutting.');
+      if (parameters.verticalClearance === 0) warnings.push('Zero drawer vertical clearance is unlikely to slide reliably after cutting.');
+      if (parameters.rearClearance === 0) warnings.push('Zero rear clearance may make the drawer bind against the cabinet back.');
+      if ([parameters.lateralClearance,parameters.verticalClearance,parameters.rearClearance].some(value=>value>t)) warnings.push('One or more drawer running clearances exceed the material thickness; verify that the drawers will not rack.');
+      if (parameters.rows > 1) warnings.push('Upper drawers use plain full-width edge-glued support shelves. Prototype shelf alignment and glue strength before production use.');
+      warnings.push('Drawer fit is an experimental starting point; cut joint coupons and dry-fit the cabinet using the same measured sheet.');
+      if (Math.max(dimensions.cabinetOutsideWidth,dimensions.cabinetOutsideDepth)>300||dimensions.cabinetOutsideHeight>200) warnings.push('This is a large cabinet; verify sheet size, machine travel, squareness, and material flatness.');
+      if (errors.length || !cabinetWidthPattern || !cabinetDepthPattern || !cabinetHeightPattern || !drawerModel.valid) return { valid:false, errors, warnings, dimensions, patterns:{cabinet:cabinetPatterns,drawer:drawerModel.patterns}, panels:[], metrics:{} };
+      const cabinetEdge=(pattern,phase)=>designPatternEdge(pattern,phase,t,parameters.cabinetClearance),plain=null;
+      const bottom=buildSlidingLidBodyPanel({name:'Cabinet Bottom',id:'cabinet-bottom',width:dimensions.cabinetOutsideWidth,height:dimensions.cabinetOutsideDepth,edges:[cabinetEdge(cabinetWidthPattern,true),cabinetEdge(cabinetDepthPattern,false),plain,cabinetEdge(cabinetDepthPattern,false)]});
+      const top=buildSlidingLidBodyPanel({name:'Cabinet Top',id:'cabinet-top',width:dimensions.cabinetOutsideWidth,height:dimensions.cabinetOutsideDepth,edges:[cabinetEdge(cabinetWidthPattern,true),cabinetEdge(cabinetDepthPattern,false),plain,cabinetEdge(cabinetDepthPattern,false)]});
+      const side=(id,name)=>buildSlidingLidBodyPanel({name,id,width:dimensions.cabinetOutsideDepth,height:dimensions.cabinetOutsideHeight,edges:[cabinetEdge(cabinetDepthPattern,true),cabinetEdge(cabinetHeightPattern,true),cabinetEdge(cabinetDepthPattern,true),plain]});
+      const left=side('cabinet-left','Cabinet Left'),right=side('cabinet-right','Cabinet Right');
+      const back=buildSlidingLidBodyPanel({name:'Cabinet Back',id:'cabinet-back',width:dimensions.cabinetOutsideWidth,height:dimensions.cabinetOutsideHeight,edges:[cabinetEdge(cabinetWidthPattern,false),cabinetEdge(cabinetHeightPattern,false),cabinetEdge(cabinetWidthPattern,false),cabinetEdge(cabinetHeightPattern,false)]});
+      const shelves=Array.from({length:Math.max(0,parameters.rows-1)},(_,index)=>designPanelFromPoints({id:`cabinet-shelf-r${String(index+1).padStart(2,'0')}`,name:`Cabinet support shelf ${index+1}`,width:dimensions.cabinetInsideWidth,height:dimensions.cabinetInsideDepth},[{x:0,y:0},{x:dimensions.cabinetInsideWidth,y:0},{x:dimensions.cabinetInsideWidth,y:dimensions.cabinetInsideDepth},{x:0,y:dimensions.cabinetInsideDepth},{x:0,y:0}]));
+      const drawers=Array.from({length:parameters.rows},(_,index)=>drawerModel.panels.map(panel=>namespaceDesignPanel(panel,`drawer-r${String(index+1).padStart(2,'0')}`,`Drawer ${index+1}`))).flat();
+      const cabinetPieces=[bottom,top,left,right,back,...shelves],panels=[...cabinetPieces,...drawers];
+      cabinetPieces.forEach(panel=>errors.push(...designPanelGeometryErrors(panel)));
+      const drawerInsertionWidth = dimensions.cabinetInsideWidth - parameters.lateralClearance, drawerInsertionHeight = dimensions.cellHeight - parameters.verticalClearance;
+      if (Math.abs(drawerInsertionWidth-dimensions.drawerOutsideWidth)>1e-6 || Math.abs(drawerInsertionHeight-dimensions.drawerOutsideHeight)>1e-6) errors.push('Calculated drawer insertion opening does not match the requested running clearances.');
+      const shelfBottomElevations=Array.from({length:shelves.length},(_,index)=>designRound((index+1)*dimensions.cellHeight+index*t));
+      const metrics={drawerCabinet:true,rows:parameters.rows,cabinetPanelCount:5,shelfCount:shelves.length,shelfBottomElevations,drawerCount:parameters.rows,pieceCount:panels.length,cabinetClearance:parameters.cabinetClearance,drawerClearance:parameters.drawerClearance,lateralClearance:parameters.lateralClearance,verticalClearance:parameters.verticalClearance,rearClearance:parameters.rearClearance,requestedFingerWidth:parameters.preferredFingerWidth,requiredWeb};
+      return {valid:!errors.length,errors,warnings,dimensions,patterns:{cabinet:cabinetPatterns,drawer:drawerModel.patterns},panels,metrics};
     }
     function slidingLidBoxDimensions(parameters) {
       const t = parameters.materialThickness, upperWeb = Math.max(t, 4), lowerWeb = Math.max(t, 4), stopLength = Math.max(t, 4);
@@ -1949,6 +2040,7 @@
       M: { w: 4, s: [[0,6,0,0],[0,0,1.2,3],[1.2,3,2,0],[2,0,2.8,3],[2.8,3,4,0],[4,0,4,6]] },
       N: { w: 4, s: [[0,6,0,0],[0,0,1.2,6],[1.2,6,1.2,0],[1.2,0,4,6],[4,6,4,0]] },
       O: { w: 4, s: [[0,0,4,0],[4,0,4,6],[4,6,0,6],[0,6,0,0]] },
+      P: { w: 4, s: [[0,0,0,6],[0,0,2.8,0],[2.8,0,2.8,3],[0,3,2.8,3]] },
       R: { w: 4, s: [[0,0,0,6],[0,0,2.8,0],[2.8,0,2.8,3],[0,3,2.8,3],[2.8,3,2.8,6],[2.8,6,4,6],[2.8,3,4,3]] },
       T: { w: 4, s: [[0,0,4,0],[2,0,2,6]] }
     };
@@ -1975,6 +2067,17 @@
     function designAssemblyLabelSpecs(template, values) {
       const box = template === 'finger-box';
       const sliding = template === 'sliding-lid-box';
+      const cabinet = template === 'drawer-cabinet';
+      if (cabinet) {
+        const labels = [
+          {panelId:'cabinet-bottom',text:'BOTTOM'}, {panelId:'cabinet-top',text:'TOP'}, {panelId:'cabinet-back',text:'BACK'}, {panelId:'cabinet-left',text:'LEFT'}, {panelId:'cabinet-right',text:'RIGHT'}
+        ];
+        for (let row=1;row<=values.rows;row++) {
+          const prefix=`drawer-r${String(row).padStart(2,'0')}`;
+          labels.push({panelId:`${prefix}-bottom`,text:'BOTTOM'},{panelId:`${prefix}-front`,text:'FRONT'},{panelId:`${prefix}-back`,text:'BACK'},{panelId:`${prefix}-left`,text:'LEFT'},{panelId:`${prefix}-right`,text:'RIGHT'});
+        }
+        return labels;
+      }
       if (!box && !sliding) return [];
       const labels = [
         { panelId: 'bottom', text: 'BOTTOM' },
@@ -2321,8 +2424,31 @@
       if (svg && labelResult.paths.length) errors.push(...designSerializedAssemblyLabelValidation(svg, layout.panels, guideSegmentsByPanel, Math.max(1, normalized.values.materialThickness / 3)).errors);
       return {valid:!errors.length,errors:[...new Set(errors)],warnings:[...new Set(warnings)],svg:errors.length?'':svg,widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,scorePaths:placedScorePaths,labelPaths:labelResult.paths,metrics:{...model.metrics,...couponMetrics,dimensions:model.dimensions,patterns:model.patterns,guideMarks:normalized.values.guideMarks,guideEndJoineryDepth:endJoineryDepth,fitCoupon:normalized.values.fitCoupon,assemblyLabels:normalized.values.assemblyLabels,labelCount:labelResult.paths.length,margin:layout.margin,gap:layout.gap,rows},validation};
     }
+    function buildDrawerCabinetDesignResult(normalized) {
+      if (normalized.errors.length) return {valid:false,errors:[...new Set(normalized.errors)],warnings:normalized.warnings,svg:'',widthMm:0,heightMm:0,panels:[],labelPaths:[],metrics:{drawerCabinet:true}};
+      const model=buildDrawerCabinetModel(normalized.values);
+      if (!model.valid) return {valid:false,errors:[...new Set(model.errors)],warnings:[...new Set([...normalized.warnings,...model.warnings])],svg:'',widthMm:0,heightMm:0,panels:model.panels,labelPaths:[],metrics:{...model.metrics,drawerCabinet:true,dimensions:model.dimensions,patterns:model.patterns}};
+      const rows=[['cabinet-bottom','cabinet-top'],['cabinet-left','cabinet-right','cabinet-back']];
+      if (normalized.values.rows>1) rows.push(Array.from({length:normalized.values.rows-1},(_,index)=>`cabinet-shelf-r${String(index+1).padStart(2,'0')}`));
+      for(let row=1;row<=normalized.values.rows;row++){
+        const prefix=`drawer-r${String(row).padStart(2,'0')}`;
+        rows.push([`${prefix}-bottom`,`${prefix}-front`,`${prefix}-back`],[`${prefix}-left`,`${prefix}-right`]);
+      }
+      const layout=layoutDesignPanelRows(model.panels,rows),errors=[...model.errors,...layout.errors],warnings=[...normalized.warnings,...model.warnings];
+      const translatedKeys=layout.panels.flatMap(panel=>designPointSegments(panel.points).map(segment=>designSegmentKey({a:{x:segment.a.x+panel.x,y:segment.a.y+panel.y},b:{x:segment.b.x+panel.x,y:segment.b.y+panel.y}})));
+      if(new Set(translatedKeys).size!==translatedKeys.length) errors.push('Generated drawer-cabinet layout contains a duplicate translated cut segment.');
+      if(layout.widthMm>400||layout.heightMm>400) warnings.push(`Generated layout is ${designNumberText(layout.widthMm)} x ${designNumberText(layout.heightMm)} mm; verify the available sheet and machine area.`);
+      const labelSpecs=normalized.values.assemblyLabels?designAssemblyLabelSpecs(normalized.template,normalized.values):[];
+      const labelResult=labelSpecs.length?buildAssemblyLabelPaths(layout.panels,labelSpecs,{}, {minimumClearance:Math.max(1,normalized.values.materialThickness/3)}):{paths:[],warnings:[]};
+      warnings.push(...labelResult.warnings);
+      const partial={widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,labelPaths:labelResult.paths},svg=errors.length?'':serializeDesignSvg(partial),validation=svg?designSvgValidation(svg,layout.widthMm,layout.heightMm):{valid:false,errors:[]};
+      errors.push(...validation.errors);
+      if(svg&&labelResult.paths.length) errors.push(...designSerializedAssemblyLabelValidation(svg,layout.panels,{},Math.max(1,normalized.values.materialThickness/3)).errors);
+      return {valid:!errors.length,errors:[...new Set(errors)],warnings:[...new Set(warnings)],svg:errors.length?'':svg,widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,labelPaths:labelResult.paths,metrics:{...model.metrics,dimensions:model.dimensions,patterns:model.patterns,assemblyLabels:normalized.values.assemblyLabels,labelCount:labelResult.paths.length,margin:layout.margin,gap:layout.gap,layoutRows:rows},validation};
+    }
     function buildDesignResult(rawDraft = designDraft) {
       const normalized = normalizeDesignDraft(rawDraft);
+      if (normalized.template === 'drawer-cabinet') return buildDrawerCabinetDesignResult(normalized);
       if (normalized.template === 'sliding-lid-box') return buildSlidingLidDesignResult(normalized);
       return normalized.template === 'finger-box' ? buildBoxDesignResult(normalized) : buildLegacyDesignResult(normalized);
     }
@@ -2331,7 +2457,24 @@
     function designResultsHtml(result) {
       const dimensions = result.metrics?.dimensions, patterns = result.metrics?.patterns;
       const sliding = result.metrics?.slidingLid && dimensions;
-      const metrics = sliding
+      const cabinet = result.metrics?.drawerCabinet && dimensions;
+      const metrics = cabinet
+        ? designMetric('Drawer inside', `${designNumberText(dimensions.drawerInsideWidth)} x ${designNumberText(dimensions.drawerInsideDepth)} x ${designNumberText(dimensions.drawerInsideHeight)} mm`)
+          + designMetric('Drawer outside', `${designNumberText(dimensions.drawerOutsideWidth)} x ${designNumberText(dimensions.drawerOutsideDepth)} x ${designNumberText(dimensions.drawerOutsideHeight)} mm`)
+          + designMetric('Cabinet interior', `${designNumberText(dimensions.cabinetInsideWidth)} x ${designNumberText(dimensions.cabinetInsideDepth)} x ${designNumberText(dimensions.cabinetInsideHeight)} mm`)
+          + designMetric('Cabinet outside', `${designNumberText(dimensions.cabinetOutsideWidth)} x ${designNumberText(dimensions.cabinetOutsideDepth)} x ${designNumberText(dimensions.cabinetOutsideHeight)} mm`)
+          + designMetric('Rows / drawers', `${result.metrics.rows} / ${result.metrics.drawerCount}`)
+          + designMetric('Cabinet shell / shelves', `${result.metrics.cabinetPanelCount} / ${result.metrics.shelfCount}`)
+          + (result.metrics.shelfBottomElevations?.length ? designMetric('Shelf bottom elevations', `${result.metrics.shelfBottomElevations.map(designNumberText).join(', ')} mm above inside floor`) : '')
+          + designMetric('Required pieces', String(result.panels.length || result.metrics.pieceCount || 0))
+          + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} x ${designNumberText(result.heightMm)} mm` : 'Unavailable')
+          + designMetric('Lateral clearance', `${designNumberText(result.metrics.lateralClearance)} mm total / ${designNumberText(result.metrics.lateralClearance/2)} mm per side`)
+          + designMetric('Vertical / rear clearance', `${designNumberText(result.metrics.verticalClearance)} / ${designNumberText(result.metrics.rearClearance)} mm`)
+          + designMetric('Cabinet / drawer joints', `${designNumberText(result.metrics.cabinetClearance)} / ${designNumberText(result.metrics.drawerClearance)} mm`)
+          + designMetric('Assembly labels', result.metrics.assemblyLabels ? `Enabled - ${result.metrics.labelCount || 0} safe labels` : 'Disabled')
+          + (patterns?.cabinet?.width ? designMetric('Cabinet width fingers', `${patterns.cabinet.width.count} segments x ${designNumberText(patterns.cabinet.width.actualWidth)} mm`) : '')
+          + (patterns?.drawer?.width ? designMetric('Drawer width fingers', `${patterns.drawer.width.count} segments x ${designNumberText(patterns.drawer.width.actualWidth)} mm`) : '')
+        : sliding
         ? designMetric('Usable cavity', `${designNumberText(dimensions.usableWidth)} × ${designNumberText(dimensions.usableDepth)} × ${designNumberText(dimensions.usableHeight)} mm`)
           + designMetric('Wall-to-wall interior', `${designNumberText(dimensions.insideWidth)} × ${designNumberText(dimensions.insideDepth)} × ${designNumberText(dimensions.insideHeight)} mm`)
           + designMetric('Outside body', `${designNumberText(dimensions.outsideWidth)} × ${designNumberText(dimensions.outsideDepth)} × ${designNumberText(dimensions.outsideHeight)} mm`)
@@ -2372,7 +2515,9 @@
         : designMetric('Shapes', String(result.panels.length)) + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable');
       const messages = result.errors.map(message => `<div class="design-message error"><b>Error:</b> ${esc(message)}</div>`).join('') + result.warnings.map(message => `<div class="design-message warning"><b>Warning:</b> ${esc(message)}</div>`).join('');
       const preview = result.valid ? `<div class="design-svg-preview"><object type="image/svg+xml" aria-label="Exact exported SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`)}"></object></div>` : '<div class="design-svg-preview"><div class="empty"><b>Preview unavailable</b><div class="small muted">Correct the errors before previewing or downloading.</div></div></div>';
-      const assembly = sliding
+      const assembly = cabinet
+        ? `<div class="design-message"><b>Assembly:</b> Assemble and square the five-panel open-front cabinet shell. Assemble every five-panel open-top drawer separately. The bottom drawer rests on the cabinet bottom; glue each upper support shelf level between the side walls and against the back${result.metrics.shelfBottomElevations?.length ? `, with shelf bottom edges ${result.metrics.shelfBottomElevations.map(designNumberText).join(', ')} mm above the inside floor` : ''}, then let all glue cure before testing drawer travel. Keep the requested lateral, vertical, and rear gaps clear. ${result.metrics.assemblyLabels ? 'Labels are on intended concealed faces where safe placement was possible.' : ''} <b>Kerf is not included; dry-fit and prototype on the same measured sheet.</b></div>`
+        : sliding
         ? `<div class="design-message"><b>Assembly:</b> Assemble the five body panels. Glue the two identical rails inside the side walls, top-flush and Back-flush, with both channels facing inward. Clamp with a thickness-plus-clearance spacer, keep glue out of the channels, and let it cure. Insert the lid from Front toward Back; the shortened edges face Front and the stop ends face Back while the tongue closes the center gap. ${result.metrics.guideMarks || result.metrics.assemblyLabels ? 'Labels and rail guides are placed on the displayed sheet face. Install both marked side faces inward. Keep shortened edges toward Front and stop ends toward Back. Verify label visibility and face orientation during the first assembly.' : ''} <b>Kerf is not included.</b></div>`
         : result.metrics?.assemblyLabels ? '<div class="design-message"><b>Assembly labels:</b> Marks are placed on the displayed sheet face and are intended for the inside or concealed faces. Verify Left/Right orientation, label visibility, and the marked face during the first assembly; the finger-box cut geometry is unchanged.</div>' : '';
       return `<div class="design-preview-layout"><div class="panel"><b>Design results</b><div class="metrics" style="margin-top:10px">${metrics}</div>${messages || '<div class="design-message"><b>Ready:</b> Preview and download use the same validated SVG.</div>'}${assembly}</div>${preview}</div>`;
@@ -2801,6 +2946,68 @@
       add('Disabled sliding output has no score or coupon',!slidingAResult.svg.includes('id="score"')&&!slidingAResult.svg.includes('coupon-')&&slidingAResult.panels.length===8);
       const invalidGuide=slidingRailGuideSegments({railLength:10,railHeight:5},3,10);
       add('Guide geometry rejects an envelope that cannot contain the marks',!invalidGuide.valid,'invalid','valid');
+
+      const cabinetDraft=defaultsFor('drawer-cabinet'),cabinetDraftBefore=JSON.stringify(cabinetDraft),cabinetOne=buildDesignResult(cabinetDraft),cabinetTwo=buildDesignResult({...cabinetDraft,drawerRows:'2'}),cabinetThree=buildDesignResult({...cabinetDraft,drawerRows:'3'}),cabinetRepeat=buildDesignResult({...cabinetDraft});
+      const cabinetOneIds='cabinet-bottom|cabinet-top|cabinet-left|cabinet-right|cabinet-back|drawer-r01-bottom|drawer-r01-front|drawer-r01-back|drawer-r01-left|drawer-r01-right';
+      const cabinetTwoIds='cabinet-bottom|cabinet-top|cabinet-left|cabinet-right|cabinet-back|cabinet-shelf-r01|drawer-r01-bottom|drawer-r01-front|drawer-r01-back|drawer-r01-left|drawer-r01-right|drawer-r02-bottom|drawer-r02-front|drawer-r02-back|drawer-r02-left|drawer-r02-right';
+      const cabinetThreeIds='cabinet-bottom|cabinet-top|cabinet-left|cabinet-right|cabinet-back|cabinet-shelf-r01|cabinet-shelf-r02|drawer-r01-bottom|drawer-r01-front|drawer-r01-back|drawer-r01-left|drawer-r01-right|drawer-r02-bottom|drawer-r02-front|drawer-r02-back|drawer-r02-left|drawer-r02-right|drawer-r03-bottom|drawer-r03-front|drawer-r03-back|drawer-r03-left|drawer-r03-right';
+      add('One-row drawer cabinet is valid',cabinetOne.valid,true,JSON.stringify(cabinetOne.errors));
+      add('Two-row drawer cabinet is valid',cabinetTwo.valid,true,JSON.stringify(cabinetTwo.errors));
+      add('Three-row drawer cabinet is valid',cabinetThree.valid,true,JSON.stringify(cabinetThree.errors));
+      add('Drawer cabinet formulas preserve drawer inside dimensions',cabinetOne.metrics.dimensions.drawerInsideWidth===100&&cabinetOne.metrics.dimensions.drawerInsideDepth===70&&cabinetOne.metrics.dimensions.drawerInsideHeight===30,'100/70/30',JSON.stringify(cabinetOne.metrics.dimensions));
+      add('Drawer cabinet formulas derive drawer outside dimensions',cabinetOne.metrics.dimensions.drawerOutsideWidth===106&&cabinetOne.metrics.dimensions.drawerOutsideDepth===76&&cabinetOne.metrics.dimensions.drawerOutsideHeight===33,'106/76/33',JSON.stringify(cabinetOne.metrics.dimensions));
+      add('One-row cabinet formulas derive exact dimensions',cabinetOne.metrics.dimensions.cabinetInsideWidth===106.4&&cabinetOne.metrics.dimensions.cabinetInsideDepth===76.5&&cabinetOne.metrics.dimensions.cabinetInsideHeight===33.3&&cabinetOne.metrics.dimensions.cabinetOutsideWidth===112.4&&cabinetOne.metrics.dimensions.cabinetOutsideDepth===79.5&&cabinetOne.metrics.dimensions.cabinetOutsideHeight===39.3,'106.4/76.5/33.3 and 112.4/79.5/39.3',JSON.stringify(cabinetOne.metrics.dimensions));
+      add('Two-row cabinet height includes one support shelf',cabinetTwo.metrics.dimensions.cabinetInsideHeight===69.6&&cabinetTwo.metrics.dimensions.cabinetOutsideHeight===75.6,'69.6/75.6',`${cabinetTwo.metrics.dimensions.cabinetInsideHeight}/${cabinetTwo.metrics.dimensions.cabinetOutsideHeight}`);
+      add('Three-row cabinet height includes two support shelves',cabinetThree.metrics.dimensions.cabinetInsideHeight===105.9&&cabinetThree.metrics.dimensions.cabinetOutsideHeight===111.9,'105.9/111.9',`${cabinetThree.metrics.dimensions.cabinetInsideHeight}/${cabinetThree.metrics.dimensions.cabinetOutsideHeight}`);
+      add('Cabinet open front adds one back thickness to depth',cabinetOne.metrics.dimensions.cabinetOutsideDepth-cabinetOne.metrics.dimensions.cabinetInsideDepth===3);
+      add('Cabinet shell remains five panels',[cabinetOne,cabinetTwo,cabinetThree].every(result=>result.metrics.cabinetPanelCount===5));
+      add('Drawer cabinet emits one shelf per upper row',cabinetOne.metrics.shelfCount===0&&cabinetTwo.metrics.shelfCount===1&&cabinetThree.metrics.shelfCount===2,'0/1/2',`${cabinetOne.metrics.shelfCount}/${cabinetTwo.metrics.shelfCount}/${cabinetThree.metrics.shelfCount}`);
+      add('Drawer cabinet shelf elevations follow row pitch',cabinetOne.metrics.shelfBottomElevations.length===0&&cabinetTwo.metrics.shelfBottomElevations.join('|')==='33.3'&&cabinetThree.metrics.shelfBottomElevations.join('|')==='33.3|69.6','empty / 33.3 / 33.3|69.6',`${cabinetOne.metrics.shelfBottomElevations.join('|')} / ${cabinetTwo.metrics.shelfBottomElevations.join('|')} / ${cabinetThree.metrics.shelfBottomElevations.join('|')}`);
+      add('Drawer cabinet emits five panels per drawer',[cabinetOne,cabinetTwo,cabinetThree].every((result,index)=>result.metrics.drawerCount===index+1&&result.panels.filter(panel=>panel.id.startsWith('drawer-')).length===(index+1)*5));
+      add('Drawer cabinet piece counts are exact',cabinetOne.panels.length===10&&cabinetTwo.panels.length===16&&cabinetThree.panels.length===22,'10/16/22',`${cabinetOne.panels.length}/${cabinetTwo.panels.length}/${cabinetThree.panels.length}`);
+      add('One-row drawer cabinet IDs are stable',cabinetOne.panels.map(panel=>panel.id).join('|')===cabinetOneIds,cabinetOneIds,cabinetOne.panels.map(panel=>panel.id).join('|'));
+      add('Two-row drawer cabinet IDs are stable',cabinetTwo.panels.map(panel=>panel.id).join('|')===cabinetTwoIds,cabinetTwoIds,cabinetTwo.panels.map(panel=>panel.id).join('|'));
+      add('Three-row drawer cabinet IDs are stable',cabinetThree.panels.map(panel=>panel.id).join('|')===cabinetThreeIds,cabinetThreeIds,cabinetThree.panels.map(panel=>panel.id).join('|'));
+      add('Every drawer cabinet physical piece has a unique ID',new Set(cabinetThree.panels.map(panel=>panel.id)).size===cabinetThree.panels.length);
+      add('Repeated drawer pieces are emitted individually',cabinetThree.panels.filter(panel=>/drawer-r\d{2}-left/.test(panel.id)).length===3&&cabinetThree.panels.filter(panel=>/drawer-r\d{2}-right/.test(panel.id)).length===3);
+      add('Drawer cabinet layout is deterministic',cabinetOne.svg===cabinetRepeat.svg&&cabinetOne.panels.map(panel=>`${panel.id}@${panel.x},${panel.y}`).join('|')===cabinetRepeat.panels.map(panel=>`${panel.id}@${panel.x},${panel.y}`).join('|'));
+      const cabinetResultsMarkup=designResultsHtml(cabinetOne),knownDesignMojibake=['\u00c3\u2014','\u00e2\u20ac\u201d'];
+      add('Drawer cabinet results contain no known mojibake',knownDesignMojibake.every(sequence=>!cabinetResultsMarkup.includes(sequence)),true,cabinetResultsMarkup);
+      add('Drawer cabinet kerf guidance excludes sliding-lid language',/cabinet joint clearance/i.test(designKerfGuidance('drawer-cabinet'))&&!/sliding lid|lid clearance/i.test(designKerfGuidance('drawer-cabinet')));
+      add('Sliding Lid Box keeps lid-specific kerf guidance',/lid clearances/i.test(designKerfGuidance('sliding-lid-box'))&&!/drawer/i.test(designKerfGuidance('sliding-lid-box')));
+      add('Finger Box keeps joint-specific kerf guidance',/joint clearance/i.test(designKerfGuidance('finger-box'))&&!/lid|drawer/i.test(designKerfGuidance('finger-box')));
+      add('Drawer cabinet layout has no panel overlap',[cabinetOne,cabinetTwo,cabinetThree].every(result=>result.valid&&!result.errors.some(message=>/overlap|actual paths/i.test(message))));
+      add('Drawer cabinet SVG is valid',[cabinetOne,cabinetTwo,cabinetThree].every(result=>designSvgValidation(result.svg,result.widthMm,result.heightMm).valid));
+      add('Drawer cabinet SVG contains no invalid numeric token',[cabinetOne,cabinetTwo,cabinetThree].every(result=>!/NaN|Infinity|undefined/.test(result.svg)));
+      add('Drawer cabinet preview and download stay identical',designSvg(cabinetDraft)===cabinetOne.svg&&designSvg({...cabinetDraft,drawerRows:'2'})===cabinetTwo.svg&&designSvg({...cabinetDraft,drawerRows:'3'})===cabinetThree.svg);
+      add('Drawer cabinet defaults have cut only',cabinetOne.svg.includes('<g id="cut"')&&!cabinetOne.svg.includes('<g id="score"'));
+      const cabinetLabeled=buildDesignResult({...cabinetDraft,drawerRows:'3',assemblyLabels:true}),cabinetLabeledRoot=new DOMParser().parseFromString(cabinetLabeled.svg,'image/svg+xml').documentElement;
+      add('Drawer cabinet labels remain optional',cabinetOne.labelPaths.length===0&&cabinetLabeled.metrics.assemblyLabels===true&&cabinetLabeled.labelPaths.length>0);
+      add('Drawer cabinet score precedes cut',cabinetLabeled.valid&&cabinetLabeled.svg.indexOf('<g id="score"')<cabinetLabeled.svg.indexOf('<g id="cut"'));
+      add('Drawer cabinet labels use paths without SVG text',cabinetLabeledRoot.querySelectorAll('g#assembly-labels path').length===cabinetLabeled.labelPaths.length&&cabinetLabeledRoot.querySelectorAll('text').length===0);
+      add('Drawer cabinet labels stay inside final panel polygons',designSerializedAssemblyLabelValidation(cabinetLabeled.svg,cabinetLabeled.panels,{},1).valid,true,JSON.stringify(designSerializedAssemblyLabelValidation(cabinetLabeled.svg,cabinetLabeled.panels,{},1).errors));
+      const cabinetById=Object.fromEntries(cabinetOne.panels.map(panel=>[panel.id,panel])),cabinetMatingPairs=[[cabinetById['cabinet-bottom'].edges[0],cabinetById['cabinet-back'].edges[2]],[cabinetById['cabinet-top'].edges[0],cabinetById['cabinet-back'].edges[0]],[cabinetById['cabinet-bottom'].edges[1],cabinetById['cabinet-right'].edges[2]],[cabinetById['cabinet-bottom'].edges[3],cabinetById['cabinet-left'].edges[2]],[cabinetById['cabinet-top'].edges[1],cabinetById['cabinet-right'].edges[0]],[cabinetById['cabinet-top'].edges[3],cabinetById['cabinet-left'].edges[0]],[cabinetById['cabinet-left'].edges[1],cabinetById['cabinet-back'].edges[3]],[cabinetById['cabinet-right'].edges[1],cabinetById['cabinet-back'].edges[1]]];
+      add('All eight cabinet shell joints use matching boundaries and opposite phases',cabinetMatingPairs.every(([a,b])=>a&&b&&a.phase!==b.phase&&JSON.stringify(a.pattern.boundaries)===JSON.stringify(b.pattern.boundaries)));
+      const cabinetClearanceChanged=buildDesignResult({...cabinetDraft,cabinetJointClearance:'0.20'}),drawerClearanceChanged=buildDesignResult({...cabinetDraft,drawerJointClearance:'0.20'}),pathsByPrefix=(result,prefix)=>result.panels.filter(panel=>panel.id.startsWith(prefix)).map(panel=>panel.path).join('|');
+      add('Cabinet clearance changes only cabinet shell joints',pathsByPrefix(cabinetClearanceChanged,'cabinet-')!==pathsByPrefix(cabinetOne,'cabinet-')&&pathsByPrefix(cabinetClearanceChanged,'drawer-')===pathsByPrefix(cabinetOne,'drawer-'));
+      add('Drawer clearance changes only drawer joints',pathsByPrefix(drawerClearanceChanged,'drawer-')!==pathsByPrefix(cabinetOne,'drawer-')&&pathsByPrefix(drawerClearanceChanged,'cabinet-')===pathsByPrefix(cabinetOne,'cabinet-'));
+      add('Drawer lateral clearance is split equally',cabinetOne.metrics.lateralClearance===0.4&&designRound(cabinetOne.metrics.dimensions.cabinetInsideWidth-cabinetOne.metrics.dimensions.drawerOutsideWidth)===0.4);
+      add('Drawer vertical clearance is preserved per row',designRound(cabinetOne.metrics.dimensions.cellHeight-cabinetOne.metrics.dimensions.drawerOutsideHeight)===0.3);
+      add('Drawer rear clearance is preserved',designRound(cabinetOne.metrics.dimensions.cabinetInsideDepth-cabinetOne.metrics.dimensions.drawerOutsideDepth)===0.5);
+      add('Drawer cabinet generation does not mutate its draft',JSON.stringify(cabinetDraft)===cabinetDraftBefore);
+      const storageBeforeDrawerFixture=localStorage.getItem(STORAGE_KEY); buildDesignResult({...cabinetDraft,drawerRows:'3',assemblyLabels:true}); const storageAfterDrawerFixture=localStorage.getItem(STORAGE_KEY);
+      add('Drawer cabinet generation does not write localStorage',storageBeforeDrawerFixture===storageAfterDrawerFixture);
+      add('Drawer cabinet rejects rows below one',!buildDesignResult({...cabinetDraft,drawerRows:'0'}).valid);
+      add('Drawer cabinet rejects rows above three',!buildDesignResult({...cabinetDraft,drawerRows:'4'}).valid);
+      add('Drawer cabinet rejects fractional rows',!buildDesignResult({...cabinetDraft,drawerRows:'2.5'}).valid);
+      add('Drawer cabinet rejects zero dimensions',!buildDesignResult({...cabinetDraft,drawerInsideWidth:'0'}).valid&&!buildDesignResult({...cabinetDraft,drawerInsideDepth:'0'}).valid&&!buildDesignResult({...cabinetDraft,drawerInsideHeight:'0'}).valid);
+      add('Drawer cabinet rejects negative dimensions',!buildDesignResult({...cabinetDraft,drawerInsideWidth:'-1'}).valid);
+      add('Drawer cabinet rejects negative clearances',!buildDesignResult({...cabinetDraft,cabinetJointClearance:'-0.1'}).valid&&!buildDesignResult({...cabinetDraft,drawerJointClearance:'-0.1'}).valid&&!buildDesignResult({...cabinetDraft,drawerLateralClearance:'-0.1'}).valid&&!buildDesignResult({...cabinetDraft,drawerVerticalClearance:'-0.1'}).valid&&!buildDesignResult({...cabinetDraft,drawerRearClearance:'-0.1'}).valid);
+      add('Drawer cabinet rejects impossible lateral clearance',!buildDesignResult({...cabinetDraft,drawerLateralClearance:'106'}).valid);
+      add('Drawer cabinet rejects impossible vertical clearance',!buildDesignResult({...cabinetDraft,drawerVerticalClearance:'33'}).valid);
+      add('Drawer cabinet rejects impossible rear clearance',!buildDesignResult({...cabinetDraft,drawerRearClearance:'76'}).valid);
+      add('Drawer cabinet rejects panels too small for finger joints',!buildDesignResult({...cabinetDraft,drawerInsideWidth:'1',drawerInsideDepth:'1',drawerInsideHeight:'1'}).valid);
+      add('Finger Box, Sliding Lid Box, and Drawer Cabinet geometry remain unchanged',insideResult.svg.length===2559&&designFixtureHash(insideResult.svg)==='4e2a6f4b'&&lidResult.svg.length===2691&&designFixtureHash(lidResult.svg)==='c202cef2'&&slidingAResult.svg.length===2800&&designFixtureHash(slidingAResult.svg)==='4a7ab718'&&cabinetOne.svg===cabinetRepeat.svg);
 
       const passed = results.filter(result => result.pass).length, failed = results.length - passed;
       console.group('Design geometry fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
