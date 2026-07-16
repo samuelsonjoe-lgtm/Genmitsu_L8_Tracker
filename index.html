@@ -1751,11 +1751,7 @@
       return `${path} Z`;
     }
     function buildFingerPanel(definition) {
-      const { width, height, edges } = definition, corners = [{x:0,y:0},{x:width,y:0},{x:width,y:height},{x:0,y:height}], inward = [{x:0,y:1},{x:-1,y:0},{x:0,y:-1},{x:1,y:0}];
-      let points = [{ ...corners[0] }];
-      for (let index = 0; index < 4; index++) points.push(...designEdgePoints(corners[index], corners[(index + 1) % 4], inward[index], edges[index]).slice(1));
-      const path = designPointsPath(points);
-      return { name: definition.name, id: definition.id, width, height, path, points: designCompactPoints(points), bounds: { minX: 0, minY: 0, maxX: width, maxY: height, width, height }, edges };
+      return buildSlidingLidBodyPanel(definition);
     }
     function buildBoxModel(parameters) {
       const errors = [], warnings = [], t = parameters.materialThickness;
@@ -1789,6 +1785,7 @@
       ];
       if (parameters.lid === 'loose') definitions.push({ name:'Lid', id:'lid', width:dimensions.outsideWidth, height:dimensions.outsideDepth, edges:[plain,plain,plain,plain] });
       const panels = definitions.map(buildFingerPanel);
+      panels.forEach(panel => errors.push(...designPanelGeometryErrors(panel)));
       if (panels.some(panel => !panel.path || panel.points.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y)))) errors.push('Generated panel geometry contains a non-finite or non-orthogonal coordinate.');
       return { valid: !errors.length, errors, warnings, dimensions, patterns, panels, metrics: { requestedFingerWidth: parameters.preferredFingerWidth, requiredWeb, clearance: parameters.clearance, closedHeight: dimensions.outsideHeight + (parameters.lid === 'loose' ? t : 0) } };
     }
@@ -1842,7 +1839,7 @@
       const shelves=Array.from({length:Math.max(0,parameters.rows-1)},(_,index)=>designPanelFromPoints({id:`cabinet-shelf-r${String(index+1).padStart(2,'0')}`,name:`Cabinet support shelf ${index+1}`,width:dimensions.cabinetInsideWidth,height:dimensions.cabinetInsideDepth},[{x:0,y:0},{x:dimensions.cabinetInsideWidth,y:0},{x:dimensions.cabinetInsideWidth,y:dimensions.cabinetInsideDepth},{x:0,y:dimensions.cabinetInsideDepth},{x:0,y:0}]));
       const drawers=Array.from({length:parameters.rows},(_,index)=>drawerModel.panels.map(panel=>namespaceDesignPanel(panel,`drawer-r${String(index+1).padStart(2,'0')}`,`Drawer ${index+1}`))).flat();
       const cabinetPieces=[bottom,top,left,right,back,...shelves],panels=[...cabinetPieces,...drawers];
-      cabinetPieces.forEach(panel=>errors.push(...designPanelGeometryErrors(panel)));
+      panels.forEach(panel=>errors.push(...designPanelGeometryErrors(panel)));
       const drawerInsertionWidth = dimensions.cabinetInsideWidth - parameters.lateralClearance, drawerInsertionHeight = dimensions.cellHeight - parameters.verticalClearance;
       if (Math.abs(drawerInsertionWidth-dimensions.drawerOutsideWidth)>1e-6 || Math.abs(drawerInsertionHeight-dimensions.drawerOutsideHeight)>1e-6) errors.push('Calculated drawer insertion opening does not match the requested running clearances.');
       const shelfBottomElevations=Array.from({length:shelves.length},(_,index)=>designRound((index+1)*dimensions.cellHeight+index*t));
@@ -1984,12 +1981,30 @@
       }
       return false;
     }
+    function designCollinearSegmentOverlapLength(first, second, epsilon = 1e-9) {
+      const firstDx=first.b.x-first.a.x,firstDy=first.b.y-first.a.y,secondDx=second.b.x-second.a.x,secondDy=second.b.y-second.a.y;
+      if(Math.hypot(firstDx,firstDy)<=epsilon||Math.hypot(secondDx,secondDy)<=epsilon) return 0;
+      const cross=firstDx*secondDy-firstDy*secondDx,offsetCross=firstDx*(second.a.y-first.a.y)-firstDy*(second.a.x-first.a.x);
+      if(Math.abs(cross)>epsilon||Math.abs(offsetCross)>epsilon) return 0;
+      const horizontal=Math.abs(firstDx)>=Math.abs(firstDy),firstRange=horizontal?[Math.min(first.a.x,first.b.x),Math.max(first.a.x,first.b.x)]:[Math.min(first.a.y,first.b.y),Math.max(first.a.y,first.b.y)],secondRange=horizontal?[Math.min(second.a.x,second.b.x),Math.max(second.a.x,second.b.x)]:[Math.min(second.a.y,second.b.y),Math.max(second.a.y,second.b.y)];
+      const overlap=Math.min(firstRange[1],secondRange[1])-Math.max(firstRange[0],secondRange[0]);
+      return overlap>epsilon?overlap:0;
+    }
+    function designPositiveCollinearOverlaps(points, epsilon = 1e-9) {
+      const segments=designPointSegments(points),overlaps=[];
+      for(let firstIndex=0;firstIndex<segments.length;firstIndex++) for(let secondIndex=firstIndex+1;secondIndex<segments.length;secondIndex++){
+        const length=designCollinearSegmentOverlapLength(segments[firstIndex],segments[secondIndex],epsilon);
+        if(length>0) overlaps.push({firstIndex,secondIndex,length:designRound(length),first:segments[firstIndex],second:segments[secondIndex]});
+      }
+      return overlaps;
+    }
     function designPanelGeometryErrors(panel) {
       const errors = [], points = panel.points || [], segments = designPointSegments(points), keys = segments.map(designSegmentKey);
       if (!panel.path || !points.length || points[0].x !== points[points.length-1].x || points[0].y !== points[points.length-1].y) errors.push(`${panel.name} path is not closed and orthogonal.`);
       if (points.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y))) errors.push(`${panel.name} contains a non-finite coordinate.`);
       if (points.slice(1).some((point,index) => point.x === points[index].x && point.y === points[index].y)) errors.push(`${panel.name} contains a zero-length segment.`);
       if (designPathSelfIntersects(points)) errors.push(`${panel.name} path self-intersects.`);
+      if (designPositiveCollinearOverlaps(points).length) errors.push(`${panel.name} contains overlapping collinear cut segments.`);
       if (new Set(keys).size !== keys.length) errors.push(`${panel.name} contains a duplicate cut segment.`);
       if (panel.bounds.minX < -1e-6 || panel.bounds.minY < -1e-6 || panel.bounds.maxX > panel.width + 1e-6 || panel.bounds.maxY > panel.height + 1e-6) errors.push(`${panel.name} geometry leaves its panel bounds.`);
       return errors;
@@ -2569,6 +2584,22 @@
       add('Vertical segment count is odd', patterns.vertical.count % 2 === 1);
       add('All patterns have at least three segments', Object.values(patterns).every(pattern => pattern.count >= 3));
       add('All actual segment widths are positive', Object.values(patterns).every(pattern => pattern.actualWidth > 0));
+      const cornerPattern={length:30,count:3,actualWidth:10,minimumWidth:6,boundaries:[0,10,20,30]},cornerEdge=phase=>designPatternEdge(cornerPattern,phase,3,0),cornerRaw=[{x:0,y:0},{x:30,y:0},{x:30,y:30},{x:0,y:30}],cornerInward=[{x:0,y:1},{x:-1,y:0},{x:0,y:-1},{x:1,y:0}];
+      const fixtureTerminalOffset=(edge,atStart)=>{if(!edge?.pattern)return 0;const index=atStart?0:edge.pattern.count-1;return((index%2===0)===edge.phase)?0:edge.depth;};
+      const fixtureExpectedJoin=(cornerIndex,edges)=>{const previous=(cornerIndex+3)%4,corner=cornerRaw[cornerIndex],previousOffset=fixtureTerminalOffset(edges[previous],false),currentOffset=fixtureTerminalOffset(edges[cornerIndex],true);return{x:corner.x+cornerInward[previous].x*previousOffset+cornerInward[cornerIndex].x*currentOffset,y:corner.y+cornerInward[previous].y*previousOffset+cornerInward[cornerIndex].y*currentOffset};};
+      const fixtureCornerPanel=edges=>buildFingerPanel({name:'Corner fixture',id:'corner-fixture',width:30,height:30,edges}),hasPoint=(panel,point)=>panel.points.some(candidate=>candidate.x===point.x&&candidate.y===point.y),cornerIsStitched=(panel,cornerIndex,edges)=>{const expected=fixtureExpectedJoin(cornerIndex,edges),raw=cornerRaw[cornerIndex];return hasPoint(panel,expected)&&(!fixtureTerminalOffset(edges[(cornerIndex+3)%4],false)&&!fixtureTerminalOffset(edges[cornerIndex],true)||!hasPoint(panel,raw))&&!designPositiveCollinearOverlaps(panel.points).length;};
+      const patternedPatternedEdges=[cornerEdge(true),cornerEdge(false),null,null],plainPatternedEdges=[null,cornerEdge(false),null,null],patternedPlainEdges=[cornerEdge(false),null,null,null],recessedPatternEdges=[cornerEdge(false),cornerEdge(false),null,null],closureEdges=[cornerEdge(false),null,null,cornerEdge(false)];
+      add('Patterned edges share the independently calculated corner join',cornerIsStitched(fixtureCornerPanel(patternedPatternedEdges),1,patternedPatternedEdges),JSON.stringify(fixtureExpectedJoin(1,patternedPatternedEdges)),JSON.stringify(fixtureCornerPanel(patternedPatternedEdges).points));
+      add('Plain edge meeting recessed pattern uses one shared corner join',cornerIsStitched(fixtureCornerPanel(plainPatternedEdges),1,plainPatternedEdges));
+      add('Recessed pattern meeting plain edge uses one shared corner join',cornerIsStitched(fixtureCornerPanel(patternedPlainEdges),1,patternedPlainEdges));
+      add('Two recessed patterned edges use the combined corner offsets',cornerIsStitched(fixtureCornerPanel(recessedPatternEdges),1,recessedPatternEdges));
+      add('Final path closure uses the shared starting corner join',cornerIsStitched(fixtureCornerPanel(closureEdges),0,closureEdges)&&fixtureCornerPanel(closureEdges).points[0].x===fixtureExpectedJoin(0,closureEdges).x&&fixtureCornerPanel(closureEdges).points[0].y===fixtureExpectedJoin(0,closureEdges).y);
+      add('Collinear diagnostic detects adjacent immediate backtracking',designPositiveCollinearOverlaps([{x:0,y:0},{x:10,y:0},{x:7,y:0}]).some(overlap=>overlap.length===3));
+      add('Collinear diagnostic detects non-adjacent closure overlap',designPositiveCollinearOverlaps([{x:0,y:0},{x:10,y:0},{x:10,y:10},{x:0,y:10},{x:0,y:0},{x:3,y:0},{x:3,y:3}]).some(overlap=>overlap.length===3));
+      add('Collinear diagnostic detects partial overlap',designPositiveCollinearOverlaps([{x:0,y:0},{x:10,y:0},{x:10,y:5},{x:8,y:5},{x:8,y:0},{x:3,y:0},{x:3,y:5}]).some(overlap=>overlap.length===5));
+      add('Collinear diagnostic detects exact duplicate traversal',designPositiveCollinearOverlaps([{x:0,y:0},{x:10,y:0},{x:10,y:5},{x:0,y:5},{x:0,y:0},{x:10,y:0}]).some(overlap=>overlap.length===10));
+      add('Endpoint-only and separated parallel contacts remain valid',!designPositiveCollinearOverlaps([{x:0,y:0},{x:10,y:0},{x:15,y:0},{x:15,y:2},{x:0,y:2}]).length);
+      add('Legitimate short finger geometry remains valid',!designPositiveCollinearOverlaps([{x:0,y:0},{x:.25,y:0},{x:.25,y:.25},{x:0,y:.25},{x:0,y:0}]).length);
       const bottom = insideResult.panels.find(panel => panel.id === 'bottom'), front = insideResult.panels.find(panel => panel.id === 'front'), back = insideResult.panels.find(panel => panel.id === 'back'), left = insideResult.panels.find(panel => panel.id === 'left'), right = insideResult.panels.find(panel => panel.id === 'right');
       add('Bottom and back width boundaries match', JSON.stringify(bottom.edges[0].pattern.boundaries) === JSON.stringify(back.edges[2].pattern.boundaries));
       add('Bottom and back width phases oppose', bottom.edges[0].phase !== back.edges[2].phase);
@@ -2641,10 +2672,10 @@
       const immutableDraft = { ...inside }, before = JSON.stringify(immutableDraft); buildDesignResult(immutableDraft);
       add('Design generation does not mutate its draft', JSON.stringify(immutableDraft) === before);
 
-      const openSignature={length:2559,hash:'4e2a6f4b'},looseSignature={length:2691,hash:'c202cef2'};
-      add('Legacy open-top finger-box SVG remains byte-stable',insideResult.svg.length===openSignature.length&&designFixtureHash(insideResult.svg)===openSignature.hash,`${openSignature.length}/${openSignature.hash}`,`${insideResult.svg.length}/${designFixtureHash(insideResult.svg)}`);
-      add('Legacy loose-lid finger-box SVG remains byte-stable',lidResult.svg.length===looseSignature.length&&designFixtureHash(lidResult.svg)===looseSignature.hash,`${looseSignature.length}/${looseSignature.hash}`,`${lidResult.svg.length}/${designFixtureHash(lidResult.svg)}`);
-      add('Legacy buildBoxModel remains byte-stable through result output',buildDesignResult({...inside}).svg===insideResult.svg);
+      const openSignature={length:2483,hash:'a892f91c'},looseSignature={length:2615,hash:'6181bc75'};
+      add('Corrected open-top finger-box SVG remains byte-stable',insideResult.svg.length===openSignature.length&&designFixtureHash(insideResult.svg)===openSignature.hash,`${openSignature.length}/${openSignature.hash}`,`${insideResult.svg.length}/${designFixtureHash(insideResult.svg)}`);
+      add('Corrected loose-lid finger-box SVG remains byte-stable',lidResult.svg.length===looseSignature.length&&designFixtureHash(lidResult.svg)===looseSignature.hash,`${looseSignature.length}/${looseSignature.hash}`,`${lidResult.svg.length}/${designFixtureHash(lidResult.svg)}`);
+      add('Corrected buildBoxModel remains byte-stable through result output',buildDesignResult({...inside}).svg===insideResult.svg);
       const labeledBox = buildDesignResult({...inside, assemblyLabels:true}), looseLabeledBox = buildDesignResult({...inside, boxLid:'loose', assemblyLabels:true});
       add('Open-top box labels are valid', labeledBox.valid && labeledBox.metrics.assemblyLabels === true && labeledBox.labelPaths.length === 5);
       add('Open-top box labels serialize inside the score layer', labeledBox.svg.includes('<g id="score"') && labeledBox.svg.includes('<g id="assembly-labels"'));
@@ -2971,6 +3002,13 @@
       add('Every drawer cabinet physical piece has a unique ID',new Set(cabinetThree.panels.map(panel=>panel.id)).size===cabinetThree.panels.length);
       add('Repeated drawer pieces are emitted individually',cabinetThree.panels.filter(panel=>/drawer-r\d{2}-left/.test(panel.id)).length===3&&cabinetThree.panels.filter(panel=>/drawer-r\d{2}-right/.test(panel.id)).length===3);
       add('Drawer cabinet layout is deterministic',cabinetOne.svg===cabinetRepeat.svg&&cabinetOne.panels.map(panel=>`${panel.id}@${panel.x},${panel.y}`).join('|')===cabinetRepeat.panels.map(panel=>`${panel.id}@${panel.x},${panel.y}`).join('|'));
+      const panelPathSignature=panels=>{const text=panels.map(panel=>`${panel.id}:${panel.path}`).join('|');return{length:text.length,hash:designFixtureHash(text)};},cabinetShellShelfSignature=panelPathSignature(cabinetThree.panels.filter(panel=>panel.id.startsWith('cabinet-')));
+      add('All five Finger Box body panels are overlap-free',insideResult.panels.every(panel=>!designPositiveCollinearOverlaps(panel.points).length));
+      add('Every Drawer panel is overlap-free for one, two, and three rows',[cabinetOne,cabinetTwo,cabinetThree].every(result=>result.panels.filter(panel=>panel.id.startsWith('drawer-')).every(panel=>!designPositiveCollinearOverlaps(panel.points).length)));
+      add('Drawer Cabinet shell and support shelves remain overlap-free',[cabinetOne,cabinetTwo,cabinetThree].every(result=>result.panels.filter(panel=>panel.id.startsWith('cabinet-')).every(panel=>!designPositiveCollinearOverlaps(panel.points).length)));
+      add('Sliding Lid physical pieces remain overlap-free',slidingAResult.panels.every(panel=>!designPositiveCollinearOverlaps(panel.points).length));
+      add('Drawer Cabinet shell and shelf paths preserve their investigated signature',cabinetShellShelfSignature.length===2288&&cabinetShellShelfSignature.hash==='63d818d0','2288/63d818d0',`${cabinetShellShelfSignature.length}/${cabinetShellShelfSignature.hash}`);
+      add('Corrected Drawer Cabinet SVG signatures are stable',cabinetOne.svg.length===4436&&designFixtureHash(cabinetOne.svg)==='7494c326'&&cabinetThree.svg.length===9124&&designFixtureHash(cabinetThree.svg)==='b158a794','4436/7494c326 and 9124/b158a794',`${cabinetOne.svg.length}/${designFixtureHash(cabinetOne.svg)} and ${cabinetThree.svg.length}/${designFixtureHash(cabinetThree.svg)}`);
       const cabinetResultsMarkup=designResultsHtml(cabinetOne),knownDesignMojibake=['\u00c3\u2014','\u00e2\u20ac\u201d'];
       add('Drawer cabinet results contain no known mojibake',knownDesignMojibake.every(sequence=>!cabinetResultsMarkup.includes(sequence)),true,cabinetResultsMarkup);
       add('Drawer cabinet kerf guidance excludes sliding-lid language',/cabinet joint clearance/i.test(designKerfGuidance('drawer-cabinet'))&&!/sliding lid|lid clearance/i.test(designKerfGuidance('drawer-cabinet')));
@@ -3007,7 +3045,7 @@
       add('Drawer cabinet rejects impossible vertical clearance',!buildDesignResult({...cabinetDraft,drawerVerticalClearance:'33'}).valid);
       add('Drawer cabinet rejects impossible rear clearance',!buildDesignResult({...cabinetDraft,drawerRearClearance:'76'}).valid);
       add('Drawer cabinet rejects panels too small for finger joints',!buildDesignResult({...cabinetDraft,drawerInsideWidth:'1',drawerInsideDepth:'1',drawerInsideHeight:'1'}).valid);
-      add('Finger Box, Sliding Lid Box, and Drawer Cabinet geometry remain unchanged',insideResult.svg.length===2559&&designFixtureHash(insideResult.svg)==='4e2a6f4b'&&lidResult.svg.length===2691&&designFixtureHash(lidResult.svg)==='c202cef2'&&slidingAResult.svg.length===2800&&designFixtureHash(slidingAResult.svg)==='4a7ab718'&&cabinetOne.svg===cabinetRepeat.svg);
+      add('Corrected Finger Box and Drawer signatures preserve unaffected Sliding Lid geometry',insideResult.svg.length===2483&&designFixtureHash(insideResult.svg)==='a892f91c'&&lidResult.svg.length===2615&&designFixtureHash(lidResult.svg)==='6181bc75'&&slidingAResult.svg.length===2800&&designFixtureHash(slidingAResult.svg)==='4a7ab718'&&cabinetOne.svg.length===4436&&designFixtureHash(cabinetOne.svg)==='7494c326'&&cabinetOne.svg===cabinetRepeat.svg);
 
       const passed = results.filter(result => result.pass).length, failed = results.length - passed;
       console.group('Design geometry fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();

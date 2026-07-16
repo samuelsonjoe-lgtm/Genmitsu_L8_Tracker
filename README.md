@@ -70,7 +70,7 @@ Log entries, Library profiles, Test Grids, and Projects track material, thicknes
 
 ## Built-in checks
 
-The standalone page includes browser-console fixture tests for storage recovery, material-test normalization, Test Grid promotion, Grid Browser behavior, Material Browser behavior, Library Browser behavior, Project Browser behavior, Project Wizard behavior, Designs geometry, wizard metadata, and operation-aware baseline selection. The complete suite currently reports 960 passed / 0 failed.
+The standalone page includes browser-console fixture tests for storage recovery, material-test normalization, Test Grid promotion, Grid Browser behavior, Material Browser behavior, Library Browser behavior, Project Browser behavior, Project Wizard behavior, Designs geometry, wizard metadata, and operation-aware baseline selection. The complete suite currently reports 977 passed / 0 failed.
 
 - Open `index.html?selftest=all` to run every fixture group at startup.
 - Individual query values are `baseline`, `normalization`, `grid`, `grid-browser`, `materials`, `library-browser`, `project-browser`, `project-wizard`, `design`, `metadata`, and `storage`.
