@@ -393,7 +393,7 @@
       return { status: 'ok', data };
     }
     function designDefaults() {
-      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated', slidingGuideMarks: false, slidingFitCoupon: false, drawerInsideWidth: '100', drawerInsideDepth: '70', drawerInsideHeight: '30', drawerRows: '1', cabinetJointClearance: '0.10', drawerJointClearance: '0.10', drawerPreferredFingerWidth: '12', drawerLateralClearance: '0.40', drawerVerticalClearance: '0.30', drawerRearClearance: '0.50', assemblyLabels: false };
+      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated', slidingGuideMarks: false, slidingFitCoupon: false, drawerInsideWidth: '100', drawerInsideDepth: '70', drawerInsideHeight: '30', drawerRows: '1', cabinetJointClearance: '0.10', drawerJointClearance: '0.10', drawerPreferredFingerWidth: '12', drawerLateralClearance: '0.40', drawerVerticalClearance: '0.30', drawerRearClearance: '0.50', jointCouponEdgeLength: '45', jointCouponBodyDepth: '22', jointCouponPreferredFingerWidth: '9', jointCouponClearances: '0.06, 0.04, 0.02, 0.00, -0.02, -0.04', jointCouponLabels: true, assemblyLabels: false };
     }
     function normalizeInventoryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function normalizeLibraryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
@@ -1453,12 +1453,13 @@
       if (template === 'finger-box') return 'Joint clearance and laser kerf are separate adjustments. Establish kerf through material testing; it is not automatically included in generated dimensions.';
       if (template === 'sliding-lid-box') return 'Joint clearance, lid clearances, and laser kerf are separate adjustments. Establish kerf through material testing; it is not automatically included in generated dimensions.';
       if (template === 'drawer-cabinet') return 'Cabinet joint clearance, drawer joint clearance, drawer running clearances, and laser kerf are separate adjustments. Establish kerf through material testing; it is not automatically included in generated dimensions.';
+      if (template === 'joint-fit-coupon') return 'Coupon clearance and laser kerf are separate adjustments. Establish kerf through material testing; it is not automatically included in generated dimensions.';
       return 'Fit clearance and laser kerf are separate adjustments. Establish kerf through material testing; it is not automatically included in generated dimensions.';
     }
     function renderDesigns() {
-      const d = designDraft, box = d.template === 'finger-box', sliding = d.template === 'sliding-lid-box', cabinet = d.template === 'drawer-cabinet', tray = d.template === 'dice-tray' || d.template === 'divider-tray', hanging = d.template === 'hanging-sign';
+      const d = designDraft, box = d.template === 'finger-box', sliding = d.template === 'sliding-lid-box', cabinet = d.template === 'drawer-cabinet', jointCoupon = d.template === 'joint-fit-coupon', tray = d.template === 'dice-tray' || d.template === 'divider-tray', hanging = d.template === 'hanging-sign';
       const result = buildDesignResult(d);
-      const templateField = designSelect('template', 'Template', d.template, [['qr-stand','Freestanding QR / sign stand'],['hanging-sign','Hanging sign'],['dice-tray','Dice tray'],['divider-tray','Divider tray'],['finger-box','Finger-jointed box'],['sliding-lid-box','Sliding-lid finger box'],['drawer-cabinet','Drawer Cabinet']]);
+      const templateField = designSelect('template', 'Template', d.template, [['qr-stand','Freestanding QR / sign stand'],['hanging-sign','Hanging sign'],['dice-tray','Dice tray'],['divider-tray','Divider tray'],['finger-box','Finger-jointed box'],['sliding-lid-box','Sliding-lid finger box'],['drawer-cabinet','Drawer Cabinet'],['joint-fit-coupon','Joint Fit Coupon']]);
       const boxFields = designSelect('boxDimensionMode', 'Dimension basis', d.boxDimensionMode, [['inside','Inside dimensions'],['outside','Outside body dimensions']], 'Outside height is underside of bottom to wall top; inside height starts at the inside face of the bottom.')
         + field('boxWidth', `${d.boxDimensionMode === 'outside' ? 'Outside body' : 'Inside'} width (mm)`, d.boxWidth, 'number', 'min="0.01" step="0.1"')
         + field('boxDepth', `${d.boxDimensionMode === 'outside' ? 'Outside body' : 'Inside'} depth (mm)`, d.boxDepth, 'number', 'min="0.01" step="0.1"')
@@ -1497,6 +1498,12 @@
         + field('drawerRearClearance', 'Rear clearance (mm)', d.drawerRearClearance, 'number', 'min="0" step="0.01"', 'Free space between each drawer back and the cabinet back.')
         + '<label class="row"><input name="assemblyLabels" type="checkbox" style="width:auto" ' + (d.assemblyLabels ? 'checked' : '') + '> Add assembly labels (blue score layer)</label>'
         + '<div class="small muted" style="grid-column:1/-1">Adds deterministic vector labels only where they safely fit. Run blue score before red cut; labels are assembly aids for concealed faces, not decorative engraving.</div>';
+      const jointCouponFields = field('jointCouponEdgeLength', 'Mating-edge length (mm)', d.jointCouponEdgeLength, 'number', 'min="0.01" step="0.1"', 'Both coupons share one nominal finger pattern along this edge.')
+        + field('jointCouponBodyDepth', 'Coupon grip depth (mm)', d.jointCouponBodyDepth, 'number', 'min="0.01" step="0.1"', 'Must be at least the greater of four material thicknesses or 16 mm.')
+        + field('jointCouponPreferredFingerWidth', 'Preferred finger width (mm)', d.jointCouponPreferredFingerWidth, 'number', 'min="0.01" step="0.1"', 'A target only; the exact width uses a valid odd segment count.')
+        + `<label style="grid-column:1/-1">${labelText('Clearance values (mm)', 'Enter 3 to 8 signed values separated by commas or line breaks. Coupon-only range: -0.10 through 0.30 mm.')}<textarea name="jointCouponClearances" rows="3">${esc(d.jointCouponClearances)}</textarea></label>`
+        + '<label class="row"><input name="jointCouponLabels" type="checkbox" style="width:auto" ' + (d.jointCouponLabels ? 'checked' : '') + '> Add clearance labels (blue score layer)</label>'
+        + '<div class="small muted" style="grid-column:1/-1">Labels use deterministic vector paths such as A0.04 and B-0.02. Unsafe labels are omitted individually without blocking valid cut output.</div>';
       const legacyFields = tray
         ? field('trayWidth','Inside tray width (mm)',d.trayWidth,'number','min="20" step="1"')
           + field('trayDepth','Inside tray depth (mm)',d.trayDepth,'number','min="20" step="1"')
@@ -1510,7 +1517,9 @@
               + field('hangingInset','Hole inset (mm)',d.hangingInset,'number','min="3" step="0.1"')
             : field('baseDepth','Base depth (mm)',d.baseDepth,'number','min="20" step="1"')
               + field('slotDepth','Stand slot depth (mm)',d.slotDepth,'number','min="10" step="1"'));
-      const note = cabinet
+      const note = jointCoupon
+        ? 'Each clearance creates separate A and B coupons with one shared nominal finger pattern and complementary phases. Assemble each pair at 90 degrees; this is not a flat puzzle-joint test.'
+        : cabinet
         ? 'A five-panel open-front cabinet shell holds one to three equal open-top finger-jointed drawers. Upper drawers use full-width edge-glued support shelves; prototype the shelf glue-up and drawer fit on scrap before production. Every physical drawer and shelf is emitted separately.'
         : sliding
         ? 'Eight through-cut pieces form a Front-loading box: five body panels, one shouldered lid, and two identical glue-on inner channel rails. Optional guide marks are blue score geometry; the marks sit slightly inward from the end joinery so they remain on retained material, and the complete Right side panel is mirrored with its guides. The optional coupon adds six non-interlocking fit-test pieces. All fit values are experimental starting points; test the body joints and sliding fit on scrap.'
@@ -1524,15 +1533,16 @@
         <form id="designForm" class="panel" onsubmit="return false">
           <div class="formgrid">
             ${templateField}
-            ${box || sliding || cabinet ? '' : tray ? select('jointStyle','Tray joint style',d.jointStyle,['finger','tab-slot']) : '<div></div>'}
+            ${box || sliding || cabinet || jointCoupon ? '' : tray ? select('jointStyle','Tray joint style',d.jointStyle,['finger','tab-slot']) : '<div></div>'}
             ${field('materialThickness','Measured material thickness (mm)',d.materialThickness,'number','min="0.1" step="0.01"','Measure the actual sheet; nominal plywood thickness can differ.')}
-            ${cabinet ? cabinetFields : sliding ? slidingFields : box ? boxFields : field('fitClearance','Slot clearance (mm)',d.fitClearance,'number','min="0" step="0.01"','Added to legacy slot width. Start small and test on scrap.') + legacyFields}
+            ${jointCoupon ? jointCouponFields : cabinet ? cabinetFields : sliding ? slidingFields : box ? boxFields : field('fitClearance','Slot clearance (mm)',d.fitClearance,'number','min="0" step="0.01"','Added to legacy slot width. Start small and test on scrap.') + legacyFields}
           </div>
           <div class="small muted" style="margin-top:10px">${note}</div>
           <div class="small muted" style="margin-top:8px"><b>Kerf is separate:</b> ${esc(designKerfGuidance(d.template))}</div>
           ${box ? '<div class="small muted" style="margin-top:8px">Outside body height runs from the underside of the bottom to the top of the walls. Inside height runs from the inside face of the bottom to the wall top. A loose lid adds one material thickness to overall closed height.</div>' : ''}
           ${sliding ? '<div class="small muted" style="margin-top:8px"><b>Open end:</b> Front &nbsp; <b>Slide direction:</b> Front toward Back &nbsp; <b>Rails:</b> two laminated through-cut inner channels. Glue the rails top-flush and back-flush with both channels facing inward. Kerf is not included in generated geometry.</div>' : ''}
           ${cabinet ? '<div class="small muted" style="margin-top:8px"><b>Construction:</b> The cabinet front is open and its back is closed. The bottom drawer rests on the cabinet bottom; upper drawers rest on full-width edge-glued shelves. Clearances are nominal geometry only. Dry-fit, square, clamp, and physically test the cabinet before production use.</div>' : ''}
+          ${jointCoupon ? '<div class="small muted" style="margin-top:8px"><b>Test order:</b> Start with looser positive values, then move toward zero and negative interference values. Stop if insertion force crushes, splits, or permanently locks the material. A successful coupon selects the next full prototype setting; it does not replace final box testing.</div>' : ''}
           <div class="actions" style="margin-top:12px"><button class="primary" id="downloadDesignSvg" type="button" ${result.valid ? '' : 'disabled'}>Download LightBurn SVG</button><button id="resetDesign" type="button">Reset defaults</button></div>
         </form>
         <div id="designResults">${designResultsHtml(result)}</div>
@@ -1612,14 +1622,60 @@
       if (inclusive ? value < minimum : value <= minimum) errors.push(`${label} must be ${inclusive ? 'at least' : 'greater than'} ${minimum} mm.`);
       return value;
     }
+    function parseJointCouponClearances(raw, errors = []) {
+      const source = raw === null || raw === undefined ? '' : String(raw);
+      if (!source.trim()) {
+        errors.push('Enter 3 to 8 Joint Fit Coupon clearance values.');
+        return [];
+      }
+      const tokens = source.split(/[,\r\n]/), values = [], seen = new Set();
+      tokens.forEach((token, index) => {
+        const text = token.trim();
+        if (!text) {
+          errors.push(`Joint Fit Coupon clearance value ${index + 1} is blank.`);
+          return;
+        }
+        if (!/^[+-]?\d+\.\d{1,2}$/.test(text)) {
+          errors.push(`Joint Fit Coupon clearance "${text}" must be a signed decimal with no more than two decimal places.`);
+          return;
+        }
+        const numeric = Number(text);
+        if (!Number.isFinite(numeric)) {
+          errors.push(`Joint Fit Coupon clearance "${text}" must be finite.`);
+          return;
+        }
+        let hundredths = Math.round(numeric * 100);
+        if (Object.is(hundredths, -0)) hundredths = 0;
+        if (hundredths < -10 || hundredths > 30) {
+          errors.push(`Joint Fit Coupon clearance "${text}" must be from -0.10 through 0.30 mm.`);
+          return;
+        }
+        if (seen.has(hundredths)) {
+          errors.push(`Joint Fit Coupon clearance ${hundredths < 0 ? '-' : ''}${(Math.abs(hundredths) / 100).toFixed(2)} is duplicated.`);
+          return;
+        }
+        seen.add(hundredths);
+        values.push({ hundredths, value:hundredths / 100, text:`${hundredths < 0 ? '-' : ''}${(Math.abs(hundredths) / 100).toFixed(2)}` });
+      });
+      if (values.length < 3 || values.length > 8) errors.push('Joint Fit Coupon requires between 3 and 8 unique clearance values.');
+      return values;
+    }
     function normalizeDesignDraft(rawDraft = {}) {
       const draft = { ...rawDraft }, errors = [], warnings = [];
-      const templates = ['qr-stand','hanging-sign','dice-tray','divider-tray','finger-box','sliding-lid-box','drawer-cabinet'];
+      const templates = ['qr-stand','hanging-sign','dice-tray','divider-tray','finger-box','sliding-lid-box','drawer-cabinet','joint-fit-coupon'];
       const template = String(draft.template || '');
       if (!templates.includes(template)) errors.push('Choose a recognized Designs template.');
       const values = { template };
       values.materialThickness = designRequiredNumber(draft, 'materialThickness', 'Material thickness', errors, .1, true);
-      if (template === 'drawer-cabinet') {
+      if (template === 'joint-fit-coupon') {
+        values.edgeLength = designRequiredNumber(draft, 'jointCouponEdgeLength', 'Mating-edge length', errors, 0);
+        values.bodyDepth = designRequiredNumber(draft, 'jointCouponBodyDepth', 'Coupon grip depth', errors, 0);
+        values.preferredFingerWidth = designRequiredNumber(draft, 'jointCouponPreferredFingerWidth', 'Preferred finger width', errors, 0);
+        values.clearances = parseJointCouponClearances(draft.jointCouponClearances, errors);
+        values.clearanceLabels = draft.jointCouponLabels === true || draft.jointCouponLabels === 'true' || draft.jointCouponLabels === 'on';
+        const minimumBodyDepth = Math.max(4 * values.materialThickness, 16);
+        if (Number.isFinite(values.bodyDepth) && Number.isFinite(minimumBodyDepth) && values.bodyDepth < minimumBodyDepth) errors.push(`Coupon grip depth must be at least ${designNumberText(minimumBodyDepth)} mm for this material thickness.`);
+      } else if (template === 'drawer-cabinet') {
         values.drawerInsideWidth = designRequiredNumber(draft, 'drawerInsideWidth', 'Drawer inside width', errors, 0);
         values.drawerInsideDepth = designRequiredNumber(draft, 'drawerInsideDepth', 'Drawer inside depth', errors, 0);
         values.drawerInsideHeight = designRequiredNumber(draft, 'drawerInsideHeight', 'Drawer inside height', errors, 0);
@@ -1788,6 +1844,63 @@
       panels.forEach(panel => errors.push(...designPanelGeometryErrors(panel)));
       if (panels.some(panel => !panel.path || panel.points.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y)))) errors.push('Generated panel geometry contains a non-finite or non-orthogonal coordinate.');
       return { valid: !errors.length, errors, warnings, dimensions, patterns, panels, metrics: { requestedFingerWidth: parameters.preferredFingerWidth, requiredWeb, clearance: parameters.clearance, closedHeight: dimensions.outsideHeight + (parameters.lid === 'loose' ? t : 0) } };
+    }
+    function jointCouponLabelText(pair, side) {
+      return `${String(side || '').toUpperCase()}${pair.clearanceText}`;
+    }
+    function buildJointCouponModel(parameters) {
+      const errors = [], warnings = [], t = parameters.materialThickness, requiredWeb = Math.max(.5, t * .25), minimumBodyDepth = Math.max(4 * t, 16);
+      if (!Number.isFinite(parameters.edgeLength) || parameters.edgeLength <= 0) errors.push('Mating-edge length must be greater than zero.');
+      if (!Number.isFinite(parameters.bodyDepth) || parameters.bodyDepth < minimumBodyDepth) errors.push(`Coupon grip depth must be at least ${designNumberText(minimumBodyDepth)} mm for this material thickness.`);
+      if (!Number.isFinite(parameters.preferredFingerWidth) || parameters.preferredFingerWidth <= 0) errors.push('Preferred finger width must be greater than zero.');
+      if (!Array.isArray(parameters.clearances) || parameters.clearances.length < 3 || parameters.clearances.length > 8) errors.push('Joint Fit Coupon requires between 3 and 8 unique clearance values.');
+      const pattern = buildFingerPattern(parameters.edgeLength, parameters.preferredFingerWidth, t, errors, 'Coupon mating');
+      if (pattern && parameters.clearances?.some(item => pattern.actualWidth - Math.abs(item.value) < requiredWeb - 1e-9)) errors.push(`One or more signed clearances collapse a finger or recess below the ${designNumberText(requiredWeb)} mm required web.`);
+      if (errors.length || !pattern) return {valid:false,errors,warnings,panels:[],pairs:[],pattern,metrics:{jointFitCoupon:true,requiredWeb,minimumBodyDepth}};
+      const panels = [], pairs = [], plain = null;
+      parameters.clearances.forEach((clearance, index) => {
+        const pairIndex = index + 1, ordinal = String(pairIndex).padStart(2, '0'), prefix = `joint-coupon-p${ordinal}`;
+        const pair = {
+          pairIndex,
+          clearanceHundredths:clearance.hundredths,
+          clearance:clearance.value,
+          clearanceText:clearance.text,
+          couponAId:`${prefix}-a`,
+          couponBId:`${prefix}-b`
+        };
+        const panel = (side, phase) => buildFingerPanel({
+          name:`Joint coupon pair ${ordinal} ${side} (${clearance.text} mm)`,
+          id:side === 'A' ? pair.couponAId : pair.couponBId,
+          width:parameters.edgeLength,
+          height:parameters.bodyDepth,
+          edges:[designPatternEdge(pattern, phase, t, clearance.value),plain,plain,plain]
+        });
+        const couponA = panel('A', true), couponB = panel('B', false);
+        panels.push(couponA, couponB);
+        pairs.push(pair);
+      });
+      panels.forEach(panel => errors.push(...designPanelGeometryErrors(panel)));
+      if (panels.some(panel => !panel.path || panel.points.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y)))) errors.push('Generated Joint Fit Coupon geometry contains a non-finite or non-orthogonal coordinate.');
+      return {
+        valid:!errors.length,
+        errors,
+        warnings,
+        panels,
+        pairs,
+        pattern,
+        metrics:{
+          jointFitCoupon:true,
+          requiredWeb,
+          minimumBodyDepth,
+          materialThickness:t,
+          edgeLength:parameters.edgeLength,
+          bodyDepth:parameters.bodyDepth,
+          requestedFingerWidth:parameters.preferredFingerWidth,
+          pairCount:pairs.length,
+          pieceCount:panels.length,
+          clearances:pairs.map(pair => ({hundredths:pair.clearanceHundredths,value:pair.clearance,text:pair.clearanceText}))
+        }
+      };
     }
     function drawerCabinetDimensions(parameters) {
       const t = parameters.materialThickness;
@@ -2041,6 +2154,18 @@
           : `M${designNumberText(segment.a.x)} ${designNumberText(segment.a.y)} L${designNumberText(segment.b.x)} ${designNumberText(segment.b.y)}`).join('');
     }
     const designAssemblyGlyphs = {
+      '0': { w: 4, s: [[0,0,4,0],[4,0,4,6],[4,6,0,6],[0,6,0,0]] },
+      '1': { w: 3, s: [[0,1,1.5,0],[1.5,0,1.5,6],[0,6,3,6]] },
+      '2': { w: 4, s: [[0,0,4,0],[4,0,4,3],[4,3,0,3],[0,3,0,6],[0,6,4,6]] },
+      '3': { w: 4, s: [[0,0,4,0],[4,0,4,6],[0,3,4,3],[0,6,4,6]] },
+      '4': { w: 4, s: [[0,0,0,3],[0,3,4,3],[4,0,4,6]] },
+      '5': { w: 4, s: [[4,0,0,0],[0,0,0,3],[0,3,4,3],[4,3,4,6],[0,6,4,6]] },
+      '6': { w: 4, s: [[4,0,0,0],[0,0,0,6],[0,3,4,3],[4,3,4,6],[0,6,4,6]] },
+      '7': { w: 4, s: [[0,0,4,0],[4,0,4,6]] },
+      '8': { w: 4, s: [[0,0,4,0],[4,0,4,6],[4,6,0,6],[0,6,0,0],[0,3,4,3]] },
+      '9': { w: 4, s: [[0,0,4,0],[4,0,4,6],[0,0,0,3],[0,3,4,3],[0,6,4,6]] },
+      '.': { w: 1.5, s: [[.75,5.5,.75,6]] },
+      '-': { w: 3, s: [[0,3,3,3]] },
       A: { w: 4, s: [[0,6,0,0],[4,6,4,0],[0,3,4,3]] },
       B: { w: 4, s: [[0,0,0,6],[0,0,2.8,0],[2.8,0,2.8,3],[0,3,2.8,3],[2.8,3,2.8,6],[0,6,2.8,6]] },
       C: { w: 4, s: [[4,0,0,0],[0,0,0,6],[0,6,4,6]] },
@@ -2439,6 +2564,48 @@
       if (svg && labelResult.paths.length) errors.push(...designSerializedAssemblyLabelValidation(svg, layout.panels, guideSegmentsByPanel, Math.max(1, normalized.values.materialThickness / 3)).errors);
       return {valid:!errors.length,errors:[...new Set(errors)],warnings:[...new Set(warnings)],svg:errors.length?'':svg,widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,scorePaths:placedScorePaths,labelPaths:labelResult.paths,metrics:{...model.metrics,...couponMetrics,dimensions:model.dimensions,patterns:model.patterns,guideMarks:normalized.values.guideMarks,guideEndJoineryDepth:endJoineryDepth,fitCoupon:normalized.values.fitCoupon,assemblyLabels:normalized.values.assemblyLabels,labelCount:labelResult.paths.length,margin:layout.margin,gap:layout.gap,rows},validation};
     }
+    function buildJointCouponDesignResult(normalized) {
+      if (normalized.errors.length) return {valid:false,errors:[...new Set(normalized.errors)],warnings:normalized.warnings,svg:'',widthMm:0,heightMm:0,panels:[],labelPaths:[],metrics:{jointFitCoupon:true}};
+      const model = buildJointCouponModel(normalized.values);
+      if (!model.valid) return {valid:false,errors:[...new Set(model.errors)],warnings:[...new Set([...normalized.warnings,...model.warnings])],svg:'',widthMm:0,heightMm:0,panels:model.panels,labelPaths:[],metrics:{...model.metrics,jointFitCoupon:true,pattern:model.pattern,pairs:model.pairs}};
+      const orderedIds = model.pairs.flatMap(pair => [pair.couponAId,pair.couponBId]), rows = [];
+      for (let index = 0; index < orderedIds.length; index += 4) rows.push(orderedIds.slice(index,index+4));
+      const layout = layoutDesignPanelRows(model.panels, rows, 10, 10), errors = [...model.errors,...layout.errors], warnings = [...normalized.warnings,...model.warnings];
+      const translatedKeys = layout.panels.flatMap(panel => designPointSegments(panel.points).map(segment => designSegmentKey({a:{x:segment.a.x+panel.x,y:segment.a.y+panel.y},b:{x:segment.b.x+panel.x,y:segment.b.y+panel.y}})));
+      if (new Set(translatedKeys).size !== translatedKeys.length) errors.push('Generated Joint Fit Coupon layout contains a duplicate translated cut segment.');
+      const labelSpecs = normalized.values.clearanceLabels ? model.pairs.flatMap(pair => [
+        {panelId:pair.couponAId,text:jointCouponLabelText(pair,'A')},
+        {panelId:pair.couponBId,text:jointCouponLabelText(pair,'B')}
+      ]) : [];
+      const minimumClearance = Math.max(1, normalized.values.materialThickness / 3);
+      const labelResult = labelSpecs.length ? buildAssemblyLabelPaths(layout.panels,labelSpecs,{}, {minimumClearance}) : {paths:[],warnings:[]};
+      warnings.push(...labelResult.warnings);
+      const partial = {widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,labelPaths:labelResult.paths}, svg = errors.length ? '' : serializeDesignSvg(partial), validation = svg ? designSvgValidation(svg,layout.widthMm,layout.heightMm) : {valid:false,errors:[]};
+      errors.push(...validation.errors);
+      if (svg && labelResult.paths.length) errors.push(...designSerializedAssemblyLabelValidation(svg,layout.panels,{},minimumClearance).errors);
+      return {
+        valid:!errors.length,
+        errors:[...new Set(errors)],
+        warnings:[...new Set(warnings)],
+        svg:errors.length ? '' : svg,
+        widthMm:layout.widthMm,
+        heightMm:layout.heightMm,
+        panels:layout.panels,
+        labelPaths:labelResult.paths,
+        metrics:{
+          ...model.metrics,
+          pattern:model.pattern,
+          pairs:model.pairs,
+          clearanceLabels:normalized.values.clearanceLabels,
+          labelCount:labelResult.paths.length,
+          omittedLabelCount:Math.max(0,labelSpecs.length-labelResult.paths.length),
+          margin:layout.margin,
+          gap:layout.gap,
+          layoutRows:rows
+        },
+        validation
+      };
+    }
     function buildDrawerCabinetDesignResult(normalized) {
       if (normalized.errors.length) return {valid:false,errors:[...new Set(normalized.errors)],warnings:normalized.warnings,svg:'',widthMm:0,heightMm:0,panels:[],labelPaths:[],metrics:{drawerCabinet:true}};
       const model=buildDrawerCabinetModel(normalized.values);
@@ -2463,6 +2630,7 @@
     }
     function buildDesignResult(rawDraft = designDraft) {
       const normalized = normalizeDesignDraft(rawDraft);
+      if (normalized.template === 'joint-fit-coupon') return buildJointCouponDesignResult(normalized);
       if (normalized.template === 'drawer-cabinet') return buildDrawerCabinetDesignResult(normalized);
       if (normalized.template === 'sliding-lid-box') return buildSlidingLidDesignResult(normalized);
       return normalized.template === 'finger-box' ? buildBoxDesignResult(normalized) : buildLegacyDesignResult(normalized);
@@ -2473,7 +2641,16 @@
       const dimensions = result.metrics?.dimensions, patterns = result.metrics?.patterns;
       const sliding = result.metrics?.slidingLid && dimensions;
       const cabinet = result.metrics?.drawerCabinet && dimensions;
-      const metrics = cabinet
+      const jointCoupon = result.metrics?.jointFitCoupon;
+      const metrics = jointCoupon
+        ? designMetric('Clearance values', (result.metrics.clearances || []).map(item => item.text).join(', ') || 'Unavailable')
+          + designMetric('Pairs / pieces', `${result.metrics.pairCount || 0} / ${result.metrics.pieceCount || result.panels.length || 0}`)
+          + designMetric('Material thickness', Number.isFinite(result.metrics.materialThickness) ? `${designNumberText(result.metrics.materialThickness)} mm` : 'Unavailable')
+          + designMetric('Mating edge / grip depth', Number.isFinite(result.metrics.edgeLength) ? `${designNumberText(result.metrics.edgeLength)} / ${designNumberText(result.metrics.bodyDepth)} mm` : 'Unavailable')
+          + designMetric('Finger pattern', result.metrics.pattern ? `${result.metrics.pattern.count} segments x ${designNumberText(result.metrics.pattern.actualWidth)} mm` : 'Unavailable')
+          + designMetric('Clearance labels', result.metrics.clearanceLabels ? `Enabled - ${result.metrics.labelCount || 0} emitted / ${result.metrics.omittedLabelCount || 0} omitted` : 'Disabled')
+          + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} x ${designNumberText(result.heightMm)} mm` : 'Unavailable')
+        : cabinet
         ? designMetric('Drawer inside', `${designNumberText(dimensions.drawerInsideWidth)} x ${designNumberText(dimensions.drawerInsideDepth)} x ${designNumberText(dimensions.drawerInsideHeight)} mm`)
           + designMetric('Drawer outside', `${designNumberText(dimensions.drawerOutsideWidth)} x ${designNumberText(dimensions.drawerOutsideDepth)} x ${designNumberText(dimensions.drawerOutsideHeight)} mm`)
           + designMetric('Cabinet interior', `${designNumberText(dimensions.cabinetInsideWidth)} x ${designNumberText(dimensions.cabinetInsideDepth)} x ${designNumberText(dimensions.cabinetInsideHeight)} mm`)
@@ -2530,7 +2707,9 @@
         : designMetric('Shapes', String(result.panels.length)) + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable');
       const messages = result.errors.map(message => `<div class="design-message error"><b>Error:</b> ${esc(message)}</div>`).join('') + result.warnings.map(message => `<div class="design-message warning"><b>Warning:</b> ${esc(message)}</div>`).join('');
       const preview = result.valid ? `<div class="design-svg-preview"><object type="image/svg+xml" aria-label="Exact exported SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`)}"></object></div>` : '<div class="design-svg-preview"><div class="empty"><b>Preview unavailable</b><div class="small muted">Correct the errors before previewing or downloading.</div></div></div>';
-      const assembly = cabinet
+      const assembly = jointCoupon
+        ? '<div class="design-message"><b>Use:</b> Keep each A/B pair together and assemble the two panel planes at 90 degrees. Test from looser positive values toward zero and negative interference values. Stop if insertion force crushes, splits, or permanently locks the material. Kerf remains separate and must be established through material testing. A successful coupon selects the next full prototype setting but does not replace final box testing.</div>'
+        : cabinet
         ? `<div class="design-message"><b>Assembly:</b> Assemble and square the five-panel open-front cabinet shell. Assemble every five-panel open-top drawer separately. The bottom drawer rests on the cabinet bottom; glue each upper support shelf level between the side walls and against the back${result.metrics.shelfBottomElevations?.length ? `, with shelf bottom edges ${result.metrics.shelfBottomElevations.map(designNumberText).join(', ')} mm above the inside floor` : ''}, then let all glue cure before testing drawer travel. Keep the requested lateral, vertical, and rear gaps clear. ${result.metrics.assemblyLabels ? 'Labels are on intended concealed faces where safe placement was possible.' : ''} <b>Kerf is not included; dry-fit and prototype on the same measured sheet.</b></div>`
         : sliding
         ? `<div class="design-message"><b>Assembly:</b> Assemble the five body panels. Glue the two identical rails inside the side walls, top-flush and Back-flush, with both channels facing inward. Clamp with a thickness-plus-clearance spacer, keep glue out of the channels, and let it cure. Insert the lid from Front toward Back; the shortened edges face Front and the stop ends face Back while the tongue closes the center gap. ${result.metrics.guideMarks || result.metrics.assemblyLabels ? 'Labels and rail guides are placed on the displayed sheet face. Install both marked side faces inward. Keep shortened edges toward Front and stop ends toward Back. Verify label visibility and face orientation during the first assembly.' : ''} <b>Kerf is not included.</b></div>`
@@ -3045,6 +3224,97 @@
       add('Drawer cabinet rejects impossible vertical clearance',!buildDesignResult({...cabinetDraft,drawerVerticalClearance:'33'}).valid);
       add('Drawer cabinet rejects impossible rear clearance',!buildDesignResult({...cabinetDraft,drawerRearClearance:'76'}).valid);
       add('Drawer cabinet rejects panels too small for finger joints',!buildDesignResult({...cabinetDraft,drawerInsideWidth:'1',drawerInsideDepth:'1',drawerInsideHeight:'1'}).valid);
+
+      const jointCouponDraft=defaultsFor('joint-fit-coupon'),jointCouponDraftBefore=JSON.stringify(jointCouponDraft),jointCouponDefault=buildDesignResult(jointCouponDraft),jointCouponRepeat=buildDesignResult({...jointCouponDraft}),jointCouponNoLabels=buildDesignResult({...jointCouponDraft,jointCouponLabels:false});
+      const parseCoupon=(value)=>{const errors=[];const values=parseJointCouponClearances(value,errors);return{values,errors};};
+      const parsedCouponDefault=parseCoupon('0.06, 0.04, 0.02, 0.00, -0.02, -0.04');
+      add('Joint coupon default list parses to integer hundredths',parsedCouponDefault.errors.length===0&&parsedCouponDefault.values.map(item=>item.hundredths).join('|')==='6|4|2|0|-2|-4','6|4|2|0|-2|-4',parsedCouponDefault.values.map(item=>item.hundredths).join('|'));
+      add('Joint coupon normalized text is exact',parsedCouponDefault.values.map(item=>item.text).join(', ')==='0.06, 0.04, 0.02, 0.00, -0.02, -0.04');
+      add('Joint coupon parser accepts comma and newline separators',parseCoupon('0.06\n0.04,0.02').errors.length===0);
+      add('Joint coupon blank list rejects',parseCoupon('').errors.length>0);
+      add('Joint coupon blank token rejects',parseCoupon('0.06,,0.04,0.02').errors.length>0);
+      add('Joint coupon malformed list rejects',parseCoupon('0.06,fit,0.02').errors.length>0);
+      add('Joint coupon exponent notation rejects',parseCoupon('1e-2,0.02,0.00').errors.length>0);
+      add('Joint coupon whole-number token rejects',parseCoupon('0,0.02,0.04').errors.length>0);
+      add('Joint coupon more than two decimal places rejects',parseCoupon('0.061,0.04,0.02').errors.length>0);
+      add('Joint coupon fewer than three values rejects',parseCoupon('0.04,0.02').errors.length>0);
+      add('Joint coupon more than eight values rejects',parseCoupon('-0.10,-0.08,-0.06,-0.04,-0.02,0.00,0.02,0.04,0.06').errors.length>0);
+      add('Joint coupon duplicate values reject',parseCoupon('0.04,0.04,0.02').errors.length>0);
+      add('Joint coupon negative zero duplicates zero',parseCoupon('0.00,-0.00,0.02').errors.length>0);
+      const couponBoundaries=parseCoupon('-0.10,+0.30,0.00');
+      add('Joint coupon signed range boundaries accept',couponBoundaries.errors.length===0&&couponBoundaries.values.map(item=>item.text).join('|')==='-0.10|0.30|0.00');
+      add('Joint coupon values below signed range reject',parseCoupon('-0.11,0.00,0.02').errors.length>0);
+      add('Joint coupon values above signed range reject',parseCoupon('0.31,0.00,0.02').errors.length>0);
+      add('Joint coupon zero and recommended negatives accept',parseCoupon('0.00,-0.02,-0.04').errors.length===0);
+      add('Joint coupon parsing and generation do not mutate draft',JSON.stringify(jointCouponDraft)===jointCouponDraftBefore);
+
+      add('Joint coupon default result is valid',jointCouponDefault.valid,true,JSON.stringify(jointCouponDefault.errors));
+      add('Joint coupon pair count equals clearance count',jointCouponDefault.metrics.pairCount===6&&jointCouponDefault.metrics.pairCount===jointCouponDefault.metrics.clearances.length);
+      add('Joint coupon piece count is twice pair count',jointCouponDefault.panels.length===12&&jointCouponDefault.metrics.pieceCount===jointCouponDefault.metrics.pairCount*2);
+      const jointCouponIds=Array.from({length:6},(_,index)=>{const ordinal=String(index+1).padStart(2,'0');return[`joint-coupon-p${ordinal}-a`,`joint-coupon-p${ordinal}-b`];}).flat();
+      add('Joint coupon IDs are stable and ordered',jointCouponDefault.panels.map(panel=>panel.id).join('|')===jointCouponIds.join('|'),jointCouponIds.join('|'),jointCouponDefault.panels.map(panel=>panel.id).join('|'));
+      add('Joint coupon IDs are unique and punctuation-free',new Set(jointCouponDefault.panels.map(panel=>panel.id)).size===12&&jointCouponDefault.panels.every(panel=>!/[\s.+]/.test(panel.id)));
+      add('Joint coupon A always precedes B',jointCouponDefault.metrics.pairs.every((pair,index)=>jointCouponDefault.panels[index*2].id===pair.couponAId&&jointCouponDefault.panels[index*2+1].id===pair.couponBId));
+      add('Joint coupon normalized input order is preserved',jointCouponDefault.metrics.clearances.map(item=>item.text).join('|')==='0.06|0.04|0.02|0.00|-0.02|-0.04');
+      const jointCouponDocument=new DOMParser().parseFromString(jointCouponDefault.svg,'image/svg+xml');
+      add('Every joint coupon piece serializes separately',jointCouponDocument.querySelectorAll('g#cut > g[id^="panel-joint-coupon-"]').length===12);
+
+      const couponPair04=buildDesignResult({...jointCouponDraft,jointCouponClearances:'0.04,0.00,-0.04'}),couponA04=couponPair04.panels[0],couponB04=couponPair04.panels[1],couponAZero=couponPair04.panels[2],couponBZero=couponPair04.panels[3],couponANeg04=couponPair04.panels[4],couponBNeg04=couponPair04.panels[5];
+      const couponTopTransitions=panel=>designPointSegments(panel.points).filter(segment=>segment.a.x===segment.b.x&&Math.abs(segment.a.y-segment.b.y)>1e-9&&segment.a.x>0&&segment.a.x<panel.width).map(segment=>designRound(segment.a.x));
+      const literalNominalBoundaries=[0,9,18,27,36,45],literalPositiveA=[8.98,18.02,26.98,36.02],literalPositiveB=[9.02,17.98,27.02,35.98],literalNegativeA=[9.02,17.98,27.02,35.98],literalNegativeB=[8.98,18.02,26.98,36.02],literalZero=[9,18,27,36];
+      add('Joint coupon nominal boundaries are literal five-by-nine coordinates',JSON.stringify(couponPair04.metrics.pattern.boundaries)===JSON.stringify(literalNominalBoundaries),JSON.stringify(literalNominalBoundaries),JSON.stringify(couponPair04.metrics.pattern.boundaries));
+      add('Positive clearance Coupon A transitions are independently exact',JSON.stringify(couponTopTransitions(couponA04))===JSON.stringify(literalPositiveA),JSON.stringify(literalPositiveA),JSON.stringify(couponTopTransitions(couponA04)));
+      add('Positive clearance Coupon B transitions are independently exact',JSON.stringify(couponTopTransitions(couponB04))===JSON.stringify(literalPositiveB),JSON.stringify(literalPositiveB),JSON.stringify(couponTopTransitions(couponB04)));
+      add('Negative clearance Coupon A transitions are independently exact',JSON.stringify(couponTopTransitions(couponANeg04))===JSON.stringify(literalNegativeA),JSON.stringify(literalNegativeA),JSON.stringify(couponTopTransitions(couponANeg04)));
+      add('Negative clearance Coupon B transitions are independently exact',JSON.stringify(couponTopTransitions(couponBNeg04))===JSON.stringify(literalNegativeB),JSON.stringify(literalNegativeB),JSON.stringify(couponTopTransitions(couponBNeg04)));
+      add('Zero clearance coupons follow nominal transitions',JSON.stringify(couponTopTransitions(couponAZero))===JSON.stringify(literalZero)&&JSON.stringify(couponTopTransitions(couponBZero))===JSON.stringify(literalZero));
+      add('Joint coupon phases are complementary',couponPair04.metrics.pairs.every((pair,index)=>couponPair04.panels[index*2].edges[0].phase===true&&couponPair04.panels[index*2+1].edges[0].phase===false));
+      add('Joint coupon mates share the same nominal pattern object',couponPair04.metrics.pairs.every((pair,index)=>couponPair04.panels[index*2].edges[0].pattern===couponPair04.panels[index*2+1].edges[0].pattern));
+      add('Joint coupon mates have equal edge lengths',couponPair04.metrics.pairs.every((pair,index)=>couponPair04.panels[index*2].width===45&&couponPair04.panels[index*2+1].width===45));
+      add('Joint coupon recess depth equals measured thickness',couponPair04.panels.every(panel=>panel.edges[0].depth===3));
+      const positiveTransitionDeltas=literalPositiveA.map((value,index)=>designRound(literalPositiveB[index]-value)),negativeTransitionDeltas=literalNegativeA.map((value,index)=>designRound(literalNegativeB[index]-value));
+      add('Positive transition separation equals clearance',positiveTransitionDeltas.every(value=>Math.abs(value)===0.04));
+      add('Negative transition direction reverses',negativeTransitionDeltas.every((value,index)=>value===-positiveTransitionDeltas[index]));
+
+      add('Each joint coupon has one patterned edge and three plain edges',jointCouponDefault.panels.every(panel=>panel.edges.filter(edge=>!!edge?.pattern).length===1&&panel.edges.slice(1).every(edge=>edge===null)));
+      add('Joint coupon paths are closed and orthogonal',jointCouponDefault.panels.every(panel=>/ Z$/.test(panel.path)&&!/[QCAST]/i.test(panel.path)));
+      add('Joint coupon paths have no zero-length explicit segments',jointCouponDefault.panels.every(panel=>panel.points.slice(1).every((point,index)=>point.x!==panel.points[index].x||point.y!==panel.points[index].y)));
+      add('Joint coupon paths have no self-intersections',jointCouponDefault.panels.every(panel=>!designPathSelfIntersects(panel.points)));
+      add('Joint coupon paths have no collinear retracing',jointCouponDefault.panels.every(panel=>!designPositiveCollinearOverlaps(panel.points).length));
+      add('Joint coupon paths have no duplicate local cuts',jointCouponDefault.panels.every(panel=>{const keys=designPointSegments(panel.points).map(designSegmentKey);return new Set(keys).size===keys.length;}));
+      const jointCouponTranslatedKeys=jointCouponDefault.panels.flatMap(panel=>designPointSegments(panel.points).map(segment=>designSegmentKey({a:{x:segment.a.x+panel.x,y:segment.a.y+panel.y},b:{x:segment.b.x+panel.x,y:segment.b.y+panel.y}})));
+      add('Joint coupon layout has no duplicate translated cuts',new Set(jointCouponTranslatedKeys).size===jointCouponTranslatedKeys.length);
+      add('Joint coupon layout has no overlap',jointCouponDefault.panels.every((panel,index)=>jointCouponDefault.panels.slice(index+1).every(other=>!designBoxesOverlap(panel.translatedBounds,other.translatedBounds))));
+      add('Joint coupon layout preserves ten millimeter gap',jointCouponDefault.metrics.gap===10&&jointCouponDefault.panels.every((panel,index)=>jointCouponDefault.panels.slice(index+1).every(other=>designBoxesSeparatedBy(panel.translatedPathBounds,other.translatedPathBounds,10))));
+      add('Joint coupon default layout is 230 by 106 millimeters',jointCouponDefault.widthMm===230&&jointCouponDefault.heightMm===106,'230/106',`${jointCouponDefault.widthMm}/${jointCouponDefault.heightMm}`);
+      add('Joint coupon geometry stays inside bounds',jointCouponDefault.panels.every(panel=>panel.translatedPathBounds.minX>=0&&panel.translatedPathBounds.minY>=0&&panel.translatedPathBounds.maxX<=jointCouponDefault.widthMm&&panel.translatedPathBounds.maxY<=jointCouponDefault.heightMm));
+      add('Joint coupon SVG is valid',designSvgValidation(jointCouponDefault.svg,jointCouponDefault.widthMm,jointCouponDefault.heightMm).valid);
+      add('Joint coupon SVG is deterministic',jointCouponDefault.svg===jointCouponRepeat.svg);
+      add('Joint coupon preview and download use identical SVG',designSvg(jointCouponDraft)===jointCouponDefault.svg);
+      add('Joint coupon score precedes cut',jointCouponDefault.svg.indexOf('<g id="score"')>=0&&jointCouponDefault.svg.indexOf('<g id="score"')<jointCouponDefault.svg.indexOf('<g id="cut"'));
+      add('Disabled joint coupon labels remove score geometry',jointCouponNoLabels.valid&&!jointCouponNoLabels.svg.includes('id="score"')&&!jointCouponNoLabels.svg.includes('assembly-labels'));
+
+      const numericGlyphs=['0','1','2','3','4','5','6','7','8','9','.','-'];
+      add('Joint coupon numeric glyphs are deterministic valid paths',numericGlyphs.every(glyph=>{const first=designAssemblyWordGeometry(glyph),second=designAssemblyWordGeometry(glyph);return first?.valid&&first.path===second.path&&first.segments.length>0&&first.segments.every(segment=>segment.a.x!==segment.b.x||segment.a.y!==segment.b.y);}));
+      add('Joint coupon labels use paths without SVG text',jointCouponDefault.labelPaths.length===12&&jointCouponDocument.querySelectorAll('g#assembly-labels path').length===12&&jointCouponDocument.querySelectorAll('text').length===0);
+      const defaultCouponLabels=jointCouponDefault.metrics.pairs.flatMap(pair=>[jointCouponLabelText(pair,'A'),jointCouponLabelText(pair,'B')]);
+      add('Joint coupon default labels are exact and ordered',jointCouponDefault.labelPaths.map(path=>path.text).join('|')===defaultCouponLabels.join('|'),defaultCouponLabels.join('|'),jointCouponDefault.labelPaths.map(path=>path.text).join('|'));
+      add('Negative joint coupon labels contain vector minus glyphs',jointCouponDefault.labelPaths.filter(path=>path.text.includes('-')).every(path=>path.glyphRuns.some(run=>run.char==='-')));
+      add('Joint coupon labels stay inside final polygons',designSerializedAssemblyLabelValidation(jointCouponDefault.svg,jointCouponDefault.panels,{},1).valid,true,JSON.stringify(designSerializedAssemblyLabelValidation(jointCouponDefault.svg,jointCouponDefault.panels,{},1).errors));
+      add('Joint coupon labels clear cut paths',jointCouponDefault.labelPaths.every(path=>path.cutClearance>=1-1e-9));
+      const jointCouponSmallLabels=buildDesignResult({...jointCouponDraft,jointCouponEdgeLength:'18',jointCouponBodyDepth:'16',jointCouponPreferredFingerWidth:'6',jointCouponClearances:'-0.10,0.00,0.30'});
+      add('Unsafe joint coupon labels omit individually without blocking cuts',jointCouponSmallLabels.valid&&jointCouponSmallLabels.labelPaths.length<6&&jointCouponSmallLabels.labelPaths.length>0&&jointCouponSmallLabels.warnings.some(message=>/Assembly label .* omitted/.test(message))&&!!jointCouponSmallLabels.svg,true,JSON.stringify({valid:jointCouponSmallLabels.valid,labels:jointCouponSmallLabels.labelPaths.map(path=>path.text),warnings:jointCouponSmallLabels.warnings}));
+      add('Joint coupon labels do not change cut paths',jointCouponDefault.panels.map(panel=>panel.path).join('|')===jointCouponNoLabels.panels.map(panel=>panel.path).join('|'));
+
+      add('Joint coupon rejects invalid material thickness',!buildDesignResult({...jointCouponDraft,materialThickness:'0'}).valid&&!buildDesignResult({...jointCouponDraft,materialThickness:'-3'}).valid&&!buildDesignResult({...jointCouponDraft,materialThickness:'wood'}).valid);
+      add('Joint coupon rejects invalid dimensions',!buildDesignResult({...jointCouponDraft,jointCouponEdgeLength:'0'}).valid&&!buildDesignResult({...jointCouponDraft,jointCouponBodyDepth:'0'}).valid&&!buildDesignResult({...jointCouponDraft,jointCouponPreferredFingerWidth:'0'}).valid);
+      add('Joint coupon enforces minimum grip depth',!buildDesignResult({...jointCouponDraft,jointCouponBodyDepth:'15.99'}).valid&&!buildDesignResult({...jointCouponDraft,materialThickness:'5',jointCouponBodyDepth:'19.99'}).valid);
+      add('Joint coupon rejects edges too short for three segments',!buildDesignResult({...jointCouponDraft,jointCouponEdgeLength:'17'}).valid);
+      add('Joint coupon signed web validation is symmetric',!buildJointCouponModel({...normalizeDesignDraft(jointCouponDraft).values,edgeLength:18,preferredFingerWidth:6,clearances:[{hundredths:-600,value:-6,text:'-6.00'},{hundredths:0,value:0,text:'0.00'},{hundredths:1,value:.01,text:'0.01'}]}).valid);
+      const storageBeforeJointCoupon=localStorage.getItem(STORAGE_KEY);buildDesignResult({...jointCouponDraft,jointCouponClearances:'-0.10,0.00,0.30',jointCouponLabels:true});const storageAfterJointCoupon=localStorage.getItem(STORAGE_KEY);
+      add('Joint coupon generation does not write localStorage',storageBeforeJointCoupon===storageAfterJointCoupon);
+      add('Joint coupon fields remain absent from backup',!Object.keys(backupObject()).some(key=>/^jointCoupon/.test(key)));
+      add('Existing templates still reject negative joint clearance',!buildDesignResult({...inside,jointClearance:'-0.01'}).valid&&!buildDesignResult({...slidingA,slidingJointClearance:'-0.01'}).valid&&!buildDesignResult({...cabinetDraft,cabinetJointClearance:'-0.01'}).valid&&!buildDesignResult({...cabinetDraft,drawerJointClearance:'-0.01'}).valid);
       add('Corrected Finger Box and Drawer signatures preserve unaffected Sliding Lid geometry',insideResult.svg.length===2483&&designFixtureHash(insideResult.svg)==='a892f91c'&&lidResult.svg.length===2615&&designFixtureHash(lidResult.svg)==='6181bc75'&&slidingAResult.svg.length===2800&&designFixtureHash(slidingAResult.svg)==='4a7ab718'&&cabinetOne.svg.length===4436&&designFixtureHash(cabinetOne.svg)==='7494c326'&&cabinetOne.svg===cabinetRepeat.svg);
 
       const passed = results.filter(result => result.pass).length, failed = results.length - passed;
@@ -6038,7 +6308,7 @@
       if (designForm) {
         designForm.oninput = e => {
           updateDesignDraft(designForm);
-          if (e.target.matches('input')) refreshDesignPreview();
+          if (e.target.matches('input,textarea')) refreshDesignPreview();
         };
         designForm.onchange = e => {
           updateDesignDraft(designForm);
