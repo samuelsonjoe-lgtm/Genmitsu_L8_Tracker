@@ -412,7 +412,7 @@
       return { status: 'ok', data };
     }
     function designDefaults() {
-      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated', slidingGuideMarks: false, slidingFitCoupon: false, drawerInsideWidth: '100', drawerInsideDepth: '70', drawerInsideHeight: '30', drawerRows: '1', cabinetJointClearance: '0.10', drawerJointClearance: '0.10', drawerPreferredFingerWidth: '12', drawerLateralClearance: '0.45', drawerVerticalClearance: '0.30', drawerRearClearance: '0.50', drawerShelfGuides: false, jointCouponEdgeLength: '45', jointCouponBodyDepth: '22', jointCouponPreferredFingerWidth: '9', jointCouponClearances: '0.06, 0.04, 0.02, 0.00, -0.02, -0.04', jointCouponLabels: true, couponType: 'finger-edge', jointCouponWallJointStyle: 'finger', jointCouponWallLength: '80', jointCouponWallClearances: '0.20, 0.15, 0.10, 0.05, 0.00', assemblyLabels: false };
+      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', trayBottomCover: false, hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated', slidingGuideMarks: false, slidingFitCoupon: false, drawerInsideWidth: '100', drawerInsideDepth: '70', drawerInsideHeight: '30', drawerRows: '1', cabinetJointClearance: '0.10', drawerJointClearance: '0.10', drawerPreferredFingerWidth: '12', drawerLateralClearance: '0.45', drawerVerticalClearance: '0.30', drawerRearClearance: '0.50', drawerShelfGuides: false, jointCouponEdgeLength: '45', jointCouponBodyDepth: '22', jointCouponPreferredFingerWidth: '9', jointCouponClearances: '0.06, 0.04, 0.02, 0.00, -0.02, -0.04', jointCouponLabels: true, couponType: 'finger-edge', jointCouponWallJointStyle: 'finger', jointCouponWallLength: '80', jointCouponWallClearances: '0.20, 0.15, 0.10, 0.05, 0.00', assemblyLabels: false };
     }
     function designProductionSessionDefaults() {
       return { profileId: '', settingId: '', checkedTargets: {}, showSuperseded: false, reviewFingerprint: '', staleReason: '' };
@@ -1863,6 +1863,7 @@
           + field('trayDepth','Inside tray depth (mm)',d.trayDepth,'number','min="20" step="1"')
           + field('trayHeight','Wall height (mm)',d.trayHeight,'number','min="10" step="1"')
           + (d.template === 'divider-tray' ? field('dividerCount','Removable divider slots',d.dividerCount,'number','min="1" max="6" step="1"') : '')
+          + (d.template === 'dice-tray' ? '<label class="row"><input name="trayBottomCover" type="checkbox" style="width:auto" ' + (d.trayBottomCover ? 'checked' : '') + '> Add underside cover plate</label><div class="small muted" style="grid-column:1/-1">Adds a separate full-size plain plate beneath the completed tray, intended to conceal wall-slot openings and tab ends. Cosmetic only: it does not strengthen or replace the structural tray joint. Confirm all wall tabs are fully seated and flush, clean soot, char, raised fibers, glue residue, and debris from both glue surfaces, then carefully align the plate with the tray edges before clamping. Verify concealment, alignment, and flatness on the first tray built with this option. Adds one piece, one material thickness to the visible base, and extra material and cut time.</div>' : '')
         : field('signWidth','Panel width (mm)',d.signWidth,'number','min="20" step="1"')
           + field('signHeight','Panel height (mm)',d.signHeight,'number','min="20" step="1"')
           + (hanging
@@ -1974,7 +1975,7 @@
     function buildTrayModel(values = {}) {
       const errors = trayModelValidationErrors(values), template = values.template, empty = { valid:false, template, generatorVersion:'tray-model-phase1', errors, warnings:[], inputs:{}, dimensions:{}, orientation:{}, components:[], operations:{ cutPaths:[], scorePaths:[], labels:[] }, layout:{ marginMm:10, gapMm:15, widthMm:0, heightMm:0, items:[], materialComponentIds:[] }, metrics:{ pieceCount:0, wallCount:0, dividerCount:0, compartmentCount:0 } };
       if (errors.length) return empty;
-      const thicknessMm = values.materialThickness, fitClearanceMm = values.fitClearance, insideWidthMm = values.trayWidth, insideDepthMm = values.trayDepth, wallHeightMm = values.trayHeight, jointStyle = values.jointStyle, dividerCount = template === 'divider-tray' ? values.dividerCount : 0;
+      const thicknessMm = values.materialThickness, fitClearanceMm = values.fitClearance, insideWidthMm = values.trayWidth, insideDepthMm = values.trayDepth, wallHeightMm = values.trayHeight, jointStyle = values.jointStyle, dividerCount = template === 'divider-tray' ? values.dividerCount : 0, bottomCover = values.bottomCover === true;
       const marginMm = 10, gapMm = 15, baseOutsideWidthMm = insideWidthMm + thicknessMm * 2, baseOutsideDepthMm = insideDepthMm + thicknessMm * 2, slotWidthMm = traySlotWidthMm(thicknessMm, fitClearanceMm), widthTabProfile = trayTabProfile(insideWidthMm, jointStyle), depthTabProfile = trayTabProfile(insideDepthMm, jointStyle);
       const components = [], base = trayRectComponent('tray-base', 'Tray base', 'base', marginMm, marginMm, baseOutsideWidthMm, baseOutsideDepthMm, { role:'base', wallSlotIds:[], dividerSlotIds:[] });
       components.push(base);
@@ -2003,21 +2004,26 @@
           base.dividerSlotIds.push(slot.id); components.push(slot, divider); dividers.push(divider);
         }
       }
-      const dividerWidthMm = template === 'divider-tray' ? insideWidthMm + gapMm : 0, layoutWidthMm = Math.max(sideX + insideDepthMm + dividerWidthMm + marginMm, baseOutsideWidthMm + marginMm * 2), layoutHeightMm = wallY + (wallHeightMm + thicknessMm + gapMm) * Math.max(2, template === 'divider-tray' ? Math.max(2, dividerCount) : 2) + marginMm;
-      const items = components.map(trayLayoutItem), materialComponentIds = [base.id, ...walls.map(wall => wall.id), ...dividers.map(divider => divider.id)];
+      const dividerWidthMm = template === 'divider-tray' ? insideWidthMm + gapMm : 0, existingLayoutHeightMm = wallY + (wallHeightMm + thicknessMm + gapMm) * Math.max(2, template === 'divider-tray' ? Math.max(2, dividerCount) : 2) + marginMm;
+      const bottomCoverInsetMm=0, bottomCoverWidthMm=baseOutsideWidthMm, bottomCoverDepthMm=baseOutsideDepthMm, bottomCoverYmm=existingLayoutHeightMm-marginMm+gapMm, bottomCoverComponent=bottomCover?trayRectComponent('tray-bottom-cover','Tray bottom cover','bottom-cover',marginMm,bottomCoverYmm,bottomCoverWidthMm,bottomCoverDepthMm,{role:'bottom-cover'}):null;
+      if(bottomCover&&(!Number.isFinite(bottomCoverWidthMm)||!Number.isFinite(bottomCoverDepthMm)||bottomCoverWidthMm<=0||bottomCoverDepthMm<=0)) errors.push('Underside cover plate dimensions must be finite and greater than zero.');
+      if(bottomCoverComponent) components.push(bottomCoverComponent);
+      const layoutWidthMm = Math.max(sideX + insideDepthMm + dividerWidthMm + marginMm, baseOutsideWidthMm + marginMm * 2), layoutHeightMm = existingLayoutHeightMm + (bottomCover ? gapMm + bottomCoverDepthMm : 0);
+      const items = components.map(trayLayoutItem), materialComponentIds = [base.id, ...walls.map(wall => wall.id), ...dividers.map(divider => divider.id), ...(bottomCoverComponent?[bottomCoverComponent.id]:[])];
+      const warnings=bottomCover?['Underside cover plate is cosmetic only; it does not strengthen or replace the structural tray joint. Confirm all wall tabs are fully seated and flush before gluing, clean soot, char, raised fibers, glue residue, and debris from both glue surfaces, carefully align the full-size plate with the tray edges before clamping, and verify concealment, alignment, and flatness on the first physical tray. The cover adds material thickness, material use, and cut time.']:[];
       return {
-        valid:true,
+        valid:!errors.length,
         template,
         generatorVersion:'tray-model-phase1',
-        errors:[],
-        warnings:[],
+        errors,
+        warnings,
         inputs:{ materialThicknessMm:thicknessMm, fitClearanceMm, jointStyle, insideWidthMm, insideDepthMm, wallHeightMm, ...(template === 'divider-tray' ? { dividerCount } : {}) },
-        dimensions:{ baseOutsideWidthMm, baseOutsideDepthMm, slotWidthMm, widthTabProfile, depthTabProfile },
+        dimensions:{ baseOutsideWidthMm, baseOutsideDepthMm, slotWidthMm, widthTabProfile, depthTabProfile, ...(bottomCover?{bottomCoverInsetMm,bottomCoverWidthMm,bottomCoverDepthMm,bottomCoverThicknessMm:thicknessMm,bottomCoverTotalVisibleBaseThicknessMm:designRound(thicknessMm*2),bottomCoverYmm}: {}) },
         orientation:{ interiorFace:'top', frontWallId:'wall-front', backWallId:'wall-back', leftWallId:'wall-left', rightWallId:'wall-right', ...(template === 'divider-tray' ? { dividerSpan:'left-to-right', dividerOrder:'front-to-back' } : {}) },
         components,
         operations:{ cutPaths:items.map(item => item.componentId), scorePaths:[], labels:[] },
         layout:{ marginMm, gapMm, widthMm:layoutWidthMm, heightMm:layoutHeightMm, items, materialComponentIds },
-        metrics:{ pieceCount:materialComponentIds.length, wallCount:walls.length, dividerCount, compartmentCount:dividerCount + 1 }
+        metrics:{ pieceCount:materialComponentIds.length, wallCount:walls.length, dividerCount, compartmentCount:dividerCount + 1, bottomCover, bottomCoverInsetMm, bottomCoverWidthMm, bottomCoverDepthMm, bottomCoverThicknessMm:thicknessMm, bottomCoverTotalVisibleBaseThicknessMm:designRound(thicknessMm*(bottomCover?2:1)), bottomCoverComponentId:bottomCoverComponent?.id || '', bottomCoverAddedPieceCount:bottomCoverComponent?1:0 }
       };
     }
     function serializeTrayCompatibilitySvg(model) {
@@ -2184,6 +2190,7 @@
             values.dividerCount = designRequiredNumber(draft, 'dividerCount', 'Divider count', errors, 1, true);
             if (Number.isFinite(values.dividerCount) && (!Number.isInteger(values.dividerCount) || values.dividerCount > 6)) errors.push('Divider count must be a whole number from 1 to 6.');
           }
+          if (template === 'dice-tray') values.bottomCover = draft.trayBottomCover === true || draft.trayBottomCover === 'true' || draft.trayBottomCover === 'on';
         } else {
           values.signWidth = designRequiredNumber(draft, 'signWidth', 'Panel width', errors, 20, true);
           values.signHeight = designRequiredNumber(draft, 'signHeight', 'Panel height', errors, 20, true);
@@ -3021,9 +3028,9 @@
       validateLegacyDesign(normalized);
       if (normalized.errors.length) return { valid:false, errors:[...new Set(normalized.errors)], warnings:normalized.warnings, svg:'', widthMm:0, heightMm:0, panels:[], metrics:{} };
       const model = buildTrayModel(normalized.values);
-      if (!model.valid) return { valid:false, errors:[...new Set(model.errors)], warnings:[...new Set([...normalized.warnings,...model.warnings])], svg:'', widthMm:0, heightMm:0, panels:[], metrics:{} };
+      if (!model.valid) return { valid:false, errors:[...new Set(model.errors)], warnings:[...new Set([...normalized.warnings,...model.warnings])], svg:'', widthMm:0, heightMm:0, panels:[], metrics:{template:normalized.template,...model.metrics} };
       const svg = serializeTrayCompatibilitySvg(model), validation = designSvgValidation(svg, model.layout.widthMm, model.layout.heightMm), errors = [...new Set(validation.errors)];
-      return { valid:!errors.length, errors, warnings:normalized.warnings, svg:errors.length ? '' : svg, widthMm:validation.widthMm, heightMm:validation.heightMm, panels:validation.elements.map((item,index)=>({name:`Shape ${index+1}`,bounds:item.bounds})), metrics:{template:normalized.template}, ...(errors.length ? {} : ['dice-tray','divider-tray'].includes(model.template) ? { finishedView:trayFinishedViewProjection(model) } : {}), validation };
+      return { valid:!errors.length, errors, warnings:[...new Set([...normalized.warnings,...model.warnings])], svg:errors.length ? '' : svg, widthMm:validation.widthMm, heightMm:validation.heightMm, panels:validation.elements.map((item,index)=>({name:`Shape ${index+1}`,bounds:item.bounds})), metrics:{template:normalized.template,...model.metrics,...model.dimensions}, ...(errors.length ? {} : ['dice-tray','divider-tray'].includes(model.template) ? { finishedView:trayFinishedViewProjection(model) } : {}), validation };
     }
     function buildBoxDesignResult(normalized) {
       if (normalized.errors.length) return { valid:false, errors:[...new Set(normalized.errors)], warnings:normalized.warnings, svg:'', widthMm:0, heightMm:0, panels:[], metrics:{} };
@@ -3316,6 +3323,8 @@
           + designMetric('Wall height', `${designNumberText(dice.wallHeightMm)} mm`)
           + designMetric('Outside footprint', `${designNumberText(dice.baseOutsideWidthMm)} × ${designNumberText(dice.baseOutsideDepthMm)} mm`)
           + designMetric('Wall profile', dice.jointStyle === 'finger' ? 'Four-tab wall profile' : 'Two-tab wall profile')
+          + designMetric('Bottom cover', result.metrics.bottomCover ? `Enabled - ${designNumberText(result.metrics.bottomCoverWidthMm)} × ${designNumberText(result.metrics.bottomCoverDepthMm)} mm, +1 piece` : 'Disabled')
+          + designMetric('Base thickness', result.metrics.bottomCover ? `${designNumberText(result.metrics.bottomCoverTotalVisibleBaseThicknessMm)} mm total (visible)` : `${designNumberText(dice.materialThicknessMm)} mm`)
           + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable')
         : divider
         ? designMetric('Inside usable area', `${designNumberText(divider.insideWidthMm)} × ${designNumberText(divider.insideDepthMm)} mm`)
@@ -3540,6 +3549,29 @@
       const defaultDiceSvg = buildDesignResult(diceDraft).svg, defaultDividerSvg = buildDesignResult(defaultsFor('divider-tray')).svg;
       add('Dice default golden length and hash remain unchanged', defaultDiceSvg.length === 1726 && designFixtureHash(defaultDiceSvg) === '51a55721', '1726/51a55721', `${defaultDiceSvg.length}/${designFixtureHash(defaultDiceSvg)}`);
       add('Divider default golden length and hash remain unchanged', defaultDividerSvg.length === 1965 && designFixtureHash(defaultDividerSvg) === 'a55dda6e', '1965/a55dda6e', `${defaultDividerSvg.length}/${designFixtureHash(defaultDividerSvg)}`);
+      const diceCoverDraft=defaultsFor('dice-tray',{trayBottomCover:true}),diceCoverNormalized=normalizeDesignDraft(diceCoverDraft),diceCover=buildTrayModel(diceCoverNormalized.values),diceWithoutCover=buildTrayModel(normalizeDesignDraft(defaultsFor('dice-tray')).values),diceCoverResult=buildDesignResult(diceCoverDraft),dividerCoverNormalized=normalizeDesignDraft(defaultsFor('divider-tray',{trayBottomCover:true})),dividerWithCover=buildTrayModel(dividerCoverNormalized.values),cover=diceCover.components.at(-1),existingDiceComponents=diceWithoutCover.components;
+      const wallSlotContainment=(model)=>{const base=model.components.find(component=>component.id==='tray-base'),plate=model.components.find(component=>component.id==='tray-bottom-cover');if(!base||!plate)return {all:false,families:{}};const footprint={minX:0,minY:0,maxX:plate.geometry.widthMm,maxY:plate.geometry.heightMm},contains=slot=>{const local={minX:slot.geometry.xMm-base.geometry.xMm,minY:slot.geometry.yMm-base.geometry.yMm,maxX:slot.geometry.xMm-base.geometry.xMm+slot.geometry.widthMm,maxY:slot.geometry.yMm-base.geometry.yMm+slot.geometry.heightMm};return local.minX>=footprint.minX&&local.maxX<=footprint.maxX&&local.minY>=footprint.minY&&local.maxY<=footprint.maxY;},slots=model.components.filter(component=>component.kind==='base-wall-slot'||component.role==='base-wall-slot'),families=Object.fromEntries(['front','back','left','right'].map(role=>{const family=slots.filter(slot=>slot.role===role);return [role,family.length>0&&family.every(contains)];}));return {all:Object.values(families).every(Boolean),families,footprint,slots};};
+      add('Dice underside cover normalizes only true true-string and on',diceCoverNormalized.values.bottomCover===true&&normalizeDesignDraft(defaultsFor('dice-tray',{trayBottomCover:'true'})).values.bottomCover===true&&normalizeDesignDraft(defaultsFor('dice-tray',{trayBottomCover:'on'})).values.bottomCover===true);
+      add('Dice underside cover missing false and malformed values normalize disabled',[undefined,null,false,'false','','   ',1,'cover'].every(value=>!normalizeDesignDraft(defaultsFor('dice-tray',{trayBottomCover:value})).values.bottomCover));
+      add('Divider Tray cannot enable the Dice underside cover',!dividerCoverNormalized.values.bottomCover&&!dividerWithCover.components.some(component=>component.id==='tray-bottom-cover')&&dividerWithCover.metrics.pieceCount===buildTrayModel(normalizeDesignDraft(defaultsFor('divider-tray')).values).metrics.pieceCount);
+      add('Disabled Dice and Divider goldens remain byte-identical',buildDesignResult(defaultsFor('dice-tray')).svg.length===1726&&designFixtureHash(buildDesignResult(defaultsFor('dice-tray')).svg)==='51a55721'&&buildDesignResult(defaultsFor('divider-tray')).svg.length===1965&&designFixtureHash(buildDesignResult(defaultsFor('divider-tray')).svg)==='a55dda6e');
+      add('Dice underside cover appends exactly one physical component after unchanged existing components',diceCover.valid&&diceCover.components.length===existingDiceComponents.length+1&&diceCover.layout.materialComponentIds.length===diceWithoutCover.layout.materialComponentIds.length+1&&diceCover.metrics.pieceCount===diceWithoutCover.metrics.pieceCount+1&&diceCover.components.slice(0,-1).every((component,index)=>JSON.stringify(component)===JSON.stringify(existingDiceComponents[index]))&&cover?.id==='tray-bottom-cover'&&diceCover.layout.materialComponentIds.at(-1)==='tray-bottom-cover');
+      add('Dice underside cover is the required full-size plain component with hand-derived default dimensions',cover?.name==='Tray bottom cover'&&cover.kind==='bottom-cover'&&cover.role==='bottom-cover'&&cover.geometry.widthMm===226&&cover.geometry.heightMm===166&&cover.geometry.xMm===10&&cover.geometry.yMm===312&&diceCover.metrics.bottomCoverInsetMm===0&&diceCover.metrics.bottomCoverThicknessMm===3&&diceCover.metrics.bottomCoverTotalVisibleBaseThicknessMm===6);
+      add('Dice underside cover is finite positive non-overlapping and uses the existing layout gap',Object.values(cover?.geometry||{}).filter(value=>typeof value==='number').every(Number.isFinite)&&cover?.geometry.widthMm>0&&cover?.geometry.heightMm>0&&diceCover.layout.heightMm===488&&diceCover.layout.heightMm===diceWithoutCover.layout.heightMm+diceCover.layout.gapMm+cover.geometry.heightMm&&diceCover.layout.widthMm===diceWithoutCover.layout.widthMm&&diceCover.components.slice(0,-1).every(component=>!designBoxesOverlap({minX:cover.geometry.xMm,minY:cover.geometry.yMm,maxX:cover.geometry.xMm+cover.geometry.widthMm,maxY:cover.geometry.yMm+cover.geometry.heightMm},{minX:component.geometry.xMm,minY:component.geometry.yMm,maxX:component.geometry.xMm+component.geometry.widthMm,maxY:component.geometry.yMm+component.geometry.heightMm})));
+      const defaultContainment=wallSlotContainment(diceCover),defaultFrontSlot=defaultContainment.slots?.find(slot=>slot.role==='front');
+      add('Full-size default Finger cover contains every wall-slot family in base-local coordinates',defaultContainment.all&&Object.values(defaultContainment.families).every(Boolean)&&defaultContainment.footprint?.minX===0&&defaultContainment.footprint?.minY===0&&defaultContainment.footprint?.maxX===226&&defaultContainment.footprint?.maxY===166&&defaultFrontSlot?.geometry.yMm-10===1.5&&defaultFrontSlot?.geometry.yMm-10+defaultFrontSlot?.geometry.heightMm===4.65);
+      const tabSlotCover=buildTrayModel(normalizeDesignDraft(defaultsFor('dice-tray',{jointStyle:'tab-slot',trayBottomCover:true})).values);
+      add('Full-size default two-tab cover contains every wall-slot family in base-local coordinates',wallSlotContainment(tabSlotCover).all&&tabSlotCover.components.filter(component=>component.kind==='base-wall-slot').length===8);
+      const nearMinimumFingerCover=buildTrayModel(normalizeDesignDraft(defaultsFor('dice-tray',{jointStyle:'finger',trayWidth:'42',trayDepth:'48',trayBottomCover:true})).values),nearMinimumTabCover=buildTrayModel(normalizeDesignDraft(defaultsFor('dice-tray',{jointStyle:'tab-slot',trayWidth:'42',trayDepth:'48',trayBottomCover:true})).values);
+      add('Near-minimum Finger cover contains every wall-slot rectangle',nearMinimumFingerCover.valid&&wallSlotContainment(nearMinimumFingerCover).all);
+      add('Near-minimum two-tab cover contains every wall-slot rectangle',nearMinimumTabCover.valid&&wallSlotContainment(nearMinimumTabCover).all);
+      const thinMaterialCover=buildTrayModel(normalizeDesignDraft(defaultsFor('dice-tray',{jointStyle:'finger',materialThickness:'0.1',trayWidth:'48',trayDepth:'48',trayBottomCover:true})).values);
+      add('Thin valid-material cover contains every wall-slot rectangle',thinMaterialCover.valid&&wallSlotContainment(thinMaterialCover).all);
+      add('Dice underside cover SVG remains anonymous red-only and serializes the cover rectangle last',diceCoverResult.valid&&diceCoverResult.svg.endsWith('</svg>\n')&&diceCoverResult.svg.includes('<g fill="none" stroke="#ff0000" stroke-width="0.1">')&&!/<(?:title|metadata|text|g id=|rect id=|path id=|score)/.test(diceCoverResult.svg)&&diceCoverResult.svg.lastIndexOf(`<rect x="${cover.geometry.xMm}" y="${cover.geometry.yMm}" width="${cover.geometry.widthMm}" height="${cover.geometry.heightMm}"/>`)>diceCoverResult.svg.lastIndexOf('<path'));
+      add('Enabled default Dice underside cover SVG is deterministic and pinned after structural checks',diceCoverResult.svg===buildDesignResult(diceCoverDraft).svg&&diceCoverResult.svg.length===1778&&designFixtureHash(diceCoverResult.svg)==='8e2ea3f4','1778/8e2ea3f4',`${diceCoverResult.svg.length}/${designFixtureHash(diceCoverResult.svg)}`);
+      add('Dice underside cover exposes result metrics and physical-limit warnings',diceCoverResult.metrics.bottomCover&&diceCoverResult.metrics.bottomCoverInsetMm===0&&diceCoverResult.metrics.bottomCoverWidthMm===226&&diceCoverResult.metrics.bottomCoverDepthMm===166&&diceCoverResult.metrics.bottomCoverComponentId==='tray-bottom-cover'&&diceCoverResult.metrics.bottomCoverAddedPieceCount===1&&diceCoverResult.warnings.some(message=>/cosmetic only/i.test(message)&&/flush/i.test(message)&&/clean soot/i.test(message)&&/align/i.test(message)&&/first physical tray/i.test(message)));
+      const coverStorageBefore=localStorage.getItem(STORAGE_KEY),coverBackupBefore=JSON.stringify(backupObject()),coverLive=trayLivePreviewDownloadFixture(diceCoverDraft),coverStorageAfter=localStorage.getItem(STORAGE_KEY),coverBackupAfter=JSON.stringify(backupObject());
+      add('Dice underside cover preview download filename MIME storage backup and Finished View remain independent',coverLive.result.valid&&coverLive.previewSvg===diceCoverResult.svg&&coverLive.downloaded===diceCoverResult.svg&&coverLive.filename===`l8-dice-tray-${today()}.svg`&&coverLive.type==='image/svg+xml;charset=utf-8'&&coverStorageBefore===coverStorageAfter&&coverBackupBefore===coverBackupAfter&&!buildDiceTrayFinishedViewSvg(diceCoverResult).includes('tray-bottom-cover'));
       const passed = results.filter(result => result.pass).length, failed = results.length - passed;
       return { passed, failed, results };
     }
@@ -8846,7 +8878,7 @@
             designProductionNotice = '';
             designPreviewMode = 'cut-layout';
           }
-          if (['template','couponType','boxDimensionMode','slidingDimensionMode','lidPull','slidingGuideMarks','slidingFitCoupon','drawerShelfGuides','assemblyLabels'].includes(e.target.name)) render();
+          if (['template','couponType','boxDimensionMode','slidingDimensionMode','lidPull','slidingGuideMarks','slidingFitCoupon','drawerShelfGuides','trayBottomCover','assemblyLabels'].includes(e.target.name)) render();
           else refreshDesignPreview();
         };
       }
