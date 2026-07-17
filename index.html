@@ -363,6 +363,7 @@
     const state = loadState();
     let activeGridId = null;
     let activeCellKey = null;
+    let editingGridId = null;
     let editingEntryId = null;
     let editingProfileId = null;
     let profileDraftTests = [];
@@ -1417,7 +1418,7 @@
       const otherType = operation.key === 'other' ? ` / Raw job type: ${esc(grid.jobType || 'Unspecified')}` : '';
       const dither = operation.key === 'photo' ? metric('Dither mode', grid.ditherMode || '-') : '';
       const capped = completion.truncated ? '<div class="small" style="margin-top:8px"><span class="pill warn">range capped</span> Power or speed ranges are limited to 60 steps.</div>' : '';
-      return `<div class="panel nested-browser-detail"><div class="spread"><div><b>${esc(String(grid.name || '').trim() || 'Untitled Test Grid')}</b><div class="small muted">${esc(grid.material || 'Unspecified material')} / ${esc(fmt(grid.thicknessValue, grid.thicknessUnit))} / ${esc(operation.label)}${otherType} / ${esc(validGridDate(grid.createdDate) || 'No date')}</div></div><span class="pill">${esc(completion.status)}</span></div>${browserHiddenSelectionNotice(hidden, 'Test Grid')}${materialSafetyWarningHtml(grid.material)}<div class="metrics">${metric('Recorded', `${completion.recorded}/${completion.total}`)}${metric('Matrix', `${completion.powers.length}x${completion.speeds.length}`)}${metric('Power range', `${grid.powerMin ?? '-'}-${grid.powerMax ?? '-'}% / step ${grid.powerStep ?? '-'}`)}${metric('Speed range', `${grid.speedMin ?? '-'}-${grid.speedMax ?? '-'} mm/min / step ${grid.speedStep ?? '-'}`)}${metric('Passes', grid.passes || 1)}${metric('Line interval', fmt(grid.lineInterval, 'mm'))}${metric('Air assist', grid.airAssist ? 'On' : 'Off')}${metric('Air pressure', grid.airPressure === '' || grid.airPressure == null ? '-' : `${grid.airPressure} psi`)}${dither}${metric('Software', grid.software || '-')}</div>${capped}<hr>${gridBestCellsHtml(grid)}<hr><b>Completed Library Material Test promotions</b>${gridPromotionHistoryHtml(grid)}<div class="actions"><button type="button" class="primary" data-grid-browser-open="${esc(grid.id)}">Open Matrix</button><button type="button" data-grid-browser-export="${esc(grid.id)}">Export CSV</button></div></div>`;
+      return `<div class="panel nested-browser-detail"><div class="spread"><div><b>${esc(String(grid.name || '').trim() || 'Untitled Test Grid')}</b><div class="small muted">${esc(grid.material || 'Unspecified material')} / ${esc(fmt(grid.thicknessValue, grid.thicknessUnit))} / ${esc(operation.label)}${otherType} / ${esc(validGridDate(grid.createdDate) || 'No date')}</div><div class="small muted">Machine: ${esc(gridMachineLabel(grid.machine))}</div></div><span class="pill">${esc(completion.status)}</span></div>${browserHiddenSelectionNotice(hidden, 'Test Grid')}${materialSafetyWarningHtml(grid.material)}<div class="metrics">${metric('Recorded', `${completion.recorded}/${completion.total}`)}${metric('Matrix', `${completion.powers.length}x${completion.speeds.length}`)}${metric('Power range', `${grid.powerMin ?? '-'}-${grid.powerMax ?? '-'}% / step ${grid.powerStep ?? '-'}`)}${metric('Speed range', `${grid.speedMin ?? '-'}-${grid.speedMax ?? '-'} mm/min / step ${grid.speedStep ?? '-'}`)}${metric('Passes', grid.passes || 1)}${metric('Line interval', fmt(grid.lineInterval, 'mm'))}${metric('Air assist', grid.airAssist ? 'On' : 'Off')}${metric('Air pressure', grid.airPressure === '' || grid.airPressure == null ? '-' : `${grid.airPressure} psi`)}${dither}${metric('Software', grid.software || '-')}</div>${capped}<hr>${gridBestCellsHtml(grid)}<hr><b>Completed Library Material Test promotions</b>${gridPromotionHistoryHtml(grid)}<div class="actions"><button type="button" class="primary" data-grid-browser-open="${esc(grid.id)}">Open Matrix</button><button type="button" data-grid-browser-export="${esc(grid.id)}">Export CSV</button><button type="button" data-edit-grid="${esc(grid.id)}">Edit machine / grid</button></div></div>`;
     }
     function gridBrowserResultsHtml(filtered = gridViewData()) {
       const tree = buildGridBrowserTree(filtered);
@@ -1434,6 +1435,7 @@
     function gridResultCountText(filtered) { return `Showing ${filtered.length} of ${state.grids.length} Test Grid${state.grids.length === 1 ? '' : 's'}`; }
     function bindGridResultActions(root) {
       root.querySelectorAll('[data-open-grid]').forEach(card => card.onclick = () => { activeGridId = card.dataset.openGrid; gridBrowserSelectedId = activeGridId; render(); });
+      root.querySelectorAll('[data-edit-grid]').forEach(button => button.onclick = event => { event.stopPropagation(); openGridForm(state.grids.find(item => item.id === button.dataset.editGrid)); });
       bindBrowserTreeActions(root, {
         select: id => { gridBrowserSelectedId = id; refreshGridBrowserResults(); },
         toggle: (key, open) => { open ? gridBrowserExpanded.add(key) : gridBrowserExpanded.delete(key); }
@@ -5723,6 +5725,31 @@
       const [power, speed] = String(cellKey || '').split('_').map(Number);
       return { power: Number.isFinite(power) ? power : '', speed: Number.isFinite(speed) ? speed : '' };
     }
+    function gridMachineSnapshot(machine) {
+      if (!machine || typeof machine !== 'object') return null;
+      const key = String(machine.key || '').trim().toLowerCase();
+      const label = String(machine.label || '').trim();
+      if (!key && !label) return null;
+      if (!productionMachineKeys.includes(key)) return null;
+      if (key === 'custom' && !label) return null;
+      return { key, label: label || productionMachineDefaultLabel(key) };
+    }
+    function activeMachineSnapshot(active = state.machineProfile) {
+      if (active && typeof active === 'object') return gridMachineSnapshot(active);
+      const key = active === '40W' ? 'genmitsu-l8-40w' : 'genmitsu-l8-20w';
+      return gridMachineSnapshot({ key, label: productionMachineDefaultLabel(key) });
+    }
+    function gridMachineLabel(machine) {
+      return gridMachineSnapshot(machine)?.label || 'Not recorded';
+    }
+    function normalizeTestGrid(grid) {
+      if (!grid || typeof grid !== 'object') return null;
+      const next = { ...grid };
+      const machine = gridMachineSnapshot(grid.machine);
+      if (machine) next.machine = machine;
+      else delete next.machine;
+      return next;
+    }
     function buildGridCellMaterialTestRecord(grid, cellKey, cell, machine) {
       const values = gridCellValues(cell);
       const settings = gridCellSettingsFromKey(cellKey);
@@ -5731,7 +5758,7 @@
       const markedBest = values.best ? 'Marked best: yes.' : 'Marked best: no.';
       const notes = [`Source Test Grid: ${grid.name || 'Untitled grid'}`, `Cell: ${settings.power}% / ${settings.speed} mm/min`, `Rating: ${values.rating}/5.`, markedBest, grid.software ? `Software: ${grid.software}.` : '', grid.ditherMode ? `Dither mode: ${grid.ditherMode}.` : '', values.notes ? `Cell notes: ${values.notes}` : ''].filter(Boolean).join('\n');
       return normalizeMaterialTests([{
-        id: uid(), date: /^\d{4}-\d{2}-\d{2}$/.test(String(grid.createdDate || '')) ? grid.createdDate : today(), machine: machine || '', testType: gridTestTypeFromGrid(grid), status: values.best && values.rating >= 4 ? 'recommended' : 'experimental', notes,
+        id: uid(), date: /^\d{4}-\d{2}-\d{2}$/.test(String(grid.createdDate || '')) ? grid.createdDate : today(), machine: typeof machine === 'object' ? machine.label : machine || '', machineKey: typeof machine === 'object' ? machine.key : '', testType: gridTestTypeFromGrid(grid), status: values.best && values.rating >= 4 ? 'recommended' : 'experimental', notes,
         winningSpeed: settings.speed, winningPower: settings.power, winningInterval: grid.lineInterval === '' || grid.lineInterval == null ? '' : num(grid.lineInterval), winningPasses: Math.max(1, Math.round(num(grid.passes, 1))), airAssist: !!grid.airAssist, confidence,
         attachments: [], overallResult, observedTraits: [], resultSummary: values.notes, winnerLocation: '', winnerComment: '', intendedOperation: gridIntendedOperationFromGrid(grid), adaptiveMode: '', optimizationGoal: '', recommendationRationale: '', baselineSource: '', baselineLabel: '', baselineTestId: '',
         sourceKind: 'test-grid', sourceGridId: grid.id || '', sourceCellKey: String(cellKey || ''), sourceGridName: grid.name || ''
@@ -6313,6 +6340,76 @@
       return { passed, failed, results };
     }
     window.runGridPromotionFixtures = runGridPromotionFixtures;
+    function runTestGridMachineIdentityFixtures() {
+      const results = [], add = (name, pass, expected = '', actual = '') => results.push({ name, pass: !!pass, expected, actual }), originalGrids = state.grids, originalMachine = state.machineProfile, storageBefore = localStorage.getItem(STORAGE_KEY), confirmBefore = window.confirm, alertBefore = window.alert;
+      const submitGridForm = (form, values = {}) => { Object.entries(values).forEach(([key, value]) => { if (form.elements[key]) { if (form.elements[key].type === 'checkbox') form.elements[key].checked = !!value; else form.elements[key].value = value; } }); form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); };
+      try {
+        window.confirm = () => true; window.alert = () => {};
+        state.grids = [];
+        state.machineProfile = '20W';
+        openGridForm();
+        add('New Grid form displays active L8 20W identity', document.getElementById('gridMachineSummary')?.textContent === 'Machine: Genmitsu L8 20W');
+        submitGridForm(document.getElementById('gridForm'), { name: '20W Grid', material: 'Basswood' });
+        const grid20 = state.grids[0];
+        add('New Grid stores active L8 20W identity', grid20.machine?.key === 'genmitsu-l8-20w' && grid20.machine.label === 'Genmitsu L8 20W');
+        state.machineProfile = '40W';
+        openGridForm();
+        submitGridForm(document.getElementById('gridForm'), { name: '40W Grid', material: 'Basswood' });
+        const grid40 = state.grids[0];
+        add('New Grid stores active L8 40W identity', grid40.machine?.key === 'genmitsu-l8-40w' && grid40.machine.label === 'Genmitsu L8 40W');
+        openGridForm();
+        submitGridForm(document.getElementById('gridForm'), { name: 'Custom Grid', material: 'Basswood', machineAction: 'custom', machineLabel: 'Joe custom diode' });
+        const custom = state.grids[0];
+        add('Explicit custom Grid override preserves exact identity', custom.machine?.key === 'custom' && custom.machine.label === 'Joe custom diode');
+        state.machineProfile = '20W';
+        add('Global machine change does not rewrite stored Grids', grid20.machine.label === 'Genmitsu L8 20W' && grid40.machine.label === 'Genmitsu L8 40W' && custom.machine.label === 'Joe custom diode');
+        const beforeEdit = JSON.stringify(grid20);
+        openGridForm(grid20);
+        submitGridForm(document.getElementById('gridForm'), { name: '20W Grid Renamed' });
+        const edited = state.grids.find(item => item.id === grid20.id);
+        add('Unrelated Grid edit preserves stored machine', edited.name === '20W Grid Renamed' && edited.machine.key === 'genmitsu-l8-20w');
+        openGridForm(edited);
+        submitGridForm(document.getElementById('gridForm'), { machineAction: '40W' });
+        const changed = state.grids.find(item => item.id === grid20.id), other = state.grids.find(item => item.id === grid40.id);
+        add('Explicit machine change affects only selected Grid', changed.machine.key === 'genmitsu-l8-40w' && other.machine.key === 'genmitsu-l8-40w' && other.id !== changed.id);
+        const old = { id: 'old-grid', name: 'Old Grid', material: 'Basswood', createdDate: '2026-07-10', jobType: 'cut', powerMin: 40, powerMax: 40, powerStep: 10, speedMin: 300, speedMax: 300, speedStep: 100, passes: 1, lineInterval: '', airAssist: false, airPressure: '', ditherMode: 'none', software: 'LightBurn', cells: { '40_300': { rating: 5, best: true, notes: 'clean', future: 'keep' } }, futureGridField: 'preserve' };
+        state.grids = [old, changed, other, custom];
+        openGridForm(old);
+        add('Old machine-less Grid displays missing identity', document.getElementById('gridMachineSummary')?.textContent === 'Machine: Not recorded');
+        submitGridForm(document.getElementById('gridForm'), { machineAction: 'active' });
+        const assigned = state.grids.find(item => item.id === old.id);
+        add('Assign active machine updates only the old Grid', assigned.machine?.key === 'genmitsu-l8-20w' && state.grids.filter(item => item.id !== old.id).every(item => item.machine));
+        add('Assigning machine preserves cells and unknown fields', assigned.cells['40_300'].notes === 'clean' && assigned.cells['40_300'].future === 'keep' && assigned.futureGridField === 'preserve' && assigned.id === 'old-grid' && assigned.createdDate === '2026-07-10');
+        state.machineProfile = '40W';
+        const storedGrid = { ...assigned, machine: { key: 'genmitsu-l8-20w', label: 'Genmitsu L8 20W' }, cells: { '40_300': { rating: 5, best: true, notes: 'clean' } } };
+        state.grids = [storedGrid];
+        const sourceBefore = JSON.stringify(storedGrid);
+        const candidate = buildGridPromotionCandidate(storedGrid, '40_300', storedGrid.cells['40_300']);
+        add('Selected-cell promotion uses stored Grid machine', candidate.machine.key === 'genmitsu-l8-20w' && candidate.machine.label === 'Genmitsu L8 20W');
+        startPromotion(candidate);
+        add('Promotion review displays stored machine', document.getElementById('productionEvidenceModal')?.textContent.includes('Genmitsu L8 20W'));
+        cancelPromotion();
+        add('Opening promotion does not mutate source Grid', JSON.stringify(storedGrid) === sourceBefore);
+        const test = buildGridCellMaterialTestRecord(storedGrid, '40_300', storedGrid.cells['40_300'], storedGrid.machine);
+        add('Grid to Material Test bridge stores key and label', test.machine === 'Genmitsu L8 20W' && test.machineKey === 'genmitsu-l8-20w');
+        const missing = { ...storedGrid, id: 'missing-grid', machine: undefined };
+        state.grids = [missing];
+        activeGridId = missing.id;
+        openCell('40_300');
+        document.getElementById('cellToLibrary').click();
+        add('Machine-less Grid bridge does not substitute active machine', !pendingGridPromotion && document.body.textContent.includes('Machine not recorded'));
+        closeModal('cellModal');
+        const backup = backupObject();
+        replaceData(backup);
+        add('Replace import retains Grid machine snapshot', state.grids.find(item => item.id === 'missing-grid')?.machine === undefined);
+        mergeData({ grids: [storedGrid] });
+        add('Merge import retains Grid machine snapshot', state.grids.find(item => item.id === storedGrid.id)?.machine?.key === 'genmitsu-l8-20w');
+        add('Machine normalization preserves unknown Grid fields', state.grids.find(item => item.id === storedGrid.id)?.cells['40_300'].notes === 'clean');
+      } finally { window.confirm = confirmBefore; window.alert = alertBefore; state.grids = originalGrids; state.machineProfile = originalMachine; localStorage.setItem(STORAGE_KEY, storageBefore || ''); closeModal('gridModal'); closeModal('cellModal'); cancelPromotion(); }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Test Grid machine identity fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd(); return { passed, failed, results };
+    }
+    window.runTestGridMachineIdentityFixtures = runTestGridMachineIdentityFixtures;
     function runWizardMetadataFixtures() {
       const baseline = { source: 'latest', sourceLabel: 'Most recently saved winner', label: 'Most recently saved winner', test: { id: 'baseline-test-1' } };
       const draft = () => ({ date: '2026-07-12', machine: 'Genmitsu L8 20W', intendedOperation: 'engrave_vector', adaptiveMode: 'auto', optimizationGoal: 'Best overall', testFocus: 'material', notes: 'Fixture notes', plan: { baseline, adaptiveMode: 'refine', rationale: 'Stay near the known winner.', intervalSpeed: 18000, intervalPower: 55, intervalMin: .08, intervalMax: .14, intervalSteps: 7, intervalSize: 10, intervalFillMode: 'simple_fill', intervalAirAssist: false, focusGuidance: 'Surface focus.', verticalCount: 7, verticalParameter: 'Speed', verticalMin: 14000, verticalMax: 22000, verticalHeight: 10, horizontalCount: 7, horizontalParameter: 'Power', horizontalMin: 40, horizontalMax: 70, horizontalWidth: 10, materialMode: 'Fill', lineInterval: .10, passes: 1, scanAngle: 0, bidirectionalFill: true, overscanning: 2.5, airAssist: false, constantPowerMode: true, zOffset: 0, textSpeed: 18000, textPower: 55, textMode: 'Fill', textPasses: 1, borderEnabled: true, borderSetting: 'Frame', title: 'Fixture test' }, results: { status: 'recommended', winningSpeed: '18000', winningPower: '55', winningInterval: '.10', winningPasses: '1', airAssist: false, confidence: 5, overallResult: 'Excellent', observedTraits: ['Clean', 'Crisp detail'], winnerLocation: 'Row 3, Column 4', winnerComment: 'Best balance', resultSummary: 'Clean and crisp' } });
@@ -8008,8 +8105,10 @@
       const completion = gridCompletion(g);
       return `<article class="card" data-open-grid="${g.id}" style="cursor:pointer">
         <b>${esc(g.name)}</b><div class="small muted">${esc(g.material)} - ${fmt(g.thicknessValue, g.thicknessUnit)} - ${esc(g.createdDate)}</div>
+        <div class="small muted" style="margin-top:6px">Machine: ${esc(gridMachineLabel(g.machine))}</div>
         ${materialSafetyWarningHtml(g.material)}
         <div class="row" style="margin-top:10px"><span class="pill">${completion.powers.length}x${completion.speeds.length} grid</span><span class="pill">${completion.recorded}/${completion.total} recorded</span>${completion.truncated ? '<span class="pill warn">range capped</span>' : ''}</div>
+        <div class="actions"><button type="button" data-edit-grid="${g.id}">Edit machine / grid</button></div>
       </article>`;
     }
     function metric(label, value) { return `<div class="metric"><b>${esc(label)}</b>${esc(value)}</div>`; }
@@ -8095,7 +8194,7 @@
       const powers = range(g.powerMin, g.powerMax, g.powerStep);
       const speeds = range(g.speedMin, g.speedMax, g.speedStep);
       const truncated = rangeIsTruncated(g.powerMin, g.powerMax, g.powerStep) || rangeIsTruncated(g.speedMin, g.speedMax, g.speedStep);
-      let html = `<div class="toolbar" style="margin-bottom:12px"><div class="row"><button id="backGrids">Back</button><div><b>${esc(g.name)}</b><div class="small muted">${esc(g.material)} - ${fmt(g.thicknessValue, g.thicknessUnit)} - ${esc(g.jobType)} - ${g.passes} pass(es)</div></div></div><div class="row"><button id="exportGridCsv">Export CSV</button><button class="danger" id="deleteGrid">Delete grid</button></div></div>`;
+      let html = `<div class="toolbar" style="margin-bottom:12px"><div class="row"><button id="backGrids">Back</button><div><b>${esc(g.name)}</b><div class="small muted">${esc(g.material)} - ${fmt(g.thicknessValue, g.thicknessUnit)} - ${esc(g.jobType)} - ${g.passes} pass(es)</div><div class="small muted">Machine: ${esc(gridMachineLabel(g.machine))}</div></div></div><div class="row"><button id="editGrid">Edit</button><button id="exportGridCsv">Export CSV</button><button class="danger" id="deleteGrid">Delete grid</button></div></div>`;
       if (truncated) html += '<div class="panel" style="margin-bottom:12px;background:#fff8e7;border-color:#ead59f"><b>Grid range capped.</b> <span class="small">Power or speed ranges are limited to 60 steps to keep the browser responsive. Increase the step size or narrow the range to test every value.</span></div>';
       html += '<div class="grid-table"><div class="matrix" style="grid-template-columns:70px ' + speeds.map(() => '76px').join(' ') + '">';
       html += '<div></div>' + speeds.map(s => `<div class="axis">${s}<br>mm/min</div>`).join('');
@@ -8270,6 +8369,8 @@
       if (resetDesign) resetDesign.onclick = () => { resetDesignWorkspaceSession(); render(); };
       const back = document.getElementById('backGrids');
       if (back) back.onclick = () => { activeGridId = null; render(); };
+      const editGrid = document.getElementById('editGrid');
+      if (editGrid) editGrid.onclick = () => openGridForm(state.grids.find(item => item.id === activeGridId));
       const delGrid = document.getElementById('deleteGrid');
       if (delGrid) delGrid.onclick = deleteActiveGrid;
       const exportGridCsv = document.getElementById('exportGridCsv');
@@ -9274,12 +9375,31 @@
       render();
       showInfoToast(`Added ${starters.length} starter material${starters.length === 1 ? '' : 's'}.`);
     }
-    function openGridForm() {
-      const data = formDefaults('grid');
-      openModal('gridModal', `<div class="dialog"><div class="spread"><h2>New test grid</h2><button data-close>&times;</button></div><form id="gridForm" class="formgrid">
+    function gridMachineFromForm(form, existing) {
+      const action = form.elements.machineAction?.value || (existing?.machine ? 'keep' : '');
+      if (action === 'keep') return gridMachineSnapshot(existing?.machine);
+      if (action === 'active') return activeMachineSnapshot();
+      if (action === '20W') return activeMachineSnapshot('20W');
+      if (action === '40W') return activeMachineSnapshot('40W');
+      if (action === 'custom') return gridMachineSnapshot({ key: 'custom', label: form.elements.machineLabel?.value });
+      return null;
+    }
+    function gridMachineControls(existing) {
+      const recorded = gridMachineSnapshot(existing?.machine), isNew = !existing;
+      const action = isNew ? 'active' : recorded ? 'keep' : '';
+      const options = isNew
+        ? `<option value="active" selected>Use active machine</option>`
+        : `<option value="" ${!recorded ? 'selected' : ''}>Leave not recorded</option><option value="keep" ${recorded ? 'selected' : ''}>Keep recorded machine</option><option value="active">Assign active machine</option>`;
+      return `<div class="span2 panel"><b>Machine</b><div id="gridMachineSummary" class="small muted" style="margin-top:6px">Machine: ${esc(recorded?.label || (isNew ? activeMachineSnapshot().label : 'Not recorded'))}</div><details style="margin-top:7px"><summary>${isNew ? 'Advanced machine choice' : 'Change machine'}</summary><select name="machineAction" style="margin-top:7px">${options}<option value="20W">Use Genmitsu L8 20W</option><option value="40W">Use Genmitsu L8 40W</option><option value="custom">Use custom machine</option></select>${field('machineLabel','Custom machine label',recorded?.key === 'custom' ? recorded.label : '')}<div class="small muted">The selected machine is stored with this Grid and is not replaced by the global preference later.</div></details></div>`;
+    }
+    function openGridForm(grid = null) {
+      editingGridId = grid?.id || null;
+      const data = { ...formDefaults('grid'), ...(grid || {}) };
+      const existing = grid ? normalizeTestGrid(grid) : null;
+      openModal('gridModal', `<div class="dialog"><div class="spread"><h2>${editingGridId ? 'Edit test grid' : 'New test grid'}</h2><button data-close>&times;</button></div><form id="gridForm" class="formgrid">
         ${field('name','Grid name',data.name,'text','','Name for this material test matrix.')}${select('jobType','Job type',data.jobType,['engrave','cut'],'Cut goes through material; engrave marks the surface.')}
-        ${materialFieldHtml('')}
-        ${materialSafetyFieldHelp('')}
+        ${materialFieldHtml(data.material)}
+        ${materialSafetyFieldHelp(data.material)}
         ${unitField('thicknessValue','thicknessUnit','Thickness',data.thicknessValue,data.thicknessUnit,'Actual material thickness; important for cutting and focus.')}
         ${field('passes','Passes',data.passes,'number','min="1"','How many times the laser repeats each test cell.')}
         ${field('powerMin','Power min (%)',data.powerMin,'number','','Lowest laser power to test.')}
@@ -9290,35 +9410,50 @@
         ${field('speedStep','Speed step',data.speedStep,'number','','How much speed changes between grid cells.')}
         ${field('lineInterval','Line interval, mm',data.lineInterval,'number','step="any"','Distance between engraving scan lines; smaller is finer/darker but slower.')}
         ${select('ditherMode','Dither mode',data.ditherMode,ditherModes,'Dot pattern method for photo or grayscale engraving.')}
-        <label class="row" style="margin-top:20px"><input name="airAssist" type="checkbox" style="width:auto"> Air assist on ${help('Airflow at the cut; helps reduce flame and charring.')}</label>
+        <label class="row" style="margin-top:20px"><input name="airAssist" type="checkbox" ${data.airAssist ? 'checked' : ''} style="width:auto"> Air assist on ${help('Airflow at the cut; helps reduce flame and charring.')}</label>
         ${field('airPressure','Air pressure (psi)',data.airPressure,'number','step="any"','Rough airflow strength when air assist is on.')}
         <label>${labelText('Software', 'Program used for the grid, such as LightBurn.')}<input name="software" value="${esc(data.software)}" list="software"></label>
+        ${gridMachineControls(existing)}
         <datalist id="software">${softwareList.map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>
-        <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Create grid</button></div></form></div>`);
+        <div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">${editingGridId ? 'Save grid' : 'Create grid'}</button></div></form></div>`);
       bindModal('gridModal');
-      bindMaterialSuggestions(document.getElementById('gridForm'));
-      document.getElementById('gridForm').oninput = e => bindMaterialSafetyWarning(e.currentTarget);
-      document.getElementById('gridForm').onsubmit = e => {
+      const gridForm = document.getElementById('gridForm');
+      gridForm.elements.material.value = data.material || '';
+      gridForm.elements.thicknessValue.value = data.thicknessValue ?? '';
+      gridForm.elements.thicknessUnit.value = data.thicknessUnit || state.unit;
+      gridForm.elements.passes.value = data.passes ?? 1;
+      gridForm.elements.airAssist.checked = !!data.airAssist;
+      bindMaterialSuggestions(gridForm);
+      gridForm.oninput = e => { bindMaterialSafetyWarning(e.currentTarget); const summary = document.getElementById('gridMachineSummary'); if (summary) summary.textContent = `Machine: ${gridMachineLabel(gridMachineFromForm(e.currentTarget, existing))}`; };
+      gridForm.onchange = gridForm.oninput;
+      gridForm.onsubmit = e => {
         e.preventDefault();
         const f = readForm(e.target);
         if (!f.name.trim() || !f.material.trim()) return alert('Give the grid a name and a material.');
+        const machine = gridMachineFromForm(e.target, existing);
+        if (!machine && (e.target.elements.machineAction?.value === 'active' || e.target.elements.machineAction?.value === 'custom')) return alert('Choose a valid machine identity before saving.');
+        if (existing && !existing.machine && machine && !confirm(`Assign ${machine.label} to this Grid?`)) return;
         const grid = {
-          id: uid(), name: f.name.trim(), material: f.material.trim(), createdDate: today(), jobType: f.jobType,
+          ...(existing || {}), id: existing?.id || uid(), name: f.name.trim(), material: f.material.trim(), createdDate: existing?.createdDate || today(), updatedDate: today(), jobType: f.jobType,
           thicknessValue: f.thicknessValue === '' ? '' : num(f.thicknessValue), thicknessUnit: f.thicknessUnit,
           powerMin: num(f.powerMin), powerMax: num(f.powerMax), powerStep: num(f.powerStep, 10),
           speedMin: num(f.speedMin), speedMax: num(f.speedMax), speedStep: num(f.speedStep, 100),
           passes: Math.max(1, Math.round(num(f.passes, 1))), lineInterval: f.lineInterval === '' ? '' : num(f.lineInterval),
           airAssist: !!f.airAssist, airPressure: f.airPressure === '' ? '' : num(f.airPressure), ditherMode: f.ditherMode,
-          software: (f.software || '').trim(), cells: {}
+          software: (f.software || '').trim(), cells: existing?.cells || {}
         };
-        state.grids.unshift(grid); gridBrowserSelectedId = grid.id; activeGridId = grid.id; persist(); closeModal('gridModal'); render();
+        if (machine) grid.machine = machine; else delete grid.machine;
+        const index = state.grids.findIndex(item => item.id === grid.id), previous = index >= 0 ? state.grids[index] : null;
+        if (index >= 0) state.grids[index] = grid; else state.grids.unshift(grid);
+        if (!persist()) { if (index >= 0) state.grids[index] = previous; else state.grids.shift(); return; }
+        gridBrowserSelectedId = grid.id; activeGridId = grid.id; closeModal('gridModal'); render();
       };
     }
     function openCell(key) {
       activeCellKey = key;
       const g = state.grids.find(x => x.id === activeGridId);
       const existing = (g.cells || {})[key] || { rating: 0, notes: '', best: false };
-      openModal('cellModal', `<div class="dialog" style="max-width:420px"><div class="spread"><h2>${esc(key.replace('_', '% - '))} mm/min</h2><button data-close>&times;</button></div><form id="cellForm" class="grid">
+      openModal('cellModal', `<div class="dialog" style="max-width:420px"><div class="spread"><h2>${esc(key.replace('_', '% - '))} mm/min</h2><button data-close>&times;</button></div><div class="small muted" style="margin-bottom:8px">Machine: ${esc(gridMachineLabel(g.machine))}</div>${!g.machine ? '<div class="small" style="margin-bottom:8px"><span class="pill warn">Machine not recorded</span> Edit this Grid and assign a machine before saving a Material Test or promoting machine-dependent values.</div>' : ''}<form id="cellForm" class="grid">
         <label>${labelText('Rating', 'Score this power/speed result from unusable to excellent.')}<select name="rating">${[0,1,2,3,4,5].map(n => `<option value="${n}" ${n === existing.rating ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
         <label class="row"><input type="checkbox" name="best" ${existing.best ? 'checked' : ''} style="width:auto"> Mark as best setting ${help('Marks this cell as the winner for the material test.')}</label>
         <label>${labelText('Notes', 'What happened in this cell: cut through, scorch, weak mark, good result, etc.')}<textarea name="notes" rows="3">${esc(existing.notes)}</textarea></label>
@@ -9846,11 +9981,12 @@
       if (!g || !activeCellKey) return;
       const form = document.getElementById('cellForm');
       const cell = gridCellValues(form ? { rating: form.elements.rating?.value, best: form.elements.best?.checked, notes: form.elements.notes?.value } : g.cells?.[activeCellKey]);
+      if (!g.machine) return alert('This Grid has no recorded machine. Edit the Grid and assign a machine before saving a Material Test.');
       if (!saveGridCellValues(g, activeCellKey, cell)) return;
       const { power, speed } = gridCellSettingsFromKey(activeCellKey);
       const grid = { id: g.id, name: g.name, material: g.material, thicknessValue: g.thicknessValue, thicknessUnit: g.thicknessUnit, createdDate: g.createdDate, jobType: g.jobType, passes: g.passes, lineInterval: g.lineInterval, airAssist: g.airAssist, airPressure: g.airPressure, software: g.software, ditherMode: g.ditherMode, machine: promotionClone(g.machine) };
       const requested = !!form?.elements.recordMaterialTest?.checked;
-      pendingGridPromotion = { grid, cellKey: activeCellKey, cell, machine: wizardMachineLabel(), recordTest: requested };
+      pendingGridPromotion = { grid, cellKey: activeCellKey, cell, machine: promotionClone(grid.machine), recordTest: requested };
       closeModal('cellModal');
       render();
       openProfile({
@@ -9934,6 +10070,7 @@
     if (selftest === 'promotion' || selftest === 'all') runEvidencePromotionFixtures();
     if (selftest === 'design-production' || selftest === 'all') runDesignProductionSettingsFixtures();
     if (selftest === 'grid' || selftest === 'all') runGridPromotionFixtures();
+    if (selftest === 'grid-machine' || selftest === 'all') runTestGridMachineIdentityFixtures();
     if (selftest === 'grid-browser' || selftest === 'all') runGridBrowserFixtures();
     if (selftest === 'materials' || selftest === 'all') window.runMaterialBrowserFixtures();
     if (selftest === 'library-browser' || selftest === 'all') runLibraryBrowserFixtures();
