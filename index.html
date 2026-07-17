@@ -1930,32 +1930,6 @@
       const safeInset = Math.min(inset, width / 2 - hole, height / 2 - hole);
       return designSvgDocument(width + margin * 2, height + margin * 2, [`<rect x="${margin}" y="${margin}" width="${width}" height="${height}" rx="${radius}" ry="${radius}"/>`, `<circle cx="${margin + safeInset}" cy="${margin + safeInset}" r="${hole / 2}"/>`, `<circle cx="${margin + width - safeInset}" cy="${margin + safeInset}" r="${hole / 2}"/>`]);
     }
-    function designTraySvg(d) {
-      const thickness = designNumber(d.materialThickness, 3, .1), clearance = designNumber(d.fitClearance, .15, 0), insideWidth = designNumber(d.trayWidth, 220, 20), insideDepth = designNumber(d.trayDepth, 160, 20), wallHeight = designNumber(d.trayHeight, 35, 10), outerWidth = insideWidth + thickness * 2, outerDepth = insideDepth + thickness * 2, slotWidth = thickness + clearance, tabCount = d.jointStyle === 'finger' ? 4 : 2, tabWidth = Math.max(8, Math.min(16, insideWidth / (tabCount * 2))), margin = 10, gap = 15;
-      const shapes = [`<rect x="${margin}" y="${margin}" width="${outerWidth}" height="${outerDepth}"/>`];
-      const addSlots = (length, count, tab, horizontal, offsetX, offsetY) => designTabPositions(length, count, tab).forEach(position => shapes.push(horizontal ? `<rect x="${offsetX + position}" y="${offsetY}" width="${tab}" height="${slotWidth}"/>` : `<rect x="${offsetX}" y="${offsetY + position}" width="${slotWidth}" height="${tab}"/>`));
-      addSlots(outerWidth, tabCount, tabWidth, true, margin, margin + thickness / 2);
-      addSlots(outerWidth, tabCount, tabWidth, true, margin, margin + outerDepth - thickness / 2 - slotWidth);
-      addSlots(insideDepth, tabCount, Math.max(8, Math.min(16, insideDepth / (tabCount * 2))), false, margin + thickness / 2, margin + thickness);
-      addSlots(insideDepth, tabCount, Math.max(8, Math.min(16, insideDepth / (tabCount * 2))), false, margin + outerWidth - thickness / 2 - slotWidth, margin + thickness);
-      const wallY = margin + outerDepth + gap;
-      shapes.push(`<path d="${designWallPath(margin, wallY, outerWidth, wallHeight, tabCount, tabWidth, thickness)}"/>`);
-      shapes.push(`<path d="${designWallPath(margin, wallY + wallHeight + thickness + gap, outerWidth, wallHeight, tabCount, tabWidth, thickness)}"/>`);
-      const sideTab = Math.max(8, Math.min(16, insideDepth / (tabCount * 2)));
-      const sideX = margin + outerWidth + gap;
-      shapes.push(`<path d="${designWallPath(sideX, wallY, insideDepth, wallHeight, tabCount, sideTab, thickness)}"/>`);
-      shapes.push(`<path d="${designWallPath(sideX, wallY + wallHeight + thickness + gap, insideDepth, wallHeight, tabCount, sideTab, thickness)}"/>`);
-      if (d.template === 'divider-tray') {
-        const dividerCount = Math.max(1, Math.min(6, Math.round(designNumber(d.dividerCount, 2, 1))));
-        for (let index = 0; index < dividerCount; index++) {
-          const slotY = margin + thickness + (insideDepth * (index + 1) / (dividerCount + 1)) - slotWidth / 2;
-          shapes.push(`<rect x="${margin + thickness}" y="${slotY}" width="${insideWidth}" height="${slotWidth}"/>`);
-          shapes.push(`<rect x="${sideX + insideDepth + gap}" y="${wallY + index * (wallHeight + gap)}" width="${insideWidth}" height="${wallHeight}"/>`);
-        }
-      }
-      const dividerWidth = d.template === 'divider-tray' ? insideWidth + gap : 0;
-      return designSvgDocument(Math.max(sideX + insideDepth + dividerWidth + margin, outerWidth + margin * 2), wallY + (wallHeight + thickness + gap) * Math.max(2, d.template === 'divider-tray' ? Math.max(2, Number(d.dividerCount) || 2) : 2) + margin, shapes);
-    }
     function trayTabProfile(lengthMm, jointStyle) {
       const count = jointStyle === 'finger' ? 4 : 2;
       return { count, widthMm:Math.max(8, Math.min(16, lengthMm / (count * 2))), lengthMm };
@@ -2041,7 +2015,6 @@
     }
     function legacyDesignSvg(d) {
       if (d.template === 'hanging-sign') return designHangingSignSvg(d);
-      if (d.template === 'dice-tray' || d.template === 'divider-tray') return designTraySvg(d);
       return designStandSvg(d);
     }
     function designRequiredNumber(draft, key, label, errors, minimum, inclusive = false) {
@@ -2980,6 +2953,14 @@
       const errors = [...new Set([...normalized.errors, ...validation.errors])];
       return { valid:!errors.length, errors, warnings:normalized.warnings, svg:errors.length ? '' : svg, widthMm:validation.widthMm, heightMm:validation.heightMm, panels:validation.elements.map((item,index)=>({name:`Shape ${index+1}`,bounds:item.bounds})), metrics:{template:normalized.template}, validation };
     }
+    function buildTrayDesignResult(normalized) {
+      validateLegacyDesign(normalized);
+      if (normalized.errors.length) return { valid:false, errors:[...new Set(normalized.errors)], warnings:normalized.warnings, svg:'', widthMm:0, heightMm:0, panels:[], metrics:{} };
+      const model = buildTrayModel(normalized.values);
+      if (!model.valid) return { valid:false, errors:[...new Set(model.errors)], warnings:[...new Set([...normalized.warnings,...model.warnings])], svg:'', widthMm:0, heightMm:0, panels:[], metrics:{} };
+      const svg = serializeTrayCompatibilitySvg(model), validation = designSvgValidation(svg, model.layout.widthMm, model.layout.heightMm), errors = [...new Set(validation.errors)];
+      return { valid:!errors.length, errors, warnings:normalized.warnings, svg:errors.length ? '' : svg, widthMm:validation.widthMm, heightMm:validation.heightMm, panels:validation.elements.map((item,index)=>({name:`Shape ${index+1}`,bounds:item.bounds})), metrics:{template:normalized.template}, validation };
+    }
     function buildBoxDesignResult(normalized) {
       if (normalized.errors.length) return { valid:false, errors:[...new Set(normalized.errors)], warnings:normalized.warnings, svg:'', widthMm:0, heightMm:0, panels:[], metrics:{} };
       const model = buildBoxModel(normalized.values);
@@ -3106,6 +3087,7 @@
       if (normalized.template === 'joint-fit-coupon') return buildJointCouponDesignResult(normalized);
       if (normalized.template === 'drawer-cabinet') return buildDrawerCabinetDesignResult(normalized);
       if (normalized.template === 'sliding-lid-box') return buildSlidingLidDesignResult(normalized);
+      if (normalized.template === 'dice-tray' || normalized.template === 'divider-tray') return buildTrayDesignResult(normalized);
       return normalized.template === 'finger-box' ? buildBoxDesignResult(normalized) : buildLegacyDesignResult(normalized);
     }
     function designSvg(d = designDraft) { return buildDesignResult(d).svg; }
@@ -3290,43 +3272,40 @@
       const byId = Object.fromEntries(model.components.map(component => [component.id, component]));
       return model.layout.materialComponentIds.map(id => byId[id]).filter(Boolean).map(component => ({ minX:component.geometry.xMm, minY:component.geometry.yMm, maxX:component.geometry.xMm + component.geometry.widthMm, maxY:component.geometry.yMm + component.geometry.heightMm }));
     }
+    function trayLivePreviewDownloadFixture(draft) {
+      const savedDraft = designDraft, savedPreviewMode = designPreviewMode, ids = ['designForm','designResults','downloadDesignSvg'], existing = ids.map(id => document.getElementById(id));
+      existing.forEach((element, index) => { if (element) element.id = `${ids[index]}-tray-fixture-saved`; });
+      const fixtureRoot = document.createElement('div'), form = document.createElement('form'), button = document.createElement('button'), results = document.createElement('div');
+      form.id = 'designForm'; button.id = 'downloadDesignSvg'; button.type = 'button'; results.id = 'designResults'; fixtureRoot.append(form, button, results); document.body.appendChild(fixtureRoot);
+      ['template','jointStyle','materialThickness','fitClearance','trayWidth','trayDepth','trayHeight','dividerCount'].forEach(name => { const input = document.createElement('input'); input.name = name; input.value = String(draft[name] ?? ''); form.appendChild(input); });
+      designDraft = { ...draft }; designPreviewMode = 'cut-layout';
+      let downloaded = '', filename = '', type = '', result, previewSvg = '';
+      try {
+        result = downloadCurrentDesignSvg((nextFilename, text, nextType) => { filename = nextFilename; downloaded = text; type = nextType; });
+        const data = results.querySelector('object')?.getAttribute('data') || '';
+        previewSvg = data.includes(',') ? decodeURIComponent(data.slice(data.indexOf(',') + 1)) : '';
+      } finally {
+        fixtureRoot.remove(); existing.forEach((element, index) => { if (element) element.id = ids[index]; }); designDraft = savedDraft; designPreviewMode = savedPreviewMode;
+      }
+      return { result, previewSvg, downloaded, filename, type };
+    }
     function runTrayModelFixtures() {
       const results = [], add = (name, pass, expected = '', actual = '') => results.push({ name:`Tray model - ${name}`, pass:!!pass, expected, actual }), defaultsFor = (template, overrides = {}) => ({ ...designDefaults(), template, ...overrides });
       const matrix = [
-        ['Dice default Finger','dice-tray',{}],
-        ['Dice default Tab-and-slot','dice-tray',{jointStyle:'tab-slot'}],
-        ['Dice zero clearance','dice-tray',{fitClearance:'0'}],
-        ['Dice thicker material','dice-tray',{materialThickness:'4.5'}],
-        ['Dice minimum Finger plan','dice-tray',{trayWidth:'42',trayDepth:'48'}],
-        ['Dice large plan','dice-tray',{trayWidth:'500',trayDepth:'420'}],
-        ['Dice shallow wall','dice-tray',{trayHeight:'10'}],
-        ['Dice tall wall','dice-tray',{trayHeight:'180'}],
-        ['Dice square plan','dice-tray',{trayWidth:'160',trayDepth:'160'}],
-        ['Dice long narrow plan','dice-tray',{trayWidth:'80',trayDepth:'360'}],
-        ['Divider default Finger count 2','divider-tray',{}],
-        ['Divider default Tab-and-slot count 2','divider-tray',{jointStyle:'tab-slot'}],
-        ['Divider zero clearance count 2','divider-tray',{fitClearance:'0'}],
-        ['Divider thicker material count 2','divider-tray',{materialThickness:'4.5'}],
-        ['Divider minimum Finger plan count 1','divider-tray',{trayWidth:'42',trayDepth:'48',dividerCount:'1'}],
-        ['Divider large plan count 6','divider-tray',{trayWidth:'500',trayDepth:'420',dividerCount:'6'}],
-        ['Divider shallow wall count 1','divider-tray',{trayHeight:'10',dividerCount:'1'}],
-        ['Divider tall wall count 6','divider-tray',{trayHeight:'180',dividerCount:'6'}],
-        ['Divider square plan count 2','divider-tray',{trayWidth:'160',trayDepth:'160',dividerCount:'2'}],
-        ['Divider long narrow plan count 6','divider-tray',{trayWidth:'80',trayDepth:'360',dividerCount:'6'}],
-        ['Divider shallow depth count 1','divider-tray',{trayDepth:'60',dividerCount:'1'}],
-        ['Divider deep narrow spacing count 6','divider-tray',{trayWidth:'90',trayDepth:'90',dividerCount:'6'}],
-        ['Divider wide spacing count 1','divider-tray',{trayWidth:'360',trayDepth:'260',dividerCount:'1'}]
+        ['Dice default Finger','dice-tray',{},[1726,'51a55721',421,307,21,'6f81a2e8']], ['Dice default Tab-and-slot','dice-tray',{jointStyle:'tab-slot'},[1054,'41697123',421,307,13,'7840963c']], ['Dice zero clearance','dice-tray',{fitClearance:'0'},[1670,'c69c671f',421,307,21,'df393b2a']], ['Dice thicker material','dice-tray',{materialThickness:'4.5'},[1816,'15ffb4c5',424,313,21,'b03c8786']], ['Dice minimum Finger plan','dice-tray',{trayWidth:'42',trayDepth:'48'},[1556,'91820277',131,195,21,'2d4da4f2']], ['Dice large plan','dice-tray',{trayWidth:'500',trayDepth:'420'},[1740,'054691bf',961,567,21,'5386fc38']], ['Dice shallow wall','dice-tray',{trayHeight:'10'},[1726,'c5ffc4bb',421,257,21,'938222da']], ['Dice tall wall','dice-tray',{trayHeight:'180'},[1726,'d52e71b7',421,597,21,'7743f4c2']], ['Dice square plan','dice-tray',{trayWidth:'160',trayDepth:'160'},[1724,'6a71e1be',361,307,21,'44cba35b']], ['Dice long narrow plan','dice-tray',{trayWidth:'80',trayDepth:'360'},[1757,'ed95d237',481,507,21,'724e5710']],
+        ['Divider default Finger count 2','divider-tray',{},[1965,'a55dda6e',656,307,25,'bb53c0bf']], ['Divider default Tab-and-slot count 2','divider-tray',{jointStyle:'tab-slot'},[1293,'481b681c',656,307,17,'78afb913']], ['Divider zero clearance count 2','divider-tray',{fitClearance:'0'},[1903,'ca24ec91',656,307,25,'6781ae4a']], ['Divider thicker material count 2','divider-tray',{materialThickness:'4.5'},[2059,'07c6a461',659,313,25,'e9820548']], ['Divider minimum Finger plan count 1','divider-tray',{trayWidth:'42',trayDepth:'48',dividerCount:'1'},[1661,'be3f5369',188,195,23,'cb0b2d06']], ['Divider large plan count 6','divider-tray',{trayWidth:'500',trayDepth:'420',dividerCount:'6'},[2395,'ae7e3501',1476,779,33,'02f529d0']], ['Divider shallow wall count 1','divider-tray',{trayHeight:'10',dividerCount:'1'},[1834,'30475bbd',656,257,23,'41ba545c']], ['Divider tall wall count 6','divider-tray',{trayHeight:'180',dividerCount:'6'},[2452,'500f2de9',656,1389,33,'b6c51ce2']], ['Divider square plan count 2','divider-tray',{trayWidth:'160',trayDepth:'160',dividerCount:'2'},[1963,'0bac8f9b',536,307,25,'41c137e2']], ['Divider long narrow plan count 6','divider-tray',{trayWidth:'80',trayDepth:'360',dividerCount:'6'},[2462,'8938ba4c',576,719,33,'88f052a1']], ['Divider shallow depth count 1','divider-tray',{trayDepth:'60',dividerCount:'1'},[1816,'5d12b86c',556,207,23,'ab342efd']], ['Divider deep narrow spacing count 6','divider-tray',{trayWidth:'90',trayDepth:'90',dividerCount:'6'},[2518,'6c1e7413',326,449,33,'656440de']], ['Divider wide spacing count 1','divider-tray',{trayWidth:'360',trayDepth:'260',dividerCount:'1'},[1845,'12aeb387',1036,407,23,'677c43c2']]
       ];
-      matrix.forEach(([name, template, overrides]) => {
-        const draft = defaultsFor(template, overrides), normalized = normalizeDesignDraft(draft), valuesBefore = JSON.stringify(normalized.values), model = buildTrayModel(normalized.values), legacySvg = legacyDesignSvg(normalized.draft), compatibilitySvg = serializeTrayCompatibilitySvg(model), legacy = traySvgComparison(legacySvg), compatibility = traySvgComparison(compatibilitySvg), legacyValidation = designSvgValidation(legacySvg), compatibilityValidation = designSvgValidation(compatibilitySvg);
-        add(`${name} is valid`, !normalized.errors.length && model.valid && legacyValidation.valid && compatibilityValidation.valid, 'valid model and SVGs', JSON.stringify({ errors:normalized.errors, modelErrors:model.errors, legacyErrors:legacyValidation.errors, compatibilityErrors:compatibilityValidation.errors }));
-        add(`${name} is byte-identical`, legacySvg === compatibilitySvg);
-        add(`${name} preserves document dimensions and viewBox`, legacy.width === compatibility.width && legacy.height === compatibility.height && legacy.viewBox === compatibility.viewBox && model.layout.widthMm > 0 && model.layout.heightMm > 0);
-        add(`${name} preserves element count`, legacy.elements.length === compatibility.elements.length, String(legacy.elements.length), String(compatibility.elements.length));
-        add(`${name} preserves element type and attributes`, JSON.stringify(legacy.elements) === JSON.stringify(compatibility.elements));
-        add(`${name} preserves anonymous red cut-group structure`, JSON.stringify(legacy.groups) === JSON.stringify(compatibility.groups) && legacy.groups.length === 1 && legacy.groups[0].join('|') === 'fill=none|stroke=#ff0000|stroke-width=0.1');
-        add(`${name} has no invalid numeric token`, !/NaN|Infinity|undefined/.test(legacySvg) && !/NaN|Infinity|undefined/.test(compatibilitySvg));
-        add(`${name} leaves normalized values unmutated`, JSON.stringify(normalized.values) === valuesBefore);
+      matrix.forEach(([name, template, overrides, golden]) => {
+        const draft = defaultsFor(template, overrides), draftBefore = JSON.stringify(draft), normalized = normalizeDesignDraft(draft), valuesBefore = JSON.stringify(normalized.values), model = buildTrayModel(normalized.values), result = buildDesignResult(draft), comparison = traySvgComparison(result.svg), validation = designSvgValidation(result.svg, result.widthMm, result.heightMm), live = trayLivePreviewDownloadFixture(draft), [length, hash, widthMm, heightMm, elementCount, elementsHash] = golden;
+        add(`${name} live result is valid`, !normalized.errors.length && model.valid && result.valid && validation.valid && result.svg === serializeTrayCompatibilitySvg(model) && result.metrics.template === template && result.panels.length === elementCount && result.panels.every((panel, index) => panel.name === `Shape ${index + 1}`), 'valid live model result', JSON.stringify({ normalizedErrors:normalized.errors, modelErrors:model.errors, resultErrors:result.errors, validationErrors:validation.errors }));
+        add(`${name} matches the pinned production SVG bytes`, result.svg.length === length && designFixtureHash(result.svg) === hash, `${length}/${hash}`, `${result.svg.length}/${designFixtureHash(result.svg)}`);
+        add(`${name} preserves pinned document dimensions and viewBox`, result.widthMm === widthMm && result.heightMm === heightMm && comparison.width === `${widthMm}mm` && comparison.height === `${heightMm}mm` && comparison.viewBox === `0 0 ${widthMm} ${heightMm}`);
+        const elementSignature = comparison.elements.map(element => `${element.type}:${element.attributes.join('|')}`);
+        add(`${name} preserves pinned element order and attributes`, comparison.elements.length === elementCount && designFixtureHash(JSON.stringify(elementSignature)) === elementsHash, `${elementCount}/${elementsHash}`, `${comparison.elements.length}/${designFixtureHash(JSON.stringify(elementSignature))}`);
+        add(`${name} preserves anonymous red cut-group structure`, comparison.groups.length === 1 && comparison.groups[0].join('|') === 'fill=none|stroke=#ff0000|stroke-width=0.1');
+        add(`${name} has no invalid numeric token`, !/NaN|Infinity|undefined/.test(result.svg));
+        add(`${name} live preview/download and filename remain identical`, live.result?.valid && live.previewSvg === result.svg && live.downloaded === result.svg && live.filename === `l8-${template}-${today()}.svg` && live.type === 'image/svg+xml;charset=utf-8');
+        add(`${name} leaves source draft and normalized values unmutated`, JSON.stringify(draft) === draftBefore && JSON.stringify(normalized.values) === valuesBefore);
       });
       const diceDraft = defaultsFor('dice-tray'), diceNormalized = normalizeDesignDraft(diceDraft), diceValuesBefore = JSON.stringify(diceNormalized.values), dice = buildTrayModel(diceNormalized.values), diceRepeat = buildTrayModel({ ...diceNormalized.values }), diceComponents = Object.fromEntries(dice.components.map(component => [component.id, component]));
       add('Dice model is deterministic and source values are unmutated', JSON.stringify(dice) === JSON.stringify(diceRepeat) && JSON.stringify(diceNormalized.values) === diceValuesBefore);
@@ -3355,14 +3334,14 @@
         ['invalid material thickness',{ materialThickness:'0' }], ['invalid clearance',{ fitClearance:'-0.01' }], ['zero width',{ trayWidth:'0' }], ['negative width',{ trayWidth:'-1' }], ['zero depth',{ trayDepth:'0' }], ['negative depth',{ trayDepth:'-1' }], ['zero height',{ trayHeight:'0' }], ['negative height',{ trayHeight:'-1' }], ['width too short',{ trayWidth:'20' }], ['depth too short',{ trayDepth:'20' }], ['invalid joint style',{ jointStyle:'dovetail' }], ['Divider count below one',{ dividerCount:'0' }], ['Divider count above six',{ dividerCount:'7' }], ['Divider count non-integer',{ dividerCount:'1.5' }]
       ];
       invalidCases.forEach(([name, overrides]) => {
-        const draft = defaultsFor('divider-tray', overrides), normalized = normalizeDesignDraft(draft), legacy = buildLegacyDesignResult(normalizeDesignDraft(draft)), model = buildTrayModel(normalized.values);
-        add(`Invalid parity: ${name}`, !legacy.valid && !model.valid && !model.components.length && !model.layout.items.length && !buildDesignResult(draft).valid, 'both reject without components', JSON.stringify({ legacyErrors:legacy.errors, modelErrors:model.errors }));
+        const draft = defaultsFor('divider-tray', overrides), normalized = normalizeDesignDraft(draft), validationInput = normalizeDesignDraft(draft), model = buildTrayModel(normalized.values), live = buildDesignResult(draft); validateLegacyDesign(validationInput);
+        add(`Existing validation and model reject: ${name}`, validationInput.errors.length > 0 && !model.valid && !model.components.length && !model.layout.items.length && !live.valid, 'all reject without components', JSON.stringify({ validationErrors:validationInput.errors, modelErrors:model.errors, liveErrors:live.errors }));
       });
-      add('Invalid tray UI validation wording remains unchanged', buildLegacyDesignResult(normalizeDesignDraft(defaultsFor('dice-tray',{ trayWidth:'0' }))).errors.includes('Inside tray width must be at least 20 mm.'));
+      add('Invalid tray UI validation wording remains unchanged', buildDesignResult(defaultsFor('dice-tray',{ trayWidth:'0' })).errors.includes('Inside tray width must be at least 20 mm.'));
       const storageBefore = localStorage.getItem(STORAGE_KEY); buildTrayModel(diceNormalized.values); const storageAfter = localStorage.getItem(STORAGE_KEY);
       add('Tray model generation does not write localStorage', storageBefore === storageAfter);
       add('Compatibility serializer returns no SVG for invalid model', serializeTrayCompatibilitySvg(buildTrayModel({ template:'dice-tray' })) === '');
-      const defaultDiceSvg = legacyDesignSvg(diceNormalized.draft), defaultDividerNormalized = normalizeDesignDraft(defaultsFor('divider-tray')), defaultDividerSvg = legacyDesignSvg(defaultDividerNormalized.draft);
+      const defaultDiceSvg = buildDesignResult(diceDraft).svg, defaultDividerSvg = buildDesignResult(defaultsFor('divider-tray')).svg;
       add('Dice default golden length and hash remain unchanged', defaultDiceSvg.length === 1726 && designFixtureHash(defaultDiceSvg) === '51a55721', '1726/51a55721', `${defaultDiceSvg.length}/${designFixtureHash(defaultDiceSvg)}`);
       add('Divider default golden length and hash remain unchanged', defaultDividerSvg.length === 1965 && designFixtureHash(defaultDividerSvg) === 'a55dda6e', '1965/a55dda6e', `${defaultDividerSvg.length}/${designFixtureHash(defaultDividerSvg)}`);
       const passed = results.filter(result => result.pass).length, failed = results.length - passed;
