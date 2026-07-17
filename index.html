@@ -2908,7 +2908,7 @@
       const partial = { widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,labelPaths:labelResult.paths }, svg = errors.length ? '' : serializeDesignSvg(partial), validation = svg ? designSvgValidation(svg,layout.widthMm,layout.heightMm) : {valid:false,errors:[]};
       errors.push(...validation.errors);
       if (svg && labelResult.paths.length) errors.push(...designSerializedAssemblyLabelValidation(svg, layout.panels, {}, Math.max(1, normalized.values.materialThickness / 3)).errors);
-      return { valid:!errors.length, errors:[...new Set(errors)], warnings:[...new Set(warnings)], svg:errors.length ? '' : svg, widthMm:layout.widthMm, heightMm:layout.heightMm, panels:layout.panels, labelPaths:labelResult.paths, metrics:{...model.metrics,dimensions:model.dimensions,patterns:model.patterns,margin:layout.margin,gap:layout.gap,assemblyLabels:normalized.values.assemblyLabels,labelCount:labelResult.paths.length}, validation };
+      return { valid:!errors.length, errors:[...new Set(errors)], warnings:[...new Set(warnings)], svg:errors.length ? '' : svg, widthMm:layout.widthMm, heightMm:layout.heightMm, panels:layout.panels, labelPaths:labelResult.paths, metrics:{...model.metrics,dimensions:model.dimensions,patterns:model.patterns,margin:layout.margin,gap:layout.gap,boxLid:normalized.values.lid,materialThickness:normalized.values.materialThickness,assemblyLabels:normalized.values.assemblyLabels,labelCount:labelResult.paths.length}, validation };
     }
     function buildSlidingLidDesignResult(normalized) {
       if (normalized.errors.length) return { valid:false, errors:[...new Set(normalized.errors)], warnings:normalized.warnings, svg:'', widthMm:0, heightMm:0, panels:[], metrics:{slidingLid:true} };
@@ -3025,6 +3025,14 @@
     }
     function designSvg(d = designDraft) { return buildDesignResult(d).svg; }
     function designMetric(label, value) { return `<div class="metric"><span>${esc(label)}</span><b>${esc(value)}</b></div>`; }
+    function buildFingerBoxFinishedViewSvg(result) {
+      const dimensions = result?.metrics?.dimensions, width = Number(dimensions?.outsideWidth), depth = Number(dimensions?.outsideDepth), height = Number(dimensions?.outsideHeight), thickness = Number(result?.metrics?.materialThickness);
+      if (![width, depth, height, thickness].every(Number.isFinite) || width <= 0 || depth <= 0 || height <= 0 || thickness <= 0) return '';
+      const wall = Math.min(thickness, width / 3, depth / 3), margin = Math.max(12, Math.min(24, Math.max(width, depth) * .08)), gap = Math.max(14, wall * 4), labelSize = Math.max(3, Math.min(8, Math.min(width, depth) * .045)), dimSize = Math.max(3, Math.min(7, Math.min(width, depth) * .035)), boxX = margin, boxY = margin + labelSize * 2, lid = result.metrics.boxLid === 'loose', lidX = boxX + width + gap, lidY = boxY + depth * .16, totalWidth = margin * 2 + width + (lid ? gap + width : 0), totalHeight = margin * 2 + depth + labelSize * 4, innerWidth = Math.max(0, width - wall * 2), innerDepth = Math.max(0, depth - wall * 2), textY = boxY + depth + labelSize * 2;
+      const text = (value, x, y, extra = '', className = 'finger-box-label') => `<text class="${className}" x="${x}" y="${y}" ${extra}>${esc(value)}</text>`;
+      const lidMarkup = lid ? `<g id="finger-box-loose-lid"><rect class="finger-box-lid" x="${lidX}" y="${lidY}" width="${width}" height="${depth}"/><text class="finger-box-label" x="${lidX + width / 2}" y="${lidY + depth / 2}" text-anchor="middle" dominant-baseline="middle">Loose lid</text></g>` : '';
+      return `<svg class="finger-box-finished-view" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Finished view of Finger-jointed box" viewBox="0 0 ${totalWidth} ${totalHeight}"><title>Finished view - Finger-jointed box</title><desc>Screen-only assembly preview. Shows an open-top box and a separate loose lid when selected. Not included in the downloaded cut file.</desc><style>.finger-box-cavity{fill:#f7f9fb;stroke:#718096;stroke-width:${Math.max(.35, wall * .12)}}.finger-box-wall{fill:#dbeaf4;stroke:#236d9c;stroke-width:${Math.max(.35, wall * .12)}}.finger-box-lid{fill:#e8e1d2;stroke:#765d35;stroke-width:${Math.max(.35, wall * .12)}}.finger-box-label,.finger-box-dimension{fill:#263445;font-weight:700;font-size:${labelSize}px}.finger-box-dimension{fill:#425166;font-size:${dimSize}px;font-weight:600}</style><g id="finger-box-assembled"><rect id="finger-box-cavity" class="finger-box-cavity" x="${boxX + wall}" y="${boxY + wall}" width="${innerWidth}" height="${innerDepth}"/><rect id="finger-box-wall-back" class="finger-box-wall" x="${boxX}" y="${boxY}" width="${width}" height="${wall}"/>${text('Back', boxX + width / 2, boxY + wall / 2, 'text-anchor="middle" dominant-baseline="middle"')}<rect id="finger-box-wall-front" class="finger-box-wall" x="${boxX}" y="${boxY + depth - wall}" width="${width}" height="${wall}"/>${text('Front', boxX + width / 2, boxY + depth - wall / 2, 'text-anchor="middle" dominant-baseline="middle"')}<rect id="finger-box-wall-left" class="finger-box-wall" x="${boxX}" y="${boxY + wall}" width="${wall}" height="${innerDepth}"/>${text('Left', boxX + wall / 2, boxY + depth / 2, 'text-anchor="middle" dominant-baseline="middle" transform="rotate(-90 ${boxX + wall / 2} ${boxY + depth / 2})"')}<rect id="finger-box-wall-right" class="finger-box-wall" x="${boxX + width - wall}" y="${boxY + wall}" width="${wall}" height="${innerDepth}"/>${text('Right', boxX + width - wall / 2, boxY + depth / 2, 'text-anchor="middle" dominant-baseline="middle" transform="rotate(90 ${boxX + width - wall / 2} ${boxY + depth / 2})"')}</g>${lidMarkup}${text(`Outside width ${designNumberText(width)} mm`, boxX + width / 2, textY, 'text-anchor="middle"', 'finger-box-dimension')}${text(`Outside depth ${designNumberText(depth)} mm`, boxX + width / 2, textY + dimSize * 1.8, 'text-anchor="middle"', 'finger-box-dimension')}${text(`Outside height ${designNumberText(height)} mm`, lid ? lidX + width / 2 : boxX + width / 2, textY + dimSize * 3.6, 'text-anchor="middle"', 'finger-box-dimension')}${text('Open top', boxX, margin, 'dominant-baseline="middle"', 'finger-box-dimension')}${lid ? text('Loose lid is separate; no hinge or retention is shown.', lidX + width / 2, lidY + depth + labelSize * 1.6, 'text-anchor="middle"', 'finger-box-dimension') : ''}</svg>`;
+    }
     function buildDrawerCabinetFrontElevationSvg(frontElevation) {
       if (!frontElevation || !Number.isFinite(frontElevation.width) || !Number.isFinite(frontElevation.height)) return '';
       const f=frontElevation, w=f.width, h=f.height, t=f.materialThickness, shortFront=f.rows.some(row=>row.front.height<24);
@@ -3041,21 +3049,29 @@
       if (!frontElevation?.rows?.some(row=>row.front.height<24)) return '';
       return `<div class="drawer-front-legend" data-front-legend="compact"><b>Compact drawer labels:</b> ${frontElevation.rows.map(row=>`<span data-front-legend-entry="D${row.row}">D${row.row} - ${esc(row.label)}</span>`).join(' &nbsp; | &nbsp; ')}</div>`;
     }
-    function designPreviewModeForTemplate(template, mode=designPreviewMode) { return template==='drawer-cabinet' && mode==='finished-front' ? 'finished-front' : 'cut-layout'; }
+    function designPreviewModeForTemplate(template, mode=designPreviewMode) {
+      if (template === 'drawer-cabinet' && mode === 'finished-front') return 'finished-front';
+      if (template === 'finger-box' && mode === 'finished-view') return 'finished-view';
+      return 'cut-layout';
+    }
     function designPreviewSelectorHtml(result) {
-      if (designDraft.template!=='drawer-cabinet') return '';
+      const finger = designDraft.template === 'finger-box', cabinet = designDraft.template === 'drawer-cabinet';
+      if (!finger && !cabinet) return '';
       const valid=!!result.valid&&!!result.frontElevation;
-      if (!valid && designPreviewMode==='finished-front') {
+      const finishedMode = finger ? 'finished-view' : 'finished-front', validForView = finger ? !!result.valid && !!result.metrics?.dimensions : valid;
+      if (!validForView && designPreviewMode === finishedMode) {
         designPreviewMode='cut-layout';
       }
       const effectiveMode=designPreviewModeForTemplate(designDraft.template);
-      return `<div class="design-preview-selector" role="group" aria-label="Design preview"><span><b>Preview:</b></span><button type="button" data-design-preview-mode="cut-layout" aria-pressed="${effectiveMode==='cut-layout'}">Cut Layout</button><button type="button" data-design-preview-mode="finished-front" aria-pressed="${effectiveMode==='finished-front'}" ${valid?'':'disabled'}>Finished Front View</button></div>`;
+      const label = finger ? 'Finished View' : 'Finished Front View';
+      return `<div class="design-preview-selector" role="group" aria-label="Design preview"><span><b>Preview:</b></span><button type="button" data-design-preview-mode="cut-layout" aria-pressed="${effectiveMode==='cut-layout'}">Cut Layout</button><button type="button" data-design-preview-mode="${finishedMode}" aria-pressed="${effectiveMode===finishedMode}" ${validForView?'':'disabled'}>${label}</button></div>`;
     }
     function designResultsHtml(result) {
       const dimensions = result.metrics?.dimensions, patterns = result.metrics?.patterns;
       const sliding = result.metrics?.slidingLid && dimensions;
       const cabinet = result.metrics?.drawerCabinet && dimensions;
       const jointCoupon = result.metrics?.jointFitCoupon;
+      const finger = designDraft.template === 'finger-box' && dimensions;
       const metrics = jointCoupon
         ? designMetric('Clearance values', (result.metrics.clearances || []).map(item => item.text).join(', ') || 'Unavailable')
           + designMetric('Pairs / pieces', `${result.metrics.pairCount || 0} / ${result.metrics.pieceCount || result.panels.length || 0}`)
@@ -3120,12 +3136,14 @@
           + (patterns?.vertical ? designMetric('Vertical fingers', `${patterns.vertical.count} segments × ${designNumberText(patterns.vertical.actualWidth)} mm`) : '')
         : designMetric('Shapes', String(result.panels.length)) + designMetric('Layout', result.valid ? `${designNumberText(result.widthMm)} × ${designNumberText(result.heightMm)} mm` : 'Unavailable');
       const messages = result.errors.map(message => `<div class="design-message error"><b>Error:</b> ${esc(message)}</div>`).join('') + result.warnings.map(message => `<div class="design-message warning"><b>Warning:</b> ${esc(message)}</div>`).join('');
-      const activePreviewMode=designPreviewModeForTemplate(designDraft.template), frontVisible=activePreviewMode==='finished-front'&&result.valid&&result.frontElevation;
-      const preview = frontVisible ? `<div class="design-svg-preview">${buildDrawerCabinetFrontElevationSvg(result.frontElevation)}${drawerCabinetFrontLegendHtml(result.frontElevation)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> Labels use bottom-up row numbering; red dashed marks indicate nominal running gaps.</div></div>` : result.valid ? `<div class="design-svg-preview"><object type="image/svg+xml" aria-label="Exact exported SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`)}"></object></div>` : '<div class="design-svg-preview"><div class="empty"><b>Preview unavailable</b><div class="small muted">Correct the errors before previewing or downloading.</div></div></div>';
+      const activePreviewMode=designPreviewModeForTemplate(designDraft.template), frontVisible=activePreviewMode==='finished-front'&&result.valid&&result.frontElevation, fingerVisible=activePreviewMode==='finished-view'&&result.valid&&finger;
+      const preview = frontVisible ? `<div class="design-svg-preview">${buildDrawerCabinetFrontElevationSvg(result.frontElevation)}${drawerCabinetFrontLegendHtml(result.frontElevation)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> Labels use bottom-up row numbering; red dashed marks indicate nominal running gaps.</div></div>` : fingerVisible ? `<div class="design-svg-preview">${buildFingerBoxFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> This view does not prove fit, strength, kerf accuracy, glue quality, or production success.</div></div>` : result.valid ? `<div class="design-svg-preview"><object type="image/svg+xml" aria-label="Exact exported SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`)}"></object></div>` : '<div class="design-svg-preview"><div class="empty"><b>Preview unavailable</b><div class="small muted">Correct the errors before previewing or downloading.</div></div></div>';
       const assembly = jointCoupon
         ? '<div class="design-message"><b>Use:</b> Keep each A/B pair together and assemble the two panel planes at 90 degrees. Test from looser positive values toward zero and negative interference values. Stop if insertion force crushes, splits, or permanently locks the material. Kerf remains separate and must be established through material testing. A successful coupon selects the next full prototype setting but does not replace final box testing.</div>'
         : cabinet
         ? `<div class="design-message"><b>Assembly:</b> Assemble and square the five-panel open-front cabinet shell. Assemble every five-panel open-top drawer separately. The bottom drawer rests on the cabinet bottom; glue each upper support shelf level between the side walls and against the back${result.metrics.shelfBottomElevations?.length ? `, with shelf bottom edges ${result.metrics.shelfBottomElevations.map(designNumberText).join(', ')} mm above the inside floor` : ''}, then let all glue cure before testing drawer travel. Keep the requested lateral, vertical, and rear gaps clear. ${result.metrics.assemblyLabels ? 'Labels are on intended concealed faces where safe placement was possible.' : ''} <b>Kerf is not included; dry-fit and prototype on the same measured sheet.</b></div>`
+        : finger
+        ? `<div class="design-message"><b>Assembly:</b> The Finished View shows the open-top box with Front, Back, Left, and Right orientation. ${result.metrics.boxLid === 'loose' ? 'The loose lid is displayed separately with no hinge, rail, retention, or fitted-closure implication.' : 'This open-top state has no lid, hinge, groove, or closure.'} <b>Screen-only assembly preview; dry-fit and physically test the box.</b></div>`
         : sliding
         ? `<div class="design-message"><b>Assembly:</b> Assemble the five body panels. Glue the two identical rails inside the side walls, top-flush and Back-flush, with both channels facing inward. Clamp with a thickness-plus-clearance spacer, keep glue out of the channels, and let it cure. Insert the lid from Front toward Back; the shortened edges face Front and the stop ends face Back while the tongue closes the center gap. ${result.metrics.guideMarks || result.metrics.assemblyLabels ? 'Labels and rail guides are placed on the displayed sheet face. Install both marked side faces inward. Keep shortened edges toward Front and stop ends toward Back. Verify label visibility and face orientation during the first assembly.' : ''} <b>Kerf is not included.</b></div>`
         : result.metrics?.assemblyLabels ? '<div class="design-message"><b>Assembly labels:</b> Marks are placed on the displayed sheet face and are intended for the inside or concealed faces. Verify Left/Right orientation, label visibility, and the marked face during the first assembly; the finger-box cut geometry is unchanged.</div>' : '';
@@ -3143,7 +3161,7 @@
       document.querySelectorAll('[data-design-preview-mode]').forEach(button => {
         button.onclick = () => {
           const nextMode=button.getAttribute('data-design-preview-mode');
-          designPreviewMode=nextMode==='finished-front'?'finished-front':'cut-layout';
+          designPreviewMode=nextMode==='finished-front'?'finished-front':nextMode==='finished-view'?'finished-view':'cut-layout';
           refreshDesignPreview();
         };
       });
@@ -3653,6 +3671,36 @@
       add('Drawer cabinet kerf guidance excludes sliding-lid language',/cabinet joint clearance/i.test(designKerfGuidance('drawer-cabinet'))&&!/sliding lid|lid clearance/i.test(designKerfGuidance('drawer-cabinet')));
       add('Sliding Lid Box keeps lid-specific kerf guidance',/lid clearances/i.test(designKerfGuidance('sliding-lid-box'))&&!/drawer/i.test(designKerfGuidance('sliding-lid-box')));
       add('Finger Box keeps joint-specific kerf guidance',/joint clearance/i.test(designKerfGuidance('finger-box'))&&!/lid|drawer/i.test(designKerfGuidance('finger-box')));
+      const finishedRoot = result => {
+        const svg = buildFingerBoxFinishedViewSvg(result), root = svg ? new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement : null;
+        return { svg, root };
+      };
+      const openFinished = finishedRoot(insideResult), looseFinished = finishedRoot(lidResult), openDraftBefore = JSON.stringify(inside), looseDraftBefore = JSON.stringify({ ...inside, boxLid:'loose' });
+      add('Finger Box Finished View is deterministic',openFinished.svg===buildFingerBoxFinishedViewSvg(insideResult)&&looseFinished.svg===buildFingerBoxFinishedViewSvg(lidResult));
+      add('Finger Box Finished View is a finite SVG document',[openFinished,looseFinished].every(({svg,root})=>!!root&&root.nodeName.toLowerCase()==='svg'&&!root.querySelector('parsererror')&&!/NaN|Infinity|undefined/.test(svg)&&root.getAttribute('viewBox').trim().split(/\s+/).length===4&&!!root.querySelector('title')&&!!root.querySelector('desc')));
+      add('Finger Box Finished View shows all four orientation labels',['Front','Back','Left','Right'].every(label=>openFinished.root.textContent.includes(label)));
+      add('Finger Box Finished View shows open top and outside dimensions',['Open top','Outside width 126 mm','Outside depth 96 mm','Outside height 53 mm'].every(label=>openFinished.root.textContent.includes(label)));
+      add('Open-top Finished View has a cavity and no lid',!!openFinished.root.querySelector('#finger-box-cavity')&&!openFinished.root.querySelector('#finger-box-loose-lid')&&openFinished.root.querySelectorAll('.finger-box-wall').length===4);
+      add('Loose-lid Finished View keeps the lid separate',!!looseFinished.root.querySelector('#finger-box-loose-lid')&&looseFinished.root.querySelector('#finger-box-loose-lid').textContent.includes('Loose lid')&&looseFinished.root.querySelectorAll('#finger-box-loose-lid').length===1);
+      add('Loose-lid Finished View has no hinge rail retention or sliding geometry',!looseFinished.root.querySelector('[id*="hinge"],[class*="hinge"],[id*="rail"],[class*="rail"],[id*="retention"],[class*="retention"],[id*="slide"],[class*="slide"]'));
+      add('Finished View width matches authoritative outside width',Number(openFinished.root.querySelector('rect#finger-box-wall-front')?.getAttribute('width'))===dimensions.outsideWidth);
+      add('Finished View wall thickness is finite and positive',Number(openFinished.root.querySelector('rect#finger-box-wall-front')?.getAttribute('height'))===3);
+      add('Finished View viewBox is finite for authoritative dimensions',(()=>{const values=openFinished.root.getAttribute('viewBox').trim().split(/\s+/).map(Number);return values.length===4&&values.every(Number.isFinite)&&values[2]>0&&values[3]>0;})());
+      add('Finished View generation does not mutate the draft',JSON.stringify(inside)===openDraftBefore&&JSON.stringify({...inside,boxLid:'loose'})===looseDraftBefore);
+      add('Finished View is absent from production SVG',!insideResult.svg.includes('finger-box-finished-view')&&!insideResult.svg.includes('finger-box-assembled')&&!lidResult.svg.includes('Loose lid'));
+      const extremeFinished = finishedRoot(buildDesignResult({...inside,boxDimensionMode:'outside',boxWidth:'200',boxDepth:'160',boxHeight:'120'}));
+      add('Extreme valid Finger Box Finished View remains finite',!!extremeFinished.root&&!/NaN|Infinity|undefined/.test(extremeFinished.svg));
+      const invalidFinger = buildDesignResult({...inside,boxWidth:'0'});
+      add('Invalid Finger Box cannot render Finished View',!invalidFinger.valid&&!buildFingerBoxFinishedViewSvg(invalidFinger));
+      const savedFingerPreviewMode=designPreviewMode,savedFingerDesignDraft=designDraft;
+      designDraft={...inside}; designPreviewMode='finished-view'; const fingerFinishedMarkup=designResultsHtml(insideResult), fingerCutProductionSvg=insideResult.svg;
+      add('Finger Box selector exposes Finished View beside Cut Layout',fingerFinishedMarkup.includes('data-design-preview-mode="cut-layout"')&&fingerFinishedMarkup.includes('data-design-preview-mode="finished-view"')&&fingerFinishedMarkup.includes('aria-pressed="true"'));
+      add('Finger Box Finished View is screen-only in results markup',fingerFinishedMarkup.includes('finger-box-finished-view')&&fingerFinishedMarkup.includes('Screen-only assembly preview')&&!fingerCutProductionSvg.includes('finger-box-finished-view'));
+      const invalidFingerMarkup=designResultsHtml(invalidFinger);
+      add('Invalid dimensions reset Finger Box preview to Cut Layout',designPreviewMode==='cut-layout'&&invalidFingerMarkup.includes('data-design-preview-mode="finished-view" aria-pressed="false" disabled')&&invalidFingerMarkup.includes('Preview unavailable'));
+      designDraft={...inside}; designPreviewMode='finished-view'; const drawerMode=designPreviewModeForTemplate('drawer-cabinet'), fingerMode=designPreviewModeForTemplate('finger-box');
+      add('Template switching cannot carry Finished View across templates',drawerMode==='cut-layout'&&fingerMode==='finished-view'&&designPreviewModeForTemplate('finger-box','finished-front')==='cut-layout');
+      designPreviewMode=savedFingerPreviewMode; designDraft=savedFingerDesignDraft;
       add('Drawer cabinet layout has no panel overlap',[cabinetOne,cabinetTwo,cabinetThree].every(result=>result.valid&&!result.errors.some(message=>/overlap|actual paths/i.test(message))));
       add('Drawer cabinet SVG is valid',[cabinetOne,cabinetTwo,cabinetThree].every(result=>designSvgValidation(result.svg,result.widthMm,result.heightMm).valid));
       add('Drawer cabinet SVG contains no invalid numeric token',[cabinetOne,cabinetTwo,cabinetThree].every(result=>!/NaN|Infinity|undefined/.test(result.svg)));
