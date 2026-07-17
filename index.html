@@ -391,6 +391,7 @@
     let designDraft = designDefaults();
     let designPreviewMode = 'cut-layout';
     let designProductionSession = designProductionSessionDefaults();
+    let promotionSession = promotionSessionDefaults();
     let designProductionNotice = '';
     let pricingPersistTimer = null;
     const PRICING_PERSIST_DELAY = 400;
@@ -3126,7 +3127,8 @@
         : sliding
         ? `<div class="design-message"><b>Assembly:</b> Assemble the five body panels. Glue the two identical rails inside the side walls, top-flush and Back-flush, with both channels facing inward. Clamp with a thickness-plus-clearance spacer, keep glue out of the channels, and let it cure. Insert the lid from Front toward Back; the shortened edges face Front and the stop ends face Back while the tongue closes the center gap. ${result.metrics.guideMarks || result.metrics.assemblyLabels ? 'Labels and rail guides are placed on the displayed sheet face. Install both marked side faces inward. Keep shortened edges toward Front and stop ends toward Back. Verify label visibility and face orientation during the first assembly.' : ''} <b>Kerf is not included.</b></div>`
         : result.metrics?.assemblyLabels ? '<div class="design-message"><b>Assembly labels:</b> Marks are placed on the displayed sheet face and are intended for the inside or concealed faces. Verify Left/Right orientation, label visibility, and the marked face during the first assembly; the finger-box cut geometry is unchanged.</div>' : '';
-      return `${designPreviewSelectorHtml(result)}<div class="design-preview-layout"><div class="panel"><b>Design results</b><div class="metrics" style="margin-top:10px">${metrics}</div>${messages || '<div class="design-message"><b>Ready:</b> Preview and download use the same validated SVG.</div>'}${assembly}</div>${preview}</div>`;
+      const promotionEntry = jointCoupon && result.valid ? '<div class="actions" style="margin-top:10px"><button type="button" data-promote-joint-coupon>Promote physical winner</button></div>' : '';
+      return `${designPreviewSelectorHtml(result)}<div class="design-preview-layout"><div class="panel"><b>Design results</b><div class="metrics" style="margin-top:10px">${metrics}</div>${messages || '<div class="design-message"><b>Ready:</b> Preview and download use the same validated SVG.</div>'}${assembly}${promotionEntry}</div>${preview}</div>`;
     }
     function refreshDesignPreview() {
       const result = buildDesignResult(designDraft), results = document.getElementById('designResults'), download = document.getElementById('downloadDesignSvg');
@@ -3143,6 +3145,7 @@
           refreshDesignPreview();
         };
       });
+      document.querySelectorAll('[data-promote-joint-coupon]').forEach(button => button.onclick = () => openJointCouponPromotion(designDraft, buildDesignResult(designDraft)));
     }
     function downloadCurrentDesignSvg(download = downloadTextFile) {
       updateDesignDraft(document.getElementById('designForm'));
@@ -4001,7 +4004,7 @@
       const batchesHtml = batches.length ? batches.map(batch => `<div class="small" style="margin-top:8px"><b>${esc(batch.itemName || 'Unnamed batch')}</b><br>${esc(batchRemaining(batch))} remaining / ${esc(batch.status || 'made')}</div>`).join('') : '<div class="small muted">No related finished batches.</div>';
       const sourceProfileHtml = project.sourceProfileId ? (sourceProfile ? `<div class="small"><b>${esc(sourceProfile.material || 'Unspecified material')}</b> - ${esc(libraryOperationMetadata(sourceProfile).label)}<div class="actions"><button type="button" data-project-source-profile="${esc(sourceProfile.id)}">Open Library profile</button></div></div>` : '<div class="small muted">Source Library profile is no longer available.</div>') : '<div class="small muted">No source Library profile recorded.</div>';
       const sourceEntryHtml = project.sourceEntryId ? (sourceEntry ? `<div class="small"><b>${esc(sourceEntry.material || 'Unspecified material')}</b> - ${esc(sourceEntry.date || 'No date')}<div class="actions"><button type="button" data-project-source-entry="${esc(sourceEntry.id)}">Open Log entry</button></div></div>` : '<div class="small muted">Source Log entry is no longer available.</div>') : '<div class="small muted">No source Log entry recorded.</div>';
-      return `<div class="panel nested-browser-detail"><div class="spread"><div><b>${esc(projectLeafLabel(project))}</b><div class="small muted">${esc(status.label)} / ${esc(validProjectDate(project.dateCreated) || 'No date')}${project.saleDate ? ` / sold ${esc(project.saleDate)}` : ''}</div></div><span class="pill">${esc(projectLeafBadge(project))}</span></div>${browserHiddenSelectionNotice(hidden, 'Project')}${projectBrowserPhotosHtml(project)}<div class="small" style="margin-top:8px">Rating: ${stars(project.rating)} / Quantity: ${esc(projectQuantity(project))}</div>${tags.length ? `<div class="row" style="margin-top:8px">${tags.map(tag => `<span class="pill">${esc(tag)}</span>`).join('')}</div>` : ''}<hr><b>Primary material</b><div class="small">${esc(project.material || 'Unspecified material')} / ${esc(fmt(project.thicknessValue, project.thicknessUnit))} / ${esc(project.jobType || 'Unspecified operation')}</div>${materialSafetyWarningHtml(project.material)}<hr><b>Material cost lines</b>${linesHtml}<hr><b>Settings snapshot</b>${settingsHtml}<hr><b>Accounting</b>${accountingHtml}${project.accountingNotes ? `<p class="small"><b>Accounting notes:</b> ${esc(project.accountingNotes)}</p>` : ''}${project.notes ? `<p class="small"><b>Notes:</b> ${esc(project.notes)}</p>` : ''}<div class="actions"><button type="button" data-project-browser-edit="${esc(project.id)}">Edit</button><button type="button" data-project-browser-log="${esc(project.id)}">Copy to log</button><button type="button" class="danger" data-project-browser-delete="${esc(project.id)}">Delete</button></div><hr><b>Source Library profile</b>${sourceProfileHtml}<hr><b>Source Log entry</b>${sourceEntryHtml}<hr><b>Suggested Inventory</b>${inventoryHtml}<hr><b>Related finished batches</b>${batchesHtml}</div>`;
+      return `<div class="panel nested-browser-detail"><div class="spread"><div><b>${esc(projectLeafLabel(project))}</b><div class="small muted">${esc(status.label)} / ${esc(validProjectDate(project.dateCreated) || 'No date')}${project.saleDate ? ` / sold ${esc(project.saleDate)}` : ''}</div></div><span class="pill">${esc(projectLeafBadge(project))}</span></div>${browserHiddenSelectionNotice(hidden, 'Project')}${projectBrowserPhotosHtml(project)}<div class="small" style="margin-top:8px">Rating: ${stars(project.rating)} / Quantity: ${esc(projectQuantity(project))}</div>${tags.length ? `<div class="row" style="margin-top:8px">${tags.map(tag => `<span class="pill">${esc(tag)}</span>`).join('')}</div>` : ''}<hr><b>Primary material</b><div class="small">${esc(project.material || 'Unspecified material')} / ${esc(fmt(project.thicknessValue, project.thicknessUnit))} / ${esc(project.jobType || 'Unspecified operation')}</div>${materialSafetyWarningHtml(project.material)}<hr><b>Material cost lines</b>${linesHtml}<hr><b>Settings snapshot</b>${settingsHtml}<hr><b>Accounting</b>${accountingHtml}${project.accountingNotes ? `<p class="small"><b>Accounting notes:</b> ${esc(project.accountingNotes)}</p>` : ''}${project.notes ? `<p class="small"><b>Notes:</b> ${esc(project.notes)}</p>` : ''}<div class="actions"><button type="button" data-project-browser-edit="${esc(project.id)}">Edit</button>${projectPromotionActionHtml(project, true)}<button type="button" data-project-browser-log="${esc(project.id)}">Copy to log</button><button type="button" class="danger" data-project-browser-delete="${esc(project.id)}">Delete</button></div><hr><b>Source Library profile</b>${sourceProfileHtml}<hr><b>Source Log entry</b>${sourceEntryHtml}<hr><b>Suggested Inventory</b>${inventoryHtml}<hr><b>Related finished batches</b>${batchesHtml}</div>`;
     }
     function projectBrowserResultsHtml(filtered) {
       const tree = buildProjectBrowserTree(filtered);
@@ -4025,6 +4028,7 @@
       root.querySelectorAll('[data-edit-project]').forEach(button => button.onclick = () => openProject(state.projects.find(project => project.id === button.dataset.editProject)));
       root.querySelectorAll('[data-delete-project]').forEach(button => button.onclick = () => del('projects', button.dataset.deleteProject, 'Delete this project?', 'Project'));
       root.querySelectorAll('[data-project-to-entry]').forEach(button => button.onclick = () => projectToEntry(button.dataset.projectToEntry));
+      root.querySelectorAll('[data-promote-project]').forEach(button => button.onclick = () => openProjectPromotion(button.dataset.promoteProject));
       root.querySelectorAll('[data-project-photo]').forEach(image => image.onclick = event => {
         event.stopPropagation();
         openProjectPhotoViewer(image.dataset.projectPhoto, Number(image.dataset.photoIndex || 0));
@@ -4037,6 +4041,7 @@
       });
       root.querySelectorAll('[data-project-browser-edit]').forEach(button => button.onclick = () => openProject(state.projects.find(project => project.id === button.dataset.projectBrowserEdit)));
       root.querySelectorAll('[data-project-browser-log]').forEach(button => button.onclick = () => projectToEntry(button.dataset.projectBrowserLog));
+      root.querySelectorAll('[data-promote-project]').forEach(button => button.onclick = () => openProjectPromotion(button.dataset.promoteProject));
       root.querySelectorAll('[data-project-browser-delete]').forEach(button => button.onclick = () => del('projects', button.dataset.projectBrowserDelete, 'Delete this project?', 'Project'));
       root.querySelectorAll('[data-project-browser-photo]').forEach(image => image.onclick = event => { event.stopPropagation(); openProjectPhotoViewer(image.dataset.projectBrowserPhoto, Number(image.dataset.photoIndex || 0)); });
       root.querySelectorAll('[data-project-source-profile]').forEach(button => button.onclick = () => openProfile(state.profiles.find(profile => profile.id === button.dataset.projectSourceProfile)));
@@ -5149,6 +5154,560 @@
     function normalizeProductionSettings(settings) {
       return Array.isArray(settings) ? settings.map(normalizeProductionSetting).filter(Boolean) : [];
     }
+    function promotionSessionDefaults() {
+      return { sourceType: '', sourceId: '', sourceProfileId: '', candidate: null, targetProfileId: '', action: 'create', targetSettingId: '', selectedFields: {}, requestedStatus: '', physicalChecks: {}, metadataSelections: { label: false, measurementScope: false, batchLabel: false, status: false, verifiedDate: false, preferred: false }, preferred: false, supersedeSettingId: '', measurementScope: 'unknown', batchLabel: '', verifiedDate: '', reviewNotes: '', label: '', duplicateWarnings: [], step: 'review' };
+    }
+    function syncPromotionMetadataFromTarget(session, targetSetting) {
+      const next = { ...promotionClone(session), metadataSelections: { label: false, measurementScope: false, batchLabel: false, status: false, verifiedDate: false, preferred: false } };
+      if (!targetSetting) {
+        const candidate = next.candidate || {};
+        next.label = candidate.sourceLabel || '';
+        next.measurementScope = candidate.measurementScope || 'unknown';
+        next.batchLabel = '';
+        next.requestedStatus = candidate.defaultStatus || 'untested';
+        next.verifiedDate = '';
+        next.preferred = false;
+        return next;
+      }
+      next.label = String(targetSetting.label || '');
+      next.measurementScope = String(targetSetting.materialCondition?.measurementScope || 'unknown');
+      next.batchLabel = String(targetSetting.materialCondition?.batchLabel || '');
+      next.requestedStatus = String(targetSetting.verificationStatus || 'untested');
+      next.verifiedDate = String(targetSetting.verifiedDate || '');
+      next.preferred = !!targetSetting.preferred;
+      return next;
+    }
+    function promotionClone(value) {
+      if (value === undefined) return undefined;
+      return JSON.parse(JSON.stringify(value));
+    }
+    function promotionMachineSnapshot(value, inferLabel = true) {
+      const source = value && typeof value === 'object' ? value : { label: value };
+      const rawKey = String(source.key || '').trim().toLowerCase();
+      const label = String(source.label || source.machine || '').trim();
+      const text = `${rawKey} ${label}`.toLowerCase();
+      const key = rawKey === 'genmitsu-l8-20w' || rawKey === 'genmitsu-l8-40w' || rawKey === 'custom' ? rawKey : inferLabel && /40\s*w|40w/.test(text) ? 'genmitsu-l8-40w' : inferLabel && /20\s*w|20w/.test(text) ? 'genmitsu-l8-20w' : '';
+      return { key, label: label || (key ? productionMachineDefaultLabel(key) : ''), source: promotionClone(source) };
+    }
+    function promotionProfileThicknessMm(profile) {
+      if (!profile || profile.thicknessValue === '' || profile.thicknessValue == null) return '';
+      const value = num(profile.thicknessValue);
+      return Number.isFinite(value) && value > 0 ? profile.thicknessUnit === 'in' ? roundUnitValue(value * 25.4) : value : '';
+    }
+    function promotionCandidateBase(sourceType, source, profile, options = {}) {
+      const sourceProfileId = profile?.id || options.sourceProfileId || '';
+      const material = profile?.material || source?.material || source?.materialSnapshot?.material || '';
+      const nominalThicknessMm = promotionProfileThicknessMm(profile) || (Number.isFinite(source?.nominalThicknessMm) ? source.nominalThicknessMm : '');
+      const machine = promotionMachineSnapshot(options.machine || source?.machine || source?.settings?.machine, options.inferMachineLabel !== false);
+      return {
+        sourceType, sourceId: String(options.sourceId || source?.id || ''), sourceProfileId,
+        sourceLabel: String(options.sourceLabel || source?.name || source?.sourceLabel || material || sourceType).trim(),
+        sourceDate: String(options.sourceDate || source?.date || source?.dateCreated || '').trim(),
+        sourceStatus: String(options.sourceStatus || source?.status || '').trim(),
+        material, nominalThicknessMm, operation: options.operation || source?.jobType || source?.operation || 'cut',
+        machine,
+        measurementScope: options.measurementScope || 'unknown', batchLabel: '', defaultStatus: options.defaultStatus || 'untested', canVerify: options.canVerify !== false,
+        limitations: [...(options.limitations || [])], fields: {}, sourceSnapshot: { material, nominalThicknessMm, operation: options.operation || source?.jobType || source?.operation || 'cut', machine: promotionClone(machine), source: promotionClone(source) }
+      };
+    }
+    function promotionAddField(candidate, key, label, value, path, options = {}) {
+      if (value === '' || value == null || (typeof value === 'number' && !Number.isFinite(value))) return;
+      candidate.fields[key] = { key, label, value: promotionClone(value), path, machineDependent: !!options.machineDependent, limitation: options.limitation || '' };
+    }
+    function buildMaterialTestPromotionCandidate(profile, test) {
+      if (!test || typeof test !== 'object') return null;
+      const normalized = normalizeMaterialTests([test])[0];
+      if (!normalized) return null;
+      const cut = normalized.testType === 'cut' || normalized.intendedOperation === 'cut';
+      const kerf = normalized.testType === 'kerf' || normalized.intendedOperation === 'kerf';
+      const physical = normalized.status !== 'archived' && normalized.status !== 'failed' && (normalized.physicalRunCompleted === true || normalized.completed === true || normalized.completionStatus === 'completed' || normalized.resultState === 'completed' || normalized.testStatus === 'completed');
+      const candidate = promotionCandidateBase('material-test', normalized, profile, { sourceId: normalized.id, sourceLabel: `${profile?.material || 'Material'} - ${materialTestLabel(normalized.testType)}`, sourceDate: normalized.date, sourceStatus: normalized.status, operation: cut ? 'cut' : normalized.intendedOperation || normalized.testType, machine: normalized.machine, defaultStatus: physical ? 'tested' : normalized.status === 'recommended' ? 'estimated' : 'untested', canVerify: cut, limitations: cut ? (physical ? [] : ['Physical completion is not explicitly recorded; tested status requires a reviewed Cut completed confirmation.']) : ['This test is not a Cut test; review it as evidence-only unless compatible Cut values are explicitly present.'] });
+      promotionAddField(candidate, 'measuredThicknessMm', 'Measured thickness', normalized.measuredThicknessMm, 'materialCondition.measuredThicknessMm');
+      promotionAddField(candidate, 'speedMmPerMin', 'Speed', normalized.winningSpeed, 'cutSettings.speedMmPerMin', { machineDependent: true });
+      promotionAddField(candidate, 'powerMinPercent', 'Minimum power', normalized.winningPower, 'cutSettings.powerMinPercent', { machineDependent: true });
+      promotionAddField(candidate, 'powerMaxPercent', 'Maximum power', normalized.winningPower, 'cutSettings.powerMaxPercent', { machineDependent: true });
+      promotionAddField(candidate, 'passes', 'Passes', normalized.winningPasses, 'cutSettings.passes', { machineDependent: true });
+      promotionAddField(candidate, 'airAssist', 'Air assist', normalized.airAssist, 'cutSettings.airAssist', { machineDependent: true });
+      promotionAddField(candidate, 'airPressurePsi', 'Air pressure', normalized.airPressurePsi, 'cutSettings.airPressurePsi', { machineDependent: true });
+      promotionAddField(candidate, 'focusValue', 'Focus / Z-offset', normalized.focusValue, 'cutSettings.focusValue', { machineDependent: true });
+      if (normalized.focusUnit) promotionAddField(candidate, 'focusUnit', 'Focus unit', normalized.focusUnit, 'cutSettings.focusUnit', { machineDependent: true });
+      promotionAddField(candidate, 'software', 'Software', normalized.software, 'cutSettings.software');
+      candidate.sourceSnapshot.result = normalized.resultSummary || normalized.overallResult || normalized.status;
+      candidate.sourceSnapshot.notes = normalized.notes;
+      if (!cut && !kerf) candidate.fields = {};
+      if (!cut && kerf) candidate.limitations.push('Signed kerf requires explicit LightBurn meaning; no sign is inferred from this test.');
+      return candidate;
+    }
+    function buildGridPromotionCandidate(grid, cellKey, cell, options = {}) {
+      if (!grid || !cellKey || !cell) return null;
+      const values = gridCellValues(cell), settings = gridCellSettingsFromKey(cellKey);
+      const gridMachine = options.machine !== undefined ? options.machine : grid.machine;
+      const candidate = promotionCandidateBase('test-grid', { ...grid, id: `${grid.id || ''}:${cellKey}`, sourceLabel: `${grid.name || 'Test Grid'} / ${cellKey}` }, options.profile, { sourceId: `${grid.id || ''}:${cellKey}`, sourceLabel: `${grid.name || 'Test Grid'} / ${cellKey}`, sourceDate: grid.createdDate, sourceStatus: values.best ? 'best-cell' : 'selected-cell', operation: grid.jobType === 'cut' ? 'cut' : grid.jobType === 'engrave' ? 'engrave_vector' : 'unknown', machine: gridMachine, inferMachineLabel: false, defaultStatus: options.physicalRun === false ? 'estimated' : 'tested', canVerify: grid.jobType === 'cut', limitations: values.best ? ['Best/rating is not verification; confirm the physical result explicitly.'] : [] });
+      promotionAddField(candidate, 'speedMmPerMin', 'Speed', settings.speed, 'cutSettings.speedMmPerMin', { machineDependent: true });
+      promotionAddField(candidate, 'powerMinPercent', 'Minimum power', settings.power, 'cutSettings.powerMinPercent', { machineDependent: true });
+      promotionAddField(candidate, 'powerMaxPercent', 'Maximum power', settings.power, 'cutSettings.powerMaxPercent', { machineDependent: true });
+      promotionAddField(candidate, 'passes', 'Passes', grid.passes, 'cutSettings.passes', { machineDependent: true });
+      promotionAddField(candidate, 'airAssist', 'Air assist', grid.airAssist, 'cutSettings.airAssist', { machineDependent: true });
+      promotionAddField(candidate, 'airPressurePsi', 'Air pressure', grid.airPressure, 'cutSettings.airPressurePsi', { machineDependent: true });
+      promotionAddField(candidate, 'measuredThicknessMm', 'Measured thickness', options.measuredThicknessMm, 'materialCondition.measuredThicknessMm');
+      candidate.sourceSnapshot.cellKey = String(cellKey); candidate.sourceSnapshot.rating = values.rating; candidate.sourceSnapshot.best = values.best; candidate.sourceSnapshot.notes = values.notes; candidate.sourceSnapshot.result = values.best ? 'Best cell selected' : 'Cell selected';
+      if (candidate.operation !== 'cut') { candidate.fields = {}; candidate.limitations.push('Non-Cut Grid cells are evidence-only in Phase 7.3A.'); }
+      return candidate;
+    }
+    function buildJointCouponPromotionCandidate(draft, result, options = {}) {
+      const pairs = result?.metrics?.pairs || [], clearances = result?.metrics?.clearances || [], couponIdentity = { version: 1, namespace: 'genmitsu-l8', sourceType: 'joint-fit-coupon-session', machine: options.machine || {}, sourceProfileId: options.profile?.id || '', material: options.profile?.material || draft?.material || '', nominalThicknessMm: options.profile ? promotionProfileThicknessMm(options.profile) : strictOptionalNumber(draft?.materialThickness), measuredThicknessMm: strictOptionalNumber(options.measuredThicknessMm), candidateClearances: clearances.map(item => item?.value).filter(value => Number.isFinite(value)), edgeLength: draft?.jointCouponEdgeLength || '', bodyDepth: draft?.jointCouponBodyDepth || '', operation: 'cut', speedMmPerMin: options.speedMmPerMin ?? '', powerMinPercent: options.powerMinPercent ?? '', powerMaxPercent: options.powerMaxPercent ?? '', passes: options.passes ?? '', airAssist: options.airAssist ?? '', kerfOffsetMm: options.kerfOffsetMm ?? '', result: { pairs, clearances }, sourceDate: options.sourceDate || '' }, sessionSource = JSON.stringify(promotionCanonicalize(couponIdentity)), candidate = promotionCandidateBase('joint-fit-coupon-session', { sourceLabel: 'Joint Fit Coupon session' }, options.profile, { sourceId: options.sourceId || `coupon-session-v1-${designFixtureHash(sessionSource)}`, sourceLabel: 'Joint Fit Coupon session', sourceDate: options.sourceDate || '', operation: 'cut', machine: options.machine, defaultStatus: 'tested', canVerify: true, limitations: ['Select one physical winner; no coupon value is preselected.'] });
+      candidate.couponValues = clearances.map(item => item.value).filter(value => Number.isFinite(value));
+      candidate.sourceSnapshot = { kind: 'joint-fit-coupon-session', draft: promotionClone(draft), result: promotionClone(result), candidateList: promotionClone(clearances), pairs: promotionClone(pairs), machine: promotionClone(candidate.machine), material: candidate.material, nominalThicknessMm: candidate.nominalThicknessMm, notes: '' };
+      if (options.selectedWinner !== '' && options.selectedWinner != null && candidate.couponValues.includes(Number(options.selectedWinner))) promotionAddField(candidate, 'fingerJointClearanceMm', 'Finger-joint clearance', Number(options.selectedWinner), 'fitSettings.fingerJointClearanceMm');
+      promotionAddField(candidate, 'measuredThicknessMm', 'Measured thickness', options.measuredThicknessMm, 'materialCondition.measuredThicknessMm');
+      promotionAddField(candidate, 'speedMmPerMin', 'Speed', options.speedMmPerMin, 'cutSettings.speedMmPerMin', { machineDependent: true });
+      promotionAddField(candidate, 'powerMinPercent', 'Minimum power', options.powerMinPercent, 'cutSettings.powerMinPercent', { machineDependent: true });
+      promotionAddField(candidate, 'powerMaxPercent', 'Maximum power', options.powerMaxPercent, 'cutSettings.powerMaxPercent', { machineDependent: true });
+      promotionAddField(candidate, 'passes', 'Passes', options.passes, 'cutSettings.passes', { machineDependent: true });
+      promotionAddField(candidate, 'airAssist', 'Air assist', options.airAssist, 'cutSettings.airAssist', { machineDependent: true });
+      promotionAddField(candidate, 'kerfOffsetMm', 'Signed LightBurn kerf', options.kerfOffsetMm, 'lightBurn.kerfOffsetMm', { machineDependent: true, limitation: 'Explicit LightBurn meaning required; sign is never inferred.' });
+      return candidate;
+    }
+    function buildProjectPromotionCandidate(project, options = {}) {
+      if (!project) return null;
+      const settings = project.settings || {}, candidate = promotionCandidateBase('project', project, options.profile, { sourceId: project.id, sourceLabel: project.name || `${project.material || 'Project'} project`, sourceDate: project.dateCreated, sourceStatus: project.status, operation: project.jobType || 'unknown', machine: options.machine || settings.machine, defaultStatus: 'untested', canVerify: false, limitations: ['Projects are evidence-first; completion, rating, photos, and notes do not prove fit or assembly.'] });
+      promotionAddField(candidate, 'measuredThicknessMm', 'Measured thickness', project.measuredThicknessMm, 'materialCondition.measuredThicknessMm');
+      if (candidate.operation === 'cut') {
+        promotionAddField(candidate, 'speedMmPerMin', 'Speed', settings.speed, 'cutSettings.speedMmPerMin', { machineDependent: true });
+        promotionAddField(candidate, 'powerMinPercent', 'Minimum power', settings.minPower, 'cutSettings.powerMinPercent', { machineDependent: true });
+        promotionAddField(candidate, 'powerMaxPercent', 'Maximum power', settings.maxPower, 'cutSettings.powerMaxPercent', { machineDependent: true });
+        promotionAddField(candidate, 'passes', 'Passes', settings.passes, 'cutSettings.passes', { machineDependent: true });
+        promotionAddField(candidate, 'airAssist', 'Air assist', settings.airAssist, 'cutSettings.airAssist', { machineDependent: true });
+        promotionAddField(candidate, 'airPressurePsi', 'Air pressure', settings.airPressure, 'cutSettings.airPressurePsi', { machineDependent: true });
+        promotionAddField(candidate, 'focusValue', 'Focus / Z-offset', settings.focusValue, 'cutSettings.focusValue', { machineDependent: true });
+        if (settings.focusUnit) promotionAddField(candidate, 'focusUnit', 'Focus unit', settings.focusUnit, 'cutSettings.focusUnit', { machineDependent: true });
+        promotionAddField(candidate, 'software', 'Software', settings.software, 'cutSettings.software');
+      } else candidate.limitations.push('This Project is not a Cut project; no Cut Production Setting values are available.');
+      candidate.sourceSnapshot.settings = promotionClone(settings); candidate.sourceSnapshot.result = project.rating ? `Rating ${project.rating}/5` : ''; candidate.sourceSnapshot.notes = project.notes || '';
+      return candidate;
+    }
+    function projectPromotionEligibility(project) {
+      if (!project || typeof project !== 'object') return { eligible: false, reason: 'Project is missing.' };
+      const status = normalizeProjectStatus(project.status);
+      const validStatus = ['kept', 'gifted', 'for-sale', 'sold'].includes(status);
+      if (!validStatus) return { eligible: false, reason: `Project status ${status} is not a completed Project state.` };
+      if (!validProjectDate(project.dateCreated) || !['cut', 'engrave'].includes(project.jobType)) return { eligible: false, reason: 'Project completion date and operation are required.' };
+      return { eligible: true, reason: '' };
+    }
+    function projectPromotionActionHtml(project, browser = false) {
+      const eligibility = projectPromotionEligibility(project);
+      if (eligibility.eligible) return `<button type="button" ${browser ? 'data-promote-project' : 'data-promote-project'}="${esc(project.id)}">Add as Production evidence</button>`;
+      return `<span class="small muted" title="${esc(eligibility.reason)}">Promotion unavailable: incomplete Project</span>`;
+    }
+    function promotionPathValue(setting, path) {
+      return String(path || '').split('.').reduce((value, key) => value == null ? undefined : value[key], setting);
+    }
+    function promotionCanonicalize(value) {
+      if (Array.isArray(value)) return value.map(promotionCanonicalize);
+      if (!value || typeof value !== 'object') return value;
+      return Object.keys(value).sort().reduce((out, key) => { out[key] = promotionCanonicalize(value[key]); return out; }, {});
+    }
+    function promotionFieldRows(candidate, target) {
+      return Object.values(candidate?.fields || {}).map(fieldData => ({ ...fieldData, targetValue: promotionPathValue(target, fieldData.path), replaces: promotionPathValue(target, fieldData.path) !== '' && promotionPathValue(target, fieldData.path) !== undefined && JSON.stringify(promotionPathValue(target, fieldData.path)) !== JSON.stringify(fieldData.value) }));
+    }
+    function promotionValidSelectedFields(candidate, session = {}, target = null) {
+      const valid = {}, unknown = [], blocked = [], malformed = [], requested = session?.selectedFields || {};
+      Object.keys(requested).forEach(key => {
+        const fieldData = candidate?.fields?.[key];
+        if (!fieldData) { unknown.push(key); return; }
+        if (requested[key] !== true) { malformed.push(key); return; }
+        const value = fieldData.value;
+        if (value === '' || value == null || (typeof value === 'number' && !Number.isFinite(value))) { malformed.push(key); return; }
+        if (fieldData.machineDependent && target?.machine?.key && candidate?.machine?.key && target.machine.key !== candidate.machine.key) { blocked.push(key); return; }
+        if (fieldData.machineDependent && !candidate?.machine?.key && session?.action !== 'evidence') { blocked.push(key); return; }
+        valid[key] = true;
+      });
+      return { valid, unknown, blocked, malformed };
+    }
+    function promotionEligibility(candidate, targetProfile, targetSetting, action = 'create', selectedFields = {}) {
+      const errors = [], warnings = [], machine = candidate?.machine || {};
+      const selection = promotionValidSelectedFields(candidate, { action, selectedFields }, targetSetting);
+      if (!candidate) errors.push('No promotion source is selected.');
+      if (!targetProfile) errors.push('Choose an existing target Library profile.');
+      if (action === 'update' || action === 'evidence') {
+        if (!targetSetting) errors.push('Choose a target Production Setting.');
+        if (targetSetting && machine.key && targetSetting.machine?.key && machine.key !== targetSetting.machine.key) warnings.push('Machine mismatch: measured thickness may be reviewed, but machine-dependent values are blocked.');
+      }
+      if (action !== 'evidence' && !Object.keys(selection.valid).length) errors.push('Select at least one compatible value before saving.');
+      if (selection.unknown.length) errors.push(`Unknown promotion field(s): ${selection.unknown.join(', ')}.`);
+      if (selection.blocked.length) errors.push(`Blocked or machine-incompatible promotion field(s): ${selection.blocked.join(', ')}.`);
+      if (selection.malformed.length) errors.push(`Malformed promotion field selection(s): ${selection.malformed.join(', ')}.`);
+      if (candidate && !machine.key) warnings.push('Source machine identity is missing or unrecognized; do not silently assign the current machine.');
+      return { errors, warnings };
+    }
+    function promotionStatusRules(candidate, status, checks, date, notes) {
+      const physical = checks || {}, errors = [], statuses = ['untested', 'estimated', 'tested', 'verified'], allowedChecks = candidate?.sourceType === 'joint-fit-coupon-session' ? ['piecesFit'] : candidate?.sourceType === 'project' ? [] : candidate?.operation === 'cut' ? ['cutCompleted'] : ['appearanceApproved'];
+      if (!statuses.includes(status)) errors.push(`Invalid promotion status: ${status || 'empty'}. Choose untested, estimated, tested, or verified.`);
+      if (status === 'superseded') errors.push('Superseded is a history state, not a requested promotion status.');
+      Object.keys(physical).filter(key => physical[key] && !allowedChecks.includes(key)).forEach(key => errors.push(`Physical check ${key} is not applicable to this source and operation.`));
+      if (status === 'tested' && candidate?.sourceType === 'material-test' && candidate.operation === 'cut' && !candidate.sourceSnapshot?.source?.physicalRunCompleted && !physical.cutCompleted) errors.push('Tested status requires an explicit physical completion signal or reviewed Cut completed confirmation.');
+      if (status === 'verified') {
+        if (!candidate?.canVerify) errors.push('This source cannot be marked verified in Phase 7.3A.');
+        if (!date) errors.push('Verified status requires a verified date.');
+        if (!String(notes || '').trim()) errors.push('Verified status requires notes describing what was checked.');
+        const applicable = candidate?.sourceType === 'joint-fit-coupon-session' ? physical.piecesFit && !!candidate.fields?.fingerJointClearanceMm : candidate?.operation === 'cut' && physical.cutCompleted;
+        if (!applicable) errors.push('Select an applicable physical confirmation before marking verified.');
+      }
+      return errors;
+    }
+    function promotionVerifiedDateRules(status, verifiedDate) {
+      const errors = [];
+      if (status === 'verified' && !String(verifiedDate || '').trim()) errors.push('Verified status requires a verified date.');
+      if (status !== 'verified' && String(verifiedDate || '').trim()) errors.push('Verified date requires verified status.');
+      return errors;
+    }
+    function promotionEvidenceSnapshot(candidate, session, selectedValues) {
+      return { kind: candidate.sourceType, sourceId: candidate.sourceId, sourceProfileId: candidate.sourceProfileId, sourceLabel: candidate.sourceLabel, date: candidate.sourceDate, sourceDate: candidate.sourceDate, sourceStatus: candidate.sourceStatus, createdDate: today(), sourceSnapshot: promotionClone(candidate.sourceSnapshot), selectedValues: promotionClone(selectedValues), physicalChecks: promotionClone(session.physicalChecks || {}), promotionSignature: promotionSignature(candidate, session), result: candidate.sourceSnapshot?.result || '', notes: String(session.reviewNotes || candidate.sourceSnapshot?.notes || '').trim() };
+    }
+    function promotionSignature(candidate, session) {
+      const selected = promotionValidSelectedFields(candidate, session, session?.targetSetting).valid;
+      return JSON.stringify(promotionCanonicalize({ version: 1, sourceType: candidate?.sourceType || '', sourceId: candidate?.sourceId || '', sourceProfileId: candidate?.sourceProfileId || '', sourceMachine: candidate?.machine || {}, sourceMaterial: candidate?.material || '', sourceOperation: candidate?.operation || '', sourceSnapshot: candidate?.sourceSnapshot || {}, targetProfileId: session?.targetProfileId || '', targetSettingId: session?.targetSettingId || '', action: session?.action || '', selectedFields: Object.keys(selected).sort(), selectedValues: Object.keys(selected).sort().reduce((out, key) => { out[key] = candidate?.fields?.[key]?.value; return out; }, {}), requestedStatus: session?.requestedStatus || '', measurementScope: session?.measurementScope || '', sourceDate: candidate?.sourceDate || '' }));
+    }
+    function promotionSetPath(target, path, value) {
+      const keys = String(path || '').split('.'), leaf = keys.pop(); let cursor = target;
+      keys.forEach(key => { if (!cursor[key] || typeof cursor[key] !== 'object') cursor[key] = {}; cursor = cursor[key]; });
+      cursor[leaf] = promotionClone(value);
+    }
+    function mergePromotionIntoSetting(target, candidate, selectedFields, session = {}) {
+      const next = promotionClone(target || {});
+      Object.keys(selectedFields || {}).forEach(key => { const fieldData = candidate?.fields?.[key]; if (fieldData) promotionSetPath(next, fieldData.path, fieldData.value); });
+      const metadata = session.metadataSelections || {};
+      if (session.action === 'create' || metadata.measurementScope) next.materialCondition = { ...(next.materialCondition || {}), measurementScope: session.measurementScope };
+      if (session.action === 'create' || metadata.batchLabel) next.materialCondition = { ...(next.materialCondition || {}), batchLabel: String(session.batchLabel || '') };
+      if (session.action === 'create' || metadata.status) next.verificationStatus = session.requestedStatus;
+      if (session.action === 'create' || metadata.label) next.label = String(session.label || '');
+      if (session.action === 'create' || (session.action === 'update' && metadata.preferred)) next.preferred = !!session.preferred;
+      if (session.action === 'create' || metadata.status || (session.action === 'update' && metadata.verifiedDate)) next.verifiedDate = session.requestedStatus === 'verified' ? session.verifiedDate : '';
+      if (session.reviewNotes) next.notes = session.reviewNotes;
+      return next;
+    }
+    function promotionSourceDuplicateWarnings(candidate, targetProfile, session) {
+      const signature = promotionSignature(candidate, session), warnings = [];
+      normalizeProductionSettings(targetProfile?.productionSettings).forEach(setting => (setting.evidence || []).forEach(evidence => { if (evidence.promotionSignature === signature || (evidence.sourceId && evidence.sourceId === candidate.sourceId && evidence.kind === candidate.sourceType)) warnings.push(`This source may already be attached to ${setting.label || 'a Production Setting'}.`); }));
+      return warnings;
+    }
+    function savePromotionTransaction(session, confirmDemotion = message => confirm(message), persistFn = persist) {
+      const candidate = session?.candidate, targetProfile = state.profiles.find(profile => profile.id === session?.targetProfileId), targetSetting = normalizeProductionSettings(targetProfile?.productionSettings).find(setting => setting.id === session?.targetSettingId), eligibility = promotionEligibility(candidate, targetProfile, targetSetting, session?.action, session?.selectedFields), statusNeedsValidation = session?.action === 'create' || !targetSetting || session?.metadataSelections?.status === true, statusErrors = statusNeedsValidation ? promotionStatusRules(candidate, session?.requestedStatus, session?.physicalChecks, session?.verifiedDate, session?.reviewNotes) : [], dateErrors = session?.action === 'update' && session?.metadataSelections?.verifiedDate ? promotionVerifiedDateRules(session?.requestedStatus, session?.verifiedDate) : [];
+      if (eligibility.errors.length || statusErrors.length || dateErrors.length) return { ok: false, errors: [...eligibility.errors, ...statusErrors, ...dateErrors] };
+      const selection = promotionValidSelectedFields(candidate, { ...session, targetSetting }, targetSetting);
+      if (session?.evidenceId && normalizeProductionSettings(targetProfile.productionSettings).some(setting => (setting.evidence || []).some(item => item.id === session.evidenceId))) return { ok: false, errors: ['The requested evidence ID already exists; no existing evidence was replaced.'] };
+      if (session.action === 'create' && !candidate.machine.key) return { ok: false, errors: ['Create requires an exact or explicitly labeled source machine.'] };
+      if (session.action !== 'evidence' && !candidate.machine.key && Object.keys(selection.valid).some(key => candidate.fields[key]?.machineDependent)) return { ok: false, errors: ['Machine-dependent values require an exact source machine identity.'] };
+      if (targetSetting && candidate.machine.key && targetSetting.machine?.key && candidate.machine.key !== targetSetting.machine.key && Object.keys(selection.valid).some(key => key !== 'measuredThicknessMm' && candidate.fields[key]?.machineDependent)) return { ok: false, errors: ['Machine-dependent fields cannot be promoted across machines.'] };
+      const previousProfile = promotionClone(targetProfile), nextProfile = promotionClone(targetProfile), settings = normalizeProductionSettings(nextProfile.productionSettings), selected = Object.keys(session.selectedFields || {}).reduce((out, key) => { if (candidate.fields[key]) out[key] = candidate.fields[key].value; return out; }, {});
+      let nextSetting = targetSetting ? promotionClone(targetSetting) : null;
+      if (session.action === 'create') {
+        nextSetting = normalizeProductionSetting({ label: session.label || candidate.sourceLabel, operation: candidate.operation === 'cut' ? 'cut' : 'cut', machine: promotionClone(candidate.machine), materialCondition: { nominalThicknessMm: candidate.nominalThicknessMm, measurementScope: session.measurementScope || candidate.measurementScope || 'unknown', batchLabel: session.batchLabel || '' }, cutSettings: {}, lightBurn: {}, fitSettings: {}, verificationStatus: session.requestedStatus || candidate.defaultStatus || 'untested', preferred: !!session.preferred, verifiedDate: session.verifiedDate || '', notes: session.reviewNotes || '' });
+        nextSetting = mergePromotionIntoSetting(nextSetting, candidate, session.selectedFields, session);
+        nextSetting.id = uid(); nextSetting.createdDate = today(); nextSetting.updatedDate = today();
+        settings.unshift(nextSetting);
+      } else if (session.action === 'update') {
+        nextSetting = mergePromotionIntoSetting(nextSetting, candidate, session.selectedFields, session);
+        nextSetting.id = targetSetting.id; nextSetting.updatedDate = today();
+        const index = settings.findIndex(item => item.id === targetSetting.id); settings[index] = normalizeProductionSetting(nextSetting);
+      } else {
+        nextSetting = targetSetting;
+      }
+       const evidence = normalizeProductionEvidence([{ ...promotionEvidenceSnapshot(candidate, { ...session, targetSetting }, selected), id: session.evidenceId || uid() }])[0];
+      const settingIndex = settings.findIndex(item => item.id === nextSetting.id);
+      if (settingIndex < 0) return { ok: false, errors: ['The target Production Setting could not be resolved.'] };
+      settings[settingIndex] = { ...settings[settingIndex], evidence: [...(settings[settingIndex].evidence || []), evidence] };
+      const preferredRequested = session.action === 'create' || (session.action === 'update' && session.metadataSelections?.preferred && session.preferred), conflicts = preferredRequested ? settings.filter(item => item.id !== nextSetting.id && item.preferred && item.verificationStatus !== 'superseded' && item.operation === nextSetting.operation && item.machine.key === nextSetting.machine.key) : [];
+      if (conflicts.length && !confirmDemotion(productionPreferredConflictMessage(nextSetting, conflicts))) settings[settingIndex].preferred = false;
+      if (conflicts.length && settings[settingIndex].preferred !== false) conflicts.forEach(conflict => { const index = settings.findIndex(item => item.id === conflict.id); settings[index] = { ...settings[index], preferred: false, updatedDate: today() }; });
+      if (session.supersedeSettingId) {
+        const superseded = supersedeProductionSettingDraft(settings, session.supersedeSettingId, nextSetting.id);
+        if (!superseded) return { ok: false, errors: ['Choose a valid same-machine, same-operation active replacement for supersede.'] };
+        nextProfile.productionSettings = superseded;
+      } else nextProfile.productionSettings = settings;
+      if (!saveProfileRecord(state.profiles, nextProfile, persistFn)) return { ok: false, errors: ['The Library save failed; no promotion changes were retained.'] };
+      return { ok: true, settingId: nextSetting.id, evidenceId: evidence.id, duplicateWarnings: promotionSourceDuplicateWarnings(candidate, targetProfile, session) };
+    }
+    function promotionTargetProfileOptions(selectedId) {
+      return state.profiles.map(profile => `<option value="${esc(profile.id)}" ${profile.id === selectedId ? 'selected' : ''}>${esc(profile.material || 'Unnamed material')} / ${esc(fmt(profile.thicknessValue, profile.thicknessUnit))} / ${esc(profile.id)}</option>`).join('');
+    }
+    function promotionTargetSettingOptions(profile, selectedId) {
+      return `<option value="">Select Production Setting...</option>${normalizeProductionSettings(profile?.productionSettings).map(setting => `<option value="${esc(setting.id)}" ${setting.id === selectedId ? 'selected' : ''}>${esc(setting.label || 'Production Setting')} / ${esc(productionMachineLabel(setting))} / ${esc(productionStatusLabel(setting.verificationStatus))}</option>`).join('')}`;
+    }
+    function promotionPhysicalChecksHtml(checks = {}, sourceType = '') {
+      const items = [['cutCompleted', 'Cut completed'], ['piecesFit', 'Pieces fit'], ['assemblyCompleted', 'Assembly completed'], ['drawerMovedFreely', 'Drawer moved freely'], ['appearanceApproved', 'Appearance approved']];
+      return items.map(([key, label]) => `<label class="row small"><input type="checkbox" data-promotion-check="${key}" ${checks[key] ? 'checked' : ''} style="width:auto"> ${esc(label)}</label>`).join('');
+    }
+    function promotionFieldRowsHtml(candidate, target, action, selectedFields) {
+      const rows = promotionFieldRows(candidate, target);
+      if (!rows.length) return '<div class="small muted">No compatible structured values are available from this source. Use Evidence only if a target setting is selected.</div>';
+      return rows.map(row => {
+        const disabled = action === 'evidence' || (row.machineDependent && target?.machine?.key && candidate.machine.key && target.machine.key !== candidate.machine.key);
+        const limitation = disabled && row.machineDependent ? 'Blocked: source and target machines differ.' : row.limitation || row.replaces ? row.limitation || 'Replaces the current target value.' : '';
+        return `<div class="panel promotion-field-row"><label class="row"><input type="checkbox" data-promotion-field="${esc(row.key)}" ${selectedFields[row.key] ? 'checked' : ''} ${disabled ? 'disabled' : ''} style="width:auto"><b>${esc(row.label)}</b></label><div class="small">Source: <b>${esc(String(row.value))}</b> / Current target: ${esc(row.targetValue === undefined || row.targetValue === '' ? '-' : String(row.targetValue))}</div>${limitation ? `<div class="small muted">${esc(limitation)}</div>` : ''}</div>`;
+      }).join('');
+    }
+    function capturePromotionForm() {
+      const form = document.getElementById('promotionReviewForm');
+      if (!form) return;
+      const targetProfile = state.profiles.find(profile => profile.id === form.elements.targetProfileId?.value), targetSetting = normalizeProductionSettings(targetProfile?.productionSettings).find(setting => setting.id === form.elements.targetSettingId?.value);
+      promotionSession.action = form.elements.promotionAction?.value || promotionSession.action;
+      promotionSession.targetProfileId = form.elements.targetProfileId?.value || promotionSession.targetProfileId;
+      promotionSession.targetSettingId = form.elements.targetSettingId?.value || '';
+      promotionSession.requestedStatus = form.elements.requestedStatus?.value || promotionSession.requestedStatus;
+      promotionSession.measurementScope = form.elements.measurementScope?.value || 'unknown';
+      promotionSession.batchLabel = form.elements.batchLabel?.value || '';
+      promotionSession.verifiedDate = form.elements.verifiedDate?.value || '';
+      promotionSession.reviewNotes = form.elements.reviewNotes?.value || '';
+      promotionSession.label = form.elements.promotionLabel?.value || '';
+      promotionSession.preferred = !!form.elements.promotionPreferred?.checked;
+      promotionSession.metadataSelections = {
+        label: promotionSession.action === 'create' || (!!targetSetting && promotionSession.label !== String(targetSetting.label || '')),
+        measurementScope: promotionSession.action === 'create' || (!!targetSetting && promotionSession.measurementScope !== String(targetSetting.materialCondition?.measurementScope || 'unknown')),
+        batchLabel: promotionSession.action === 'create' || (!!targetSetting && promotionSession.batchLabel !== String(targetSetting.materialCondition?.batchLabel || '')),
+        status: promotionSession.action === 'create' || (!!targetSetting && promotionSession.requestedStatus !== String(targetSetting.verificationStatus || 'untested')),
+        verifiedDate: promotionSession.action === 'create' || (promotionSession.action === 'update' && !!targetSetting && promotionSession.verifiedDate !== String(targetSetting.verifiedDate || '')),
+        preferred: promotionSession.action === 'create' || (promotionSession.action === 'update' && !!targetSetting && promotionSession.preferred !== !!targetSetting.preferred)
+      };
+      if (promotionSession.action === 'evidence') {
+        promotionSession.metadataSelections.verifiedDate = false;
+        promotionSession.metadataSelections.preferred = false;
+      }
+      promotionSession.supersedeSettingId = form.elements.supersedeSettingId?.value || '';
+      promotionSession.selectedFields = {};
+      form.querySelectorAll('[data-promotion-field]:checked').forEach(input => { promotionSession.selectedFields[input.dataset.promotionField] = true; });
+      promotionSession.physicalChecks = {};
+      form.querySelectorAll('[data-promotion-check]').forEach(input => { promotionSession.physicalChecks[input.dataset.promotionCheck] = !!input.checked; });
+    }
+    function renderPromotionReview() {
+      const candidate = promotionSession.candidate;
+      if (!candidate) return;
+      const targetProfile = state.profiles.find(profile => profile.id === promotionSession.targetProfileId);
+      const targetSetting = normalizeProductionSettings(targetProfile?.productionSettings).find(setting => setting.id === promotionSession.targetSettingId);
+      const rows = promotionFieldRowsHtml(candidate, targetSetting, promotionSession.action, promotionSession.selectedFields);
+      const eligibility = promotionEligibility(candidate, targetProfile, targetSetting, promotionSession.action, promotionSession.selectedFields);
+       const gridMachineWarning = candidate.sourceType === 'test-grid' && !candidate.machine?.key ? 'Machine identity was not recorded for this Grid. Machine-dependent settings cannot be promoted. Evidence-only remains available.' : '';
+       const warnings = [...eligibility.warnings, ...(gridMachineWarning ? [gridMachineWarning] : []), ...(candidate.limitations || []), ...(promotionSession.duplicateWarnings || [])].map(message => `<div class="small muted" style="margin-top:6px">${esc(message)}</div>`).join('');
+      const targetSettings = promotionTargetSettingOptions(targetProfile, promotionSession.targetSettingId);
+      const supersede = targetProfile && promotionSession.action !== 'evidence' ? normalizeProductionSettings(targetProfile.productionSettings).filter(setting => setting.id !== promotionSession.targetSettingId && setting.verificationStatus !== 'superseded' && setting.operation === (targetSetting?.operation || 'cut') && setting.machine?.key === (candidate.machine?.key || targetSetting?.machine?.key)).map(setting => `<option value="${esc(setting.id)}" ${setting.id === promotionSession.supersedeSettingId ? 'selected' : ''}>${esc(setting.label || 'Production Setting')} / ${esc(productionMachineLabel(setting))}</option>`).join('') : '';
+      openModal('productionEvidenceModal', `<div class="dialog" style="max-width:780px"><div class="spread"><div><h2>Promotion review</h2><div class="small muted">Session-only until explicit Save</div></div><button type="button" data-promotion-cancel>&times;</button></div><div class="panel"><b>Source</b><div class="small" style="margin-top:6px">${esc(candidate.sourceType)} / ${esc(candidate.sourceLabel)} / ${esc(candidate.sourceDate || 'No date')}</div><div class="small muted">ID: ${esc(candidate.sourceId || 'Session snapshot')} / Profile: ${esc(candidate.sourceProfileId || 'Not recorded')}</div><div class="small" style="margin-top:6px">Material: ${esc(candidate.material || 'Not recorded')} / Operation: ${esc(candidate.operation || 'Unknown')} / Machine: ${esc(candidate.machine.label || candidate.machine.key || 'Not recorded')}</div>${warnings}</div><form id="promotionReviewForm" class="formgrid" style="margin-top:10px"><label>Target Library profile<select name="targetProfileId">${promotionTargetProfileOptions(promotionSession.targetProfileId)}</select></label><label>Action<select name="promotionAction"><option value="create" ${promotionSession.action === 'create' ? 'selected' : ''}>Create new Production Setting</option><option value="update" ${promotionSession.action === 'update' ? 'selected' : ''}>Update existing Production Setting</option><option value="evidence" ${promotionSession.action === 'evidence' ? 'selected' : ''}>Add evidence only</option></select></label>${promotionSession.action === 'evidence' || promotionSession.action === 'update' ? `<label class="span2">Target Production Setting<select name="targetSettingId">${targetSettings}</select></label>` : ''}<label>${labelText('Production-setting label')}<input name="promotionLabel" value="${esc(promotionSession.label || candidate.sourceLabel)}"></label><label>Status<select name="requestedStatus">${['untested','estimated','tested','verified'].map(status => `<option value="${status}" ${promotionSession.requestedStatus === status ? 'selected' : ''}>${esc(productionStatusLabel(status))}</option>`).join('')}</select></label><label>Measurement scope<select name="measurementScope">${productionMeasurementScopes.map(scope => `<option value="${scope}" ${promotionSession.measurementScope === scope ? 'selected' : ''}>${esc(scope)}</option>`).join('')}</select></label>${field('batchLabel','Batch / sheet label',promotionSession.batchLabel)}${field('verifiedDate','Verified date',promotionSession.verifiedDate,'date')}<label class="span2">Review notes<textarea name="reviewNotes" rows="3">${esc(promotionSession.reviewNotes)}</textarea></label><div class="span2 panel"><b>Explicit field selection</b><div class="small muted" style="margin:6px 0">Unchecked values remain unchanged. Evidence-only may save with zero selected value fields.</div>${rows}</div><div class="span2 panel"><b>What was physically verified?</b><div class="row" style="margin-top:7px">${promotionPhysicalChecksHtml(promotionSession.physicalChecks, candidate.sourceType)}</div></div><label class="row"><input name="promotionPreferred" type="checkbox" ${promotionSession.preferred ? 'checked' : ''} ${promotionSession.action === 'evidence' ? 'disabled' : ''} style="width:auto"> Mark the resulting setting preferred (explicit conflict review required)</label>${supersede ? `<label class="span2">Optional supersede target<select name="supersedeSettingId"><option value="">Do not supersede</option>${supersede}</select></label>` : ''}<div class="span2 actions"><button type="button" data-promotion-cancel>Cancel</button><button type="submit" class="primary">Save reviewed promotion</button></div></form></div>`);
+      document.querySelectorAll('[data-promotion-cancel]').forEach(button => button.onclick = cancelPromotion);
+      const form = document.getElementById('promotionReviewForm');
+       form.elements.targetProfileId.onchange = () => { capturePromotionForm(); promotionSession.targetProfileId = form.elements.targetProfileId.value; promotionSession.targetSettingId = ''; promotionSession = syncPromotionMetadataFromTarget(promotionSession, null); renderPromotionReview(); };
+       form.elements.promotionAction.onchange = () => { capturePromotionForm(); promotionSession.action = form.elements.promotionAction.value; if (promotionSession.action === 'create') promotionSession.targetSettingId = ''; if (promotionSession.action === 'evidence') promotionSession.selectedFields = {}; const profile = state.profiles.find(item => item.id === promotionSession.targetProfileId), target = normalizeProductionSettings(profile?.productionSettings).find(setting => setting.id === promotionSession.targetSettingId); promotionSession = syncPromotionMetadataFromTarget(promotionSession, promotionSession.action === 'create' ? null : target); renderPromotionReview(); };
+       form.elements.targetSettingId?.addEventListener('change', () => { capturePromotionForm(); const profile = state.profiles.find(item => item.id === promotionSession.targetProfileId), target = normalizeProductionSettings(profile?.productionSettings).find(setting => setting.id === form.elements.targetSettingId.value); promotionSession.targetSettingId = form.elements.targetSettingId.value; promotionSession = syncPromotionMetadataFromTarget(promotionSession, target); renderPromotionReview(); });
+      form.onsubmit = event => { event.preventDefault(); capturePromotionForm(); const result = savePromotionTransaction(promotionSession); if (!result.ok) return alert(result.errors.join('\n')); const warnings = result.duplicateWarnings || []; cancelPromotion(); render(); if (warnings.length) showInfoToast(`Promotion saved with warning: ${warnings[0]}`); else showInfoToast('Reviewed promotion saved.'); };
+    }
+    function startPromotion(candidate, action = 'create') {
+      if (!candidate) return alert('This source does not contain a promotable result.');
+      const sourceProfile = state.profiles.find(profile => profile.id === candidate.sourceProfileId);
+       promotionSession = { ...promotionSessionDefaults(), sourceType: candidate.sourceType, sourceId: candidate.sourceId, sourceProfileId: candidate.sourceProfileId, candidate: promotionClone(candidate), targetProfileId: sourceProfile?.id || '', action, requestedStatus: candidate.defaultStatus || 'untested', measurementScope: candidate.measurementScope || 'unknown', label: candidate.sourceLabel };
+       const target = state.profiles.find(profile => profile.id === promotionSession.targetProfileId);
+       if (action === 'evidence') promotionSession.targetSettingId = normalizeProductionSettings(target?.productionSettings)[0]?.id || '';
+       if (action === 'evidence') promotionSession = syncPromotionMetadataFromTarget(promotionSession, normalizeProductionSettings(target?.productionSettings).find(setting => setting.id === promotionSession.targetSettingId));
+       renderPromotionReview();
+    }
+    function cancelPromotion() {
+      promotionSession = promotionSessionDefaults();
+      closeModal('productionEvidenceModal');
+    }
+    function openMaterialTestPromotion(profileId, testId) {
+      const profile = state.profiles.find(item => item.id === profileId), test = profile && normalizeMaterialTests(profile.tests).find(item => item.id === testId);
+      if (!profile || !test) return alert('Save the Library material and Material Test before promoting it.');
+      startPromotion(buildMaterialTestPromotionCandidate(profile, test));
+    }
+    function openGridPromotion(grid, cellKey, cell) {
+      const profile = state.profiles.find(item => item.id === grid?.sourceProfileId || item.id === grid?.profileId) || null;
+      startPromotion(buildGridPromotionCandidate(grid, cellKey, cell, { profile, machine: grid?.machine }));
+    }
+    function openProjectPromotion(projectId) {
+      const project = state.projects.find(item => item.id === projectId), profile = project && state.profiles.find(item => item.id === project.sourceProfileId);
+      const eligibility = projectPromotionEligibility(project);
+      if (!eligibility.eligible) return alert(eligibility.reason);
+      startPromotion(buildProjectPromotionCandidate(project, { profile }),'evidence');
+    }
+    function openJointCouponPromotion(draft, result) {
+      const values = result?.metrics?.clearances || [];
+      openModal('productionEvidenceModal', `<div class="dialog"><div class="spread"><h2>Promote physical winner</h2><button type="button" data-close>&times;</button></div><div class="small muted">Select the physical winner explicitly. No coupon value is selected automatically.</div><form id="jointCouponPromotionForm" class="formgrid" style="margin-top:10px"><label>Exact source machine<select name="machineKey"><option value="">Select machine...</option><option value="genmitsu-l8-20w">Genmitsu L8 20W</option><option value="genmitsu-l8-40w">Genmitsu L8 40W</option><option value="custom">Custom machine</option></select></label>${field('machineLabel','Machine label','') }<label class="span2">Physical winner<select name="winner"><option value="">Choose a clearance...</option>${values.map(item => `<option value="${esc(item.value)}">${esc(item.text)} mm</option>`).join('')}</select></label><label class="span2">Review notes<textarea name="notes" rows="3" placeholder="What did the physical fit show?"></textarea></label><div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Review promotion</button></div></form></div>`);
+      bindModal('productionEvidenceModal');
+      document.getElementById('jointCouponPromotionForm').onsubmit = event => { event.preventDefault(); const form = event.target, winner = form.elements.winner.value, machineKey = form.elements.machineKey.value, machineLabel = form.elements.machineLabel.value.trim(); if (winner === '') return alert('Select the physical winner first.'); if (!machineKey || (machineKey === 'custom' && !machineLabel)) return alert('Record the exact source machine before reviewing promotion.'); const candidate = buildJointCouponPromotionCandidate(draft, result, { selectedWinner: Number(winner), sourceDate: today(), machine: { key: machineKey, label: machineLabel } }); candidate.sourceSnapshot.notes = form.elements.notes.value.trim(); startPromotion(candidate); };
+    }
+    function runPromotionTargetSwitchFixtures() {
+      const results = [], add = (name, pass, expected = '', actual = '' ) => results.push({ name, pass: !!pass, expected, actual }), originalProfiles = state.profiles;
+      const targetA = normalizeProductionSetting({ id: 'switch-a', label: 'Target A', operation: 'cut', machine: { key: 'genmitsu-l8-20w', label: 'Genmitsu L8 20W' }, materialCondition: { measurementScope: 'sheet', batchLabel: 'Batch-A' }, cutSettings: { speedMmPerMin: 400 }, verificationStatus: 'tested', preferred: false, evidence: [{ id: 'evidence-a', kind: 'manual', future: 'keep-a' }], futureTarget: 'keep-a' });
+      const targetB = normalizeProductionSetting({ id: 'switch-b', label: 'Target B', operation: 'cut', machine: { key: 'genmitsu-l8-20w', label: 'Genmitsu L8 20W' }, materialCondition: { measurementScope: 'batch', batchLabel: 'Batch-B' }, cutSettings: { speedMmPerMin: 450 }, verificationStatus: 'verified', verifiedDate: '2026-07-01', preferred: true, evidence: [{ id: 'evidence-b', kind: 'manual', future: 'keep-b' }], futureTarget: 'keep-b' });
+      const targetC = normalizeProductionSetting({ id: 'switch-c', label: 'Conflict C', operation: 'cut', machine: { key: 'genmitsu-l8-20w', label: 'Genmitsu L8 20W' }, materialCondition: { measurementScope: 'sheet', batchLabel: 'Batch-C' }, cutSettings: { speedMmPerMin: 500 }, verificationStatus: 'tested', preferred: true, evidence: [{ id: 'evidence-c', kind: 'manual', future: 'keep-c' }], futureTarget: 'keep-c' });
+      const test = { id: 'switch-test', date: '2026-07-17', machine: 'Genmitsu L8 20W', physicalRunCompleted: true, testType: 'cut', status: 'experimental', winningSpeed: 650, winningPower: 80, winningPasses: 1, notes: 'Physical cut.' };
+      const profile = { id: 'switch-profile', material: 'Basswood', thicknessValue: 3, thicknessUnit: 'mm', jobType: 'cut', tests: [test], productionSettings: [targetA, targetB, targetC] };
+      try {
+        state.profiles = [profile];
+        const candidate = buildMaterialTestPromotionCandidate(profile, test);
+        startPromotion(candidate, 'create');
+        let form = document.getElementById('promotionReviewForm');
+        form.elements.promotionAction.value = 'update'; form.elements.promotionAction.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        form.elements.targetSettingId.value = 'switch-b'; form.elements.targetSettingId.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        add('Target-switch form loads Target B metadata', form.elements.promotionLabel.value === 'Target B' && form.elements.measurementScope.value === 'batch' && form.elements.batchLabel.value === 'Batch-B' && form.elements.requestedStatus.value === 'verified' && form.elements.verifiedDate.value === '2026-07-01' && form.elements.promotionPreferred.checked);
+        add('Target-switch clears metadata selections', Object.values(promotionSession.metadataSelections).every(value => value === false));
+        form.querySelector('[data-promotion-field="speedMmPerMin"]').checked = true;
+        capturePromotionForm();
+        const targetABefore = JSON.stringify(state.profiles[0].productionSettings.find(setting => setting.id === 'switch-a'));
+        const savedUpdate = savePromotionTransaction(promotionSession, () => true, () => true);
+        const afterUpdateA = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-a'), afterUpdateB = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-b');
+        add('Target-switch Update saves successfully', savedUpdate.ok && afterUpdateB.cutSettings.speedMmPerMin === 650);
+        add('Target-switch Update preserves Target B metadata', afterUpdateB.materialCondition.measurementScope === 'batch' && afterUpdateB.materialCondition.batchLabel === 'Batch-B' && afterUpdateB.label === 'Target B' && afterUpdateB.verificationStatus === 'verified' && afterUpdateB.verifiedDate === '2026-07-01' && afterUpdateB.preferred === true && afterUpdateB.futureTarget === 'keep-b' && afterUpdateB.evidence.some(item => item.id === 'evidence-b'));
+        add('Target A remains unchanged after Update switch', JSON.stringify(afterUpdateA) === targetABefore);
+        cancelPromotion();
+        startPromotion(candidate, 'create');
+        form = document.getElementById('promotionReviewForm');
+        form.elements.promotionAction.value = 'evidence'; form.elements.promotionAction.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        form.elements.targetSettingId.value = 'switch-b'; form.elements.targetSettingId.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        const evidenceBeforeA = JSON.stringify(state.profiles[0].productionSettings.find(setting => setting.id === 'switch-a'));
+        const evidenceBeforeB = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-b').evidence.length;
+        capturePromotionForm();
+        const savedEvidence = savePromotionTransaction(promotionSession, () => true, () => true), evidenceAfterA = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-a'), evidenceAfterB = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-b');
+        add('Evidence-only target switch saves successfully', savedEvidence.ok && evidenceAfterB.evidence.length === evidenceBeforeB + 1);
+        add('Evidence-only target switch preserves Target B', evidenceAfterB.materialCondition.measurementScope === 'batch' && evidenceAfterB.materialCondition.batchLabel === 'Batch-B' && evidenceAfterB.label === 'Target B' && evidenceAfterB.verificationStatus === 'verified' && evidenceAfterB.verifiedDate === '2026-07-01' && evidenceAfterB.preferred === true);
+        add('Target A remains unchanged after evidence-only switch', JSON.stringify(evidenceAfterA) === evidenceBeforeA);
+        cancelPromotion();
+        startPromotion(candidate, 'create');
+        form = document.getElementById('promotionReviewForm');
+        form.elements.promotionAction.value = 'update'; form.elements.promotionAction.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        form.elements.targetSettingId.value = 'switch-b'; form.elements.targetSettingId.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        form.elements.measurementScope.value = 'sheet'; form.elements.batchLabel.value = ''; form.querySelector('[data-promotion-field="speedMmPerMin"]').checked = true;
+        capturePromotionForm();
+        savePromotionTransaction(promotionSession, () => true, () => true);
+        const explicitB = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-b');
+        add('Explicit metadata edits after switch apply', explicitB.materialCondition.measurementScope === 'sheet' && explicitB.materialCondition.batchLabel === '' && explicitB.label === 'Target B' && explicitB.verificationStatus === 'verified' && explicitB.verifiedDate === '2026-07-01');
+        cancelPromotion();
+        startPromotion(candidate, 'create');
+        form = document.getElementById('promotionReviewForm');
+        form.elements.promotionAction.value = 'update'; form.elements.promotionAction.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        form.elements.targetSettingId.value = 'switch-b'; form.elements.targetSettingId.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        form.elements.verifiedDate.value = '2026-07-15'; form.querySelector('[data-promotion-field="speedMmPerMin"]').checked = true; capturePromotionForm();
+        add('Verified-date edit sets an explicit metadata flag', promotionSession.metadataSelections.verifiedDate === true && promotionSession.metadataSelections.status === false);
+        const dateSave = savePromotionTransaction(promotionSession, () => true, () => true), dateTarget = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-b');
+        add('Verified-date-only Update saves without re-verification', dateSave.ok && dateTarget.verifiedDate === '2026-07-15' && dateTarget.verificationStatus === 'verified');
+        add('Verified-date Update preserves preferred and context', dateTarget.preferred === true && dateTarget.materialCondition.measurementScope === 'sheet' && dateTarget.materialCondition.batchLabel === '' && dateTarget.futureTarget === 'keep-b');
+        cancelPromotion();
+        startPromotion(candidate, 'create');
+        form = document.getElementById('promotionReviewForm');
+        form.elements.promotionAction.value = 'update'; form.elements.promotionAction.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        form.elements.targetSettingId.value = 'switch-b'; form.elements.targetSettingId.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        form.elements.promotionPreferred.checked = false; form.querySelector('[data-promotion-field="speedMmPerMin"]').checked = true; capturePromotionForm();
+        add('Preferred clear sets an explicit metadata flag', promotionSession.metadataSelections.preferred === true);
+        const preferredBeforeC = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-c').preferred, clearSave = savePromotionTransaction(promotionSession, () => { throw new Error('Preferred clear should not prompt'); }, () => true), clearTarget = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-b'), clearConflict = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-c');
+        add('Preferred true-to-false Update saves without conflict prompt', clearSave.ok && clearTarget.preferred === false && clearConflict.preferred === preferredBeforeC);
+        cancelPromotion();
+        const setPreferred = setting => { setting.preferred = true; };
+        state.profiles[0].productionSettings.find(setting => setting.id === 'switch-b').preferred = false; setPreferred(state.profiles[0].productionSettings.find(setting => setting.id === 'switch-c'));
+        startPromotion(candidate, 'create');
+        form = document.getElementById('promotionReviewForm');
+        form.elements.promotionAction.value = 'update'; form.elements.promotionAction.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        form.elements.targetSettingId.value = 'switch-b'; form.elements.targetSettingId.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        form.elements.promotionPreferred.checked = true; form.querySelector('[data-promotion-field="speedMmPerMin"]').checked = true; capturePromotionForm();
+        const accepted = savePromotionTransaction(promotionSession, () => true, () => true), acceptedB = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-b'), acceptedC = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-c');
+        add('Preferred false-to-true accepted conflict demotes only same-machine conflict', accepted.ok && acceptedB.preferred === true && acceptedC.preferred === false);
+        cancelPromotion();
+        acceptedB.preferred = false; acceptedC.preferred = true;
+        startPromotion(candidate, 'create');
+        form = document.getElementById('promotionReviewForm');
+        form.elements.promotionAction.value = 'update'; form.elements.promotionAction.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        form.elements.targetSettingId.value = 'switch-b'; form.elements.targetSettingId.dispatchEvent(new Event('change', { bubbles: true }));
+        form = document.getElementById('promotionReviewForm');
+        form.elements.promotionPreferred.checked = true; form.querySelector('[data-promotion-field="speedMmPerMin"]').checked = true; capturePromotionForm();
+        const declined = savePromotionTransaction(promotionSession, () => false, () => true), declinedB = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-b'), declinedC = state.profiles[0].productionSettings.find(setting => setting.id === 'switch-c');
+        add('Preferred false-to-true declined conflict saves target non-preferred', declined.ok && declinedB.preferred === false && declinedC.preferred === true);
+        cancelPromotion();
+      } finally { state.profiles = originalProfiles; cancelPromotion(); }
+      return { passed: results.filter(result => result.pass).length, failed: results.filter(result => !result.pass).length, results };
+    }
+    window.runPromotionTargetSwitchFixtures = runPromotionTargetSwitchFixtures;
+    function runEvidencePromotionFixtures() {
+      const results = [], add = (name, pass, expected = '', actual = '') => results.push({ name, pass: !!pass, expected, actual }), originalProfiles = state.profiles;
+      const profile = { id: 'promotion-profile', material: 'Basswood', thicknessValue: 3, thicknessUnit: 'mm', jobType: 'cut', tests: [], productionSettings: [] };
+      const targetSetting = normalizeProductionSetting({ id: 'promotion-target', label: 'Existing cut', operation: 'cut', machine: { key: 'genmitsu-l8-20w', label: 'Genmitsu L8 20W' }, materialCondition: { nominalThicknessMm: 3, measuredThicknessMm: 3.01, measurementScope: 'sheet' }, cutSettings: { speedMmPerMin: 400, powerMinPercent: 50, powerMaxPercent: 50, passes: 2, airAssist: false }, lightBurn: { kerfOffsetMm: .04 }, fitSettings: { fingerJointClearanceMm: .1 }, verificationStatus: 'tested', preferred: true, evidence: [{ id: 'old-evidence', kind: 'manual', sourceLabel: 'Old', futureEvidence: { kept: true } }] });
+      const test = { id: 'promotion-test', date: '2026-07-16', machine: 'Genmitsu L8 20W', physicalRunCompleted: true, testType: 'cut', status: 'experimental', measuredThicknessMm: 3.02, winningSpeed: 650, winningPower: 80, winningPasses: 1, airAssist: true, resultSummary: 'Cut completed and inspected', notes: 'Physical cut run.' };
+      const grid = { id: 'promotion-grid', name: 'Basswood grid', material: 'Basswood', createdDate: '2026-07-16', jobType: 'cut', passes: 1, lineInterval: .1, airAssist: true, machine: { key: 'genmitsu-l8-20w', label: 'Genmitsu L8 20W' }, cells: { '80_650': { rating: 5, best: true, notes: 'Clean cut' } } };
+      const sourceBefore = JSON.stringify(test), profileBefore = JSON.stringify(profile);
+      try {
+        state.profiles = [{ ...profile, productionSettings: [targetSetting], tests: [test] }];
+        const candidate = buildMaterialTestPromotionCandidate(state.profiles[0], test);
+        add('Cut Material Test candidate exposes structured fields', candidate.fields.speedMmPerMin.value === 650 && candidate.fields.measuredThicknessMm.value === 3.02);
+        add('Candidate does not allocate final IDs', !candidate.id && !candidate.evidence && candidate.sourceId === 'promotion-test');
+        add('Candidate preserves exact machine identity', candidate.machine.key === 'genmitsu-l8-20w' && candidate.machine.label === 'Genmitsu L8 20W');
+        const session = { ...promotionSessionDefaults(), candidate, sourceType: candidate.sourceType, sourceId: candidate.sourceId, sourceProfileId: candidate.sourceProfileId, targetProfileId: profile.id, action: 'create', requestedStatus: 'tested', selectedFields: { measuredThicknessMm: true, speedMmPerMin: true }, measurementScope: 'sheet', reviewNotes: 'Reviewed physical cut.' };
+        const saved = savePromotionTransaction(session, () => true, () => true), savedProfile = state.profiles[0], savedSetting = savedProfile.productionSettings.find(setting => setting.id === saved.settingId);
+        add('Create saves only after explicit transaction', saved.ok && !!saved.settingId && !!saved.evidenceId);
+        add('Create allocates stable setting and evidence IDs at Save', savedSetting && savedSetting.id !== 'promotion-target' && savedSetting.evidence.some(item => item.id === saved.evidenceId));
+        add('Create applies only selected fields', savedSetting.cutSettings.speedMmPerMin === 650 && savedSetting.materialCondition.measuredThicknessMm === 3.02 && savedSetting.cutSettings.powerMinPercent === '' && savedSetting.cutSettings.airAssist === false);
+        add('Evidence snapshot is self-contained', savedSetting.evidence.some(item => item.sourceSnapshot?.source?.id === test.id && item.selectedValues.speedMmPerMin === 650));
+        const updateSession = { ...session, action: 'update', targetSettingId: 'promotion-target', selectedFields: { speedMmPerMin: true }, requestedStatus: 'tested' }, updateResult = savePromotionTransaction(updateSession, () => true, () => true), updated = state.profiles[0].productionSettings.find(setting => setting.id === 'promotion-target');
+        add('Update retains target ID', updateResult.ok && updated.id === 'promotion-target');
+        add('Update preserves unchecked values and unknown evidence', updated.cutSettings.powerMinPercent === 50 && updated.lightBurn.kerfOffsetMm === .04 && updated.materialCondition.measurementScope === 'sheet' && updated.materialCondition.batchLabel === '' && updated.evidence.some(item => item.id === 'old-evidence' && item.futureEvidence.kept));
+        add('Explicit Update scope change applies', savePromotionTransaction({ ...updateSession, measurementScope: 'batch', metadataSelections: { ...updateSession.metadataSelections, measurementScope: true } }, () => true, () => true).ok && state.profiles[0].productionSettings.find(setting => setting.id === 'promotion-target').materialCondition.measurementScope === 'batch');
+        const evidenceBefore = JSON.stringify(updated), evidenceSession = { ...session, action: 'evidence', targetSettingId: 'promotion-target', selectedFields: {}, requestedStatus: 'tested' }, evidenceResult = savePromotionTransaction(evidenceSession, () => true, () => true), evidenceAfter = state.profiles[0].productionSettings.find(setting => setting.id === 'promotion-target');
+        add('Evidence-only permits zero selected values', evidenceResult.ok && evidenceAfter.cutSettings.powerMinPercent === 50 && evidenceAfter.evidence.length >= 3);
+        add('Evidence-only leaves target values/status/preferred intact', evidenceAfter.verificationStatus === 'tested' && evidenceAfter.preferred === true && evidenceAfter.cutSettings.speedMmPerMin === 650 && evidenceAfter.cutSettings.powerMinPercent === 50 && evidenceAfter.lightBurn.kerfOffsetMm === .04 && evidenceAfter.fitSettings.fingerJointClearanceMm === .1);
+        const mismatch = { ...session, action: 'update', targetSettingId: 'promotion-target', selectedFields: { speedMmPerMin: true }, candidate: { ...candidate, machine: { key: 'genmitsu-l8-40w', label: 'Genmitsu L8 40W' } } }, mismatchResult = savePromotionTransaction(mismatch, () => true, () => true);
+        add('Cross-machine machine-dependent promotion is blocked', !mismatchResult.ok && mismatchResult.errors.some(error => /machine/i.test(error)));
+        const verified = { ...session, requestedStatus: 'verified', selectedFields: { speedMmPerMin: true }, physicalChecks: {}, verifiedDate: '', reviewNotes: '' };
+        add('Verified status requires contextual evidence', promotionStatusRules(candidate, verified.requestedStatus, verified.physicalChecks, verified.verifiedDate, verified.reviewNotes).length >= 3);
+        add('Appearance alone cannot verify a Cut source', promotionStatusRules(candidate, 'verified', { appearanceApproved: true }, today(), 'Appearance only').some(error => /not applicable|confirmation/i.test(error)));
+        add('Whitespace-only verification notes are rejected', promotionStatusRules(candidate, 'verified', { cutCompleted: true }, today(), '   ').some(error => /notes/i.test(error)));
+        add('Unknown requested status is rejected', promotionStatusRules(candidate, 'future-status', {}, '', '').some(error => /Invalid promotion status/i.test(error)));
+        const verifiedCoupon = buildJointCouponPromotionCandidate({ materialThickness: '3', jointCouponClearances: '0.04,0.00,-0.04', jointCouponEdgeLength: '45', jointCouponBodyDepth: '22' }, { metrics: { clearances: [{ value: .04, text: '0.04' }], pairs: [] } }, { selectedWinner: .04 });
+        add('Coupon winner is explicit and separate from kerf', verifiedCoupon.fields.fingerJointClearanceMm.value === .04 && !verifiedCoupon.fields.kerfOffsetMm);
+        const noWinnerCoupon = buildJointCouponPromotionCandidate({ jointCouponClearances: '0.04,0.00' }, { metrics: { clearances: [{ value: .04, text: '0.04' }] } });
+        add('Coupon without winner exposes no joint value', !noWinnerCoupon.fields.fingerJointClearanceMm);
+        const gridCandidate = buildGridPromotionCandidate(grid, '80_650', grid.cells['80_650']);
+        add('Grid candidate retains cell identity and Best limitation', gridCandidate.sourceSnapshot.cellKey === '80_650' && gridCandidate.limitations.some(message => /Best/i.test(message)));
+        add('Grid source machine is exact and not inferred from preference', gridCandidate.machine.key === 'genmitsu-l8-20w' && gridCandidate.machine.label === 'Genmitsu L8 20W');
+        add('Grid missing machine remains missing', !buildGridPromotionCandidate({ ...grid, machine: undefined }, '80_650', grid.cells['80_650']).machine.key);
+        add('Grid custom machine remains explicit', buildGridPromotionCandidate({ ...grid, machine: { key: 'custom', label: 'My L8 fixture machine' } }, '80_650', grid.cells['80_650']).machine.label === 'My L8 fixture machine');
+        add('Unknown selected field is rejected', promotionEligibility(candidate, profile, targetSetting, 'update', { bogus: true }).errors.some(error => /Unknown promotion field/i.test(error)));
+        add('Zero valid Create fields is rejected', !savePromotionTransaction({ ...session, action: 'create', selectedFields: { bogus: true } }, () => true, () => true).ok);
+        add('Zero valid Update fields is rejected', !savePromotionTransaction({ ...session, action: 'update', targetSettingId: 'promotion-target', selectedFields: { bogus: true } }, () => true, () => true).ok);
+        add('Evidence-only zero fields remains allowed', savePromotionTransaction({ ...session, action: 'evidence', targetSettingId: 'promotion-target', selectedFields: {}, requestedStatus: 'tested' }, () => true, () => true).ok);
+        const projectCandidate = buildProjectPromotionCandidate({ id: 'project-1', name: 'Drawer Cabinet', material: 'Basswood', jobType: 'cut', dateCreated: '2026-07-16', status: 'sold', rating: 5, notes: 'Drawer moved freely; cabinetJointClearance 0.1', settings: { speed: 500, minPower: 70, maxPower: 70, passes: 1, airAssist: true } });
+        add('Project candidate is evidence-first and does not infer fit', projectCandidate.defaultStatus === 'untested' && !projectCandidate.fields.fingerJointClearanceMm && !projectCandidate.fields.drawerTotalLateralClearanceMm && !projectCandidate.canVerify);
+        const duplicateSession = { ...session, action: 'update', targetSettingId: saved.settingId, selectedFields: { speedMmPerMin: true } };
+        add('Duplicate signature is deterministic', promotionSignature(candidate, duplicateSession) === promotionSignature(candidate, duplicateSession));
+        add('Reordered selected-field keys are stable', promotionSignature(candidate, { ...duplicateSession, selectedFields: { speedMmPerMin: true, measuredThicknessMm: true } }) === promotionSignature(candidate, { ...duplicateSession, selectedFields: { measuredThicknessMm: true, speedMmPerMin: true } }));
+        const couponA = buildJointCouponPromotionCandidate({ materialThickness: '3', jointCouponClearances: '0.04,0.00', jointCouponEdgeLength: '45', jointCouponBodyDepth: '22' }, { metrics: { clearances: [{ value: .04 }], pairs: [] } }, { machine: { key: 'genmitsu-l8-20w', label: 'Genmitsu L8 20W' }, sourceDate: '2026-07-16' }), couponB = buildJointCouponPromotionCandidate({ materialThickness: '3', jointCouponClearances: '0.04,0.00', jointCouponEdgeLength: '45', jointCouponBodyDepth: '22' }, { metrics: { clearances: [{ value: .04 }], pairs: [] } }, { machine: { key: 'genmitsu-l8-40w', label: 'Genmitsu L8 40W' }, sourceDate: '2026-07-16' });
+        add('Coupon identity separates machines', couponA.sourceId !== couponB.sourceId);
+        add('Duplicate source promotion produces a warning', promotionSourceDuplicateWarnings(candidate, state.profiles[0], duplicateSession).length > 0);
+        const backup = backupObject(), backupProfiles = normalizeLibraryProfiles(backup.profiles);
+        add('Backup retains promoted settings and snapshots', backupProfiles[0].productionSettings.some(setting => setting.evidence.some(item => item.sourceSnapshot?.source?.id === test.id)));
+        add('Evidence remains readable after source deletion', !!savedSetting.evidence.find(item => item.sourceSnapshot?.source?.id === test.id)?.sourceSnapshot?.source?.id);
+        add('Missing target profile blocks update', promotionEligibility(candidate, null, null, 'update', { speedMmPerMin: true }).errors.some(error => /target Library profile/i.test(error)));
+        add('Custom machine identity remains explicit', promotionMachineSnapshot({ key: 'custom', label: 'My diode' }).key === 'custom' && promotionMachineSnapshot({ key: 'custom', label: 'My diode' }).label === 'My diode');
+        add('Project verification is blocked by source policy', promotionStatusRules(projectCandidate, 'verified', { assemblyCompleted: true }, today(), 'Completed') .some(error => /cannot be marked verified/i.test(error)));
+        add('Incomplete Project promotion is gated', !projectPromotionEligibility({ id: 'incomplete', status: 'cancelled', dateCreated: '2026-07-16', jobType: 'cut' }).eligible);
+        add('Stale supersede replacement is rejected', !productionSettingsCanSupersede({ id: 'old', operation: 'cut', machine: { key: 'genmitsu-l8-20w' } }, { id: 'new', operation: 'cut', machine: { key: 'genmitsu-l8-20w' }, verificationStatus: 'tested', supersededById: 'stale' }));
+        add('Duplicate evidence ID is rejected', !savePromotionTransaction({ ...session, action: 'evidence', targetSettingId: 'promotion-target', selectedFields: {}, evidenceId: 'old-evidence', requestedStatus: 'tested' }, () => true, () => true).ok);
+        const rollbackBefore = JSON.stringify(state.profiles), rollbackResult = savePromotionTransaction(session, () => true, () => false);
+        add('Persist failure rolls back the complete target', !rollbackResult.ok && JSON.stringify(state.profiles) === rollbackBefore);
+        add('Source and profile inputs remain unmutated', JSON.stringify(test) === sourceBefore && JSON.stringify(profile) === profileBefore);
+        const transitionFixtures = runPromotionTargetSwitchFixtures();
+        transitionFixtures.results.forEach(result => results.push({ ...result, name: `Target transition: ${result.name}` }));
+      } finally { state.profiles = originalProfiles; }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Evidence promotion fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd(); return { passed, failed, results };
+    }
+    window.runEvidencePromotionFixtures = runEvidencePromotionFixtures;
     function gridTestTypeFromGrid(grid) {
       return grid?.jobType === 'engrave' || grid?.jobType === 'cut' ? (grid.jobType === 'cut' ? 'cut' : 'engrave_matrix') : 'other';
     }
@@ -5793,7 +6352,7 @@
     }
     function materialTestsEditorHtml() {
       const tests = normalizeMaterialTests(profileDraftTests);
-      return `<details id="materialTestsSection" class="span2" style="margin-top:8px"><summary><b>Material Tests</b> <span class="small muted">(${tests.length})</span></summary><div style="margin-top:10px">${tests.length ? tests.map(test => `<div class="panel" style="margin-bottom:8px"><div class="spread"><div><b>${esc(materialTestLabel(test.testType))}</b><div class="small muted">${esc(test.date || '-')} - ${esc(test.status)}</div></div><span class="small">${'&#9733;'.repeat(test.confidence || 0)}${'&#9734;'.repeat(5 - (test.confidence || 0))}</span></div><div class="actions"><button type="button" data-edit-material-test="${esc(test.id)}">Edit Test</button><button type="button" class="danger" data-delete-material-test="${esc(test.id)}">Delete Test</button></div></div>`).join('') : '<div class="small muted" style="margin-bottom:10px">No material tests yet.</div>'}<button type="button" id="addMaterialTest">Add Test</button></div></details>`;
+      return `<details id="materialTestsSection" class="span2" style="margin-top:8px"><summary><b>Material Tests</b> <span class="small muted">(${tests.length})</span></summary><div style="margin-top:10px">${tests.length ? tests.map(test => `<div class="panel" style="margin-bottom:8px"><div class="spread"><div><b>${esc(materialTestLabel(test.testType))}</b><div class="small muted">${esc(test.date || '-')} - ${esc(test.status)}</div></div><span class="small">${'&#9733;'.repeat(test.confidence || 0)}${'&#9734;'.repeat(5 - (test.confidence || 0))}</span></div><div class="actions"><button type="button" data-edit-material-test="${esc(test.id)}">Edit Test</button><button type="button" data-promote-material-test="${esc(test.id)}">Promote to Production Setting</button><button type="button" class="danger" data-delete-material-test="${esc(test.id)}">Delete Test</button></div></div>`).join('') : '<div class="small muted" style="margin-bottom:10px">No material tests yet.</div>'}<button type="button" id="addMaterialTest">Add Test</button></div></details>`;
     }
     function refreshMaterialTestsEditor() {
       const section = document.getElementById('materialTestsSection');
@@ -5807,6 +6366,7 @@
       const add = document.getElementById('addMaterialTest');
       if (add) add.onclick = () => openMaterialTest();
       document.querySelectorAll('[data-edit-material-test]').forEach(button => button.onclick = () => openMaterialTest(profileDraftTests.find(test => test.id === button.dataset.editMaterialTest)));
+      document.querySelectorAll('[data-promote-material-test]').forEach(button => button.onclick = () => openMaterialTestPromotion(editingProfileId, button.dataset.promoteMaterialTest));
       document.querySelectorAll('[data-delete-material-test]').forEach(button => button.onclick = () => {
         if (!confirm('Delete this material test?')) return;
         profileDraftTests = profileDraftTests.filter(test => test.id !== button.dataset.deleteMaterialTest);
@@ -5910,6 +6470,7 @@
       return !!oldSetting && !!replacement &&
         oldSetting.id !== replacement.id &&
         replacement.verificationStatus !== 'superseded' &&
+        !String(replacement.supersededById || '').trim() &&
         oldSetting.operation === replacement.operation &&
         oldSetting.machine.key === replacement.machine.key;
     }
@@ -7402,7 +7963,7 @@
         ${materialLines.length ? `<div class="small muted" style="margin-top:8px">Materials: ${materialLines.length} line${materialLines.length === 1 ? '' : 's'} / ${money(projectMaterialLinesTotal(materialLines))} total</div>` : ''}
         ${hasProjectAccounting(p) ? projectAccountingMetrics(p) : ''}
         ${p.notes ? `<p class="small">${esc(p.notes)}</p>` : ''}
-        <div class="actions"><button data-edit-project="${p.id}">Edit</button><button data-project-to-entry="${p.id}">Copy to log</button><button class="danger" data-delete-project="${p.id}">Delete</button></div>
+        <div class="actions"><button data-edit-project="${p.id}">Edit</button>${projectPromotionActionHtml(p)}<button data-project-to-entry="${p.id}">Copy to log</button><button class="danger" data-delete-project="${p.id}">Delete</button></div>
       </article>`;
     }
     function rawMaterialCard(item) {
@@ -8762,11 +9323,12 @@
         <label class="row"><input type="checkbox" name="best" ${existing.best ? 'checked' : ''} style="width:auto"> Mark as best setting ${help('Marks this cell as the winner for the material test.')}</label>
         <label>${labelText('Notes', 'What happened in this cell: cut through, scorch, weak mark, good result, etc.')}<textarea name="notes" rows="3">${esc(existing.notes)}</textarea></label>
         <label class="row"><input type="checkbox" name="recordMaterialTest" style="width:auto"> Also record this cell as a Material Test when the Library profile is saved</label>
-        <div class="actions"><button type="button" id="clearCell">Clear</button><button type="button" id="cellToLibrary">Save to library</button><button class="primary">Save</button></div>
+        <div class="actions"><button type="button" id="clearCell">Clear</button><button type="button" id="cellToLibrary">Save to library</button><button type="button" id="cellToProduction">Promote selected result</button><button class="primary">Save</button></div>
       </form></div>`);
       bindModal('cellModal');
       document.getElementById('clearCell').onclick = () => { delete g.cells[key]; persist(); closeModal('cellModal'); render(); };
       document.getElementById('cellToLibrary').onclick = () => promoteCell();
+      document.getElementById('cellToProduction').onclick = () => promoteSelectedGridCell();
       document.getElementById('cellForm').onsubmit = e => {
         e.preventDefault();
         if (!saveGridCellValues(g, key, { rating: e.target.elements.rating?.value, best: e.target.elements.best?.checked, notes: e.target.elements.notes?.value })) return;
@@ -9286,7 +9848,7 @@
       const cell = gridCellValues(form ? { rating: form.elements.rating?.value, best: form.elements.best?.checked, notes: form.elements.notes?.value } : g.cells?.[activeCellKey]);
       if (!saveGridCellValues(g, activeCellKey, cell)) return;
       const { power, speed } = gridCellSettingsFromKey(activeCellKey);
-      const grid = { id: g.id, name: g.name, createdDate: g.createdDate, jobType: g.jobType, passes: g.passes, lineInterval: g.lineInterval, airAssist: g.airAssist, software: g.software, ditherMode: g.ditherMode };
+      const grid = { id: g.id, name: g.name, material: g.material, thicknessValue: g.thicknessValue, thicknessUnit: g.thicknessUnit, createdDate: g.createdDate, jobType: g.jobType, passes: g.passes, lineInterval: g.lineInterval, airAssist: g.airAssist, airPressure: g.airPressure, software: g.software, ditherMode: g.ditherMode, machine: promotionClone(g.machine) };
       const requested = !!form?.elements.recordMaterialTest?.checked;
       pendingGridPromotion = { grid, cellKey: activeCellKey, cell, machine: wizardMachineLabel(), recordTest: requested };
       closeModal('cellModal');
@@ -9301,6 +9863,13 @@
     function gridExportDataById(gridId, grids = state.grids) {
       const grid = (grids || []).find(item => item.id === gridId) || null;
       return grid ? { grid, filename: `l8-grid-${fileSlug(grid.name)}-${today()}.csv`, csv: gridCsv(grid) } : null;
+    }
+    function promoteSelectedGridCell() {
+      const grid = state.grids.find(item => item.id === activeGridId), form = document.getElementById('cellForm');
+      if (!grid || !activeCellKey) return;
+      const cell = gridCellValues(form ? { rating: form.elements.rating?.value, best: form.elements.best?.checked, notes: form.elements.notes?.value } : grid.cells?.[activeCellKey]);
+      closeModal('cellModal');
+      startPromotion(buildGridPromotionCandidate(grid, activeCellKey, cell));
     }
     function exportGridCsvById(gridId) {
       const data = gridExportDataById(gridId);
@@ -9362,6 +9931,7 @@
     if (selftest === 'baseline' || selftest === 'all') runBaselineResolutionFixtures();
     if (selftest === 'normalization' || selftest === 'all') runMaterialTestNormalizationFixtures();
     if (selftest === 'production' || selftest === 'all') runProductionSettingsFixtures();
+    if (selftest === 'promotion' || selftest === 'all') runEvidencePromotionFixtures();
     if (selftest === 'design-production' || selftest === 'all') runDesignProductionSettingsFixtures();
     if (selftest === 'grid' || selftest === 'all') runGridPromotionFixtures();
     if (selftest === 'grid-browser' || selftest === 'all') runGridBrowserFixtures();
