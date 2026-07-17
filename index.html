@@ -1956,6 +1956,89 @@
       const dividerWidth = d.template === 'divider-tray' ? insideWidth + gap : 0;
       return designSvgDocument(Math.max(sideX + insideDepth + dividerWidth + margin, outerWidth + margin * 2), wallY + (wallHeight + thickness + gap) * Math.max(2, d.template === 'divider-tray' ? Math.max(2, Number(d.dividerCount) || 2) : 2) + margin, shapes);
     }
+    function trayTabProfile(lengthMm, jointStyle) {
+      const count = jointStyle === 'finger' ? 4 : 2;
+      return { count, widthMm:Math.max(8, Math.min(16, lengthMm / (count * 2))), lengthMm };
+    }
+    function trayModelValidationErrors(values = {}) {
+      const errors = [], template = values.template, thickness = values.materialThickness, clearance = values.fitClearance, width = values.trayWidth, depth = values.trayDepth, height = values.trayHeight, jointStyle = values.jointStyle;
+      if (!['dice-tray','divider-tray'].includes(template)) errors.push('Choose a recognized tray template.');
+      if (!Number.isFinite(thickness) || thickness < .1) errors.push('Material thickness must be at least 0.1.');
+      if (!Number.isFinite(clearance) || clearance < 0) errors.push('Slot clearance must be at least 0.');
+      if (!Number.isFinite(width) || width < 20) errors.push('Inside tray width must be at least 20.');
+      if (!Number.isFinite(depth) || depth < 20) errors.push('Inside tray depth must be at least 20.');
+      if (!Number.isFinite(height) || height < 10) errors.push('Wall height must be at least 10.');
+      if (!['finger','tab-slot'].includes(jointStyle)) errors.push('Choose a recognized tray joint style.');
+      if (template === 'divider-tray' && (!Number.isFinite(values.dividerCount) || !Number.isInteger(values.dividerCount) || values.dividerCount < 1 || values.dividerCount > 6)) errors.push('Divider count must be a whole number from 1 to 6.');
+      if (!errors.length) {
+        const widthProfile = trayTabProfile(width, jointStyle), depthProfile = trayTabProfile(depth, jointStyle);
+        if (width + 2 * thickness < widthProfile.widthMm * (widthProfile.count + 2) || depth < depthProfile.widthMm * (depthProfile.count + 2)) errors.push('Tray edges are too short for non-overlapping wall tabs.');
+      }
+      return errors;
+    }
+    function trayRectComponent(id, name, kind, xMm, yMm, widthMm, heightMm, extra = {}) {
+      return { id, name, kind, geometry:{ type:'rect', xMm, yMm, widthMm, heightMm }, svg:`<rect x="${xMm}" y="${yMm}" width="${widthMm}" height="${heightMm}"/>`, ...extra };
+    }
+    function trayWallComponent(id, name, xMm, yMm, widthMm, wallHeightMm, tabProfile, thicknessMm, role) {
+      const d = designWallPath(xMm, yMm, widthMm, wallHeightMm, tabProfile.count, tabProfile.widthMm, thicknessMm);
+      return { id, name, kind:'wall', role, geometry:{ type:'path', xMm, yMm, widthMm, heightMm:wallHeightMm + thicknessMm }, cutGeometry:{ type:'path', d }, tabProfile:{ ...tabProfile }, svg:`<path d="${d}"/>` };
+    }
+    function trayLayoutItem(component, emissionIndex) {
+      return { componentId:component.id, geometry:{ ...component.geometry }, svg:component.svg, emissionIndex };
+    }
+    function buildTrayModel(values = {}) {
+      const errors = trayModelValidationErrors(values), template = values.template, empty = { valid:false, template, generatorVersion:'tray-model-phase1', errors, warnings:[], inputs:{}, dimensions:{}, orientation:{}, components:[], operations:{ cutPaths:[], scorePaths:[], labels:[] }, layout:{ marginMm:10, gapMm:15, widthMm:0, heightMm:0, items:[], materialComponentIds:[] }, metrics:{ pieceCount:0, wallCount:0, dividerCount:0, compartmentCount:0 } };
+      if (errors.length) return empty;
+      const thicknessMm = values.materialThickness, fitClearanceMm = values.fitClearance, insideWidthMm = values.trayWidth, insideDepthMm = values.trayDepth, wallHeightMm = values.trayHeight, jointStyle = values.jointStyle, dividerCount = template === 'divider-tray' ? values.dividerCount : 0;
+      const marginMm = 10, gapMm = 15, baseOutsideWidthMm = insideWidthMm + thicknessMm * 2, baseOutsideDepthMm = insideDepthMm + thicknessMm * 2, slotWidthMm = thicknessMm + fitClearanceMm, widthTabProfile = trayTabProfile(insideWidthMm, jointStyle), depthTabProfile = trayTabProfile(insideDepthMm, jointStyle);
+      const components = [], base = trayRectComponent('tray-base', 'Tray base', 'base', marginMm, marginMm, baseOutsideWidthMm, baseOutsideDepthMm, { role:'base', wallSlotIds:[], dividerSlotIds:[] });
+      components.push(base);
+      const addWallSlots = (wallId, role, profile, horizontal, xMm, yMm) => designTabPositions(horizontal ? baseOutsideWidthMm : insideDepthMm, profile.count, profile.widthMm).forEach((position, index) => {
+        const id = `base-slot-${role}-${String(index + 1).padStart(2,'0')}`;
+        const component = trayRectComponent(id, `${role[0].toUpperCase() + role.slice(1)} wall slot ${index + 1}`, 'base-wall-slot', horizontal ? xMm + position : xMm, horizontal ? yMm : yMm + position, horizontal ? profile.widthMm : slotWidthMm, horizontal ? slotWidthMm : profile.widthMm, { baseComponentId:base.id, wallId, role, orientation:horizontal ? 'horizontal' : 'vertical' });
+        base.wallSlotIds.push(id); components.push(component);
+      });
+      addWallSlots('wall-front', 'front', widthTabProfile, true, marginMm, marginMm + thicknessMm / 2);
+      addWallSlots('wall-back', 'back', widthTabProfile, true, marginMm, marginMm + baseOutsideDepthMm - thicknessMm / 2 - slotWidthMm);
+      addWallSlots('wall-left', 'left', depthTabProfile, false, marginMm + thicknessMm / 2, marginMm + thicknessMm);
+      addWallSlots('wall-right', 'right', depthTabProfile, false, marginMm + baseOutsideWidthMm - thicknessMm / 2 - slotWidthMm, marginMm + thicknessMm);
+      const wallY = marginMm + baseOutsideDepthMm + gapMm, sideX = marginMm + baseOutsideWidthMm + gapMm, secondWallY = wallY + wallHeightMm + thicknessMm + gapMm;
+      const walls = [
+        trayWallComponent('wall-front', 'Front wall', marginMm, wallY, baseOutsideWidthMm, wallHeightMm, widthTabProfile, thicknessMm, 'front'),
+        trayWallComponent('wall-back', 'Back wall', marginMm, secondWallY, baseOutsideWidthMm, wallHeightMm, widthTabProfile, thicknessMm, 'back'),
+        trayWallComponent('wall-left', 'Left wall', sideX, wallY, insideDepthMm, wallHeightMm, depthTabProfile, thicknessMm, 'left'),
+        trayWallComponent('wall-right', 'Right wall', sideX, secondWallY, insideDepthMm, wallHeightMm, depthTabProfile, thicknessMm, 'right')
+      ];
+      walls.forEach(wall => { wall.baseSlotIds = base.wallSlotIds.filter(slotId => slotId.includes(`-${wall.role}-`)); components.push(wall); });
+      const dividers = [];
+      if (template === 'divider-tray') {
+        for (let index = 0; index < dividerCount; index++) {
+          const ordinal = String(index + 1).padStart(2,'0'), dividerPositionMm = insideDepthMm * (index + 1) / (dividerCount + 1), slot = trayRectComponent(`base-divider-slot-${ordinal}`, `Divider slot ${index + 1}`, 'base-divider-slot', marginMm + thicknessMm, marginMm + thicknessMm + dividerPositionMm - slotWidthMm / 2, insideWidthMm, slotWidthMm, { baseComponentId:base.id, dividerIndex:index + 1, dividerPositionMm, span:'left-to-right' });
+          const divider = trayRectComponent(`divider-${ordinal}`, `Divider ${index + 1}`, 'divider', sideX + insideDepthMm + gapMm, wallY + index * (wallHeightMm + gapMm), insideWidthMm, wallHeightMm, { dividerIndex:index + 1, baseSlotId:slot.id, intendedAssembly:'removable', retention:'unspecified', span:'left-to-right', order:'front-to-back', positionFromFrontMm:dividerPositionMm });
+          base.dividerSlotIds.push(slot.id); components.push(slot, divider); dividers.push(divider);
+        }
+      }
+      const dividerWidthMm = template === 'divider-tray' ? insideWidthMm + gapMm : 0, layoutWidthMm = Math.max(sideX + insideDepthMm + dividerWidthMm + marginMm, baseOutsideWidthMm + marginMm * 2), layoutHeightMm = wallY + (wallHeightMm + thicknessMm + gapMm) * Math.max(2, template === 'divider-tray' ? Math.max(2, dividerCount) : 2) + marginMm;
+      const items = components.map(trayLayoutItem), materialComponentIds = [base.id, ...walls.map(wall => wall.id), ...dividers.map(divider => divider.id)];
+      return {
+        valid:true,
+        template,
+        generatorVersion:'tray-model-phase1',
+        errors:[],
+        warnings:[],
+        inputs:{ materialThicknessMm:thicknessMm, fitClearanceMm, jointStyle, insideWidthMm, insideDepthMm, wallHeightMm, ...(template === 'divider-tray' ? { dividerCount } : {}) },
+        dimensions:{ baseOutsideWidthMm, baseOutsideDepthMm, slotWidthMm, widthTabProfile, depthTabProfile },
+        orientation:{ interiorFace:'top', frontWallId:'wall-front', backWallId:'wall-back', leftWallId:'wall-left', rightWallId:'wall-right', ...(template === 'divider-tray' ? { dividerSpan:'left-to-right', dividerOrder:'front-to-back' } : {}) },
+        components,
+        operations:{ cutPaths:items.map(item => item.componentId), scorePaths:[], labels:[] },
+        layout:{ marginMm, gapMm, widthMm:layoutWidthMm, heightMm:layoutHeightMm, items, materialComponentIds },
+        metrics:{ pieceCount:materialComponentIds.length, wallCount:walls.length, dividerCount, compartmentCount:dividerCount + 1 }
+      };
+    }
+    function serializeTrayCompatibilitySvg(model) {
+      if (!model?.valid) return '';
+      return designSvgDocument(model.layout.widthMm, model.layout.heightMm, model.layout.items.map(item => item.svg));
+    }
     function legacyDesignSvg(d) {
       if (d.template === 'hanging-sign') return designHangingSignSvg(d);
       if (d.template === 'dice-tray' || d.template === 'divider-tray') return designTraySvg(d);
@@ -2073,6 +2156,7 @@
       } else if (templates.includes(template)) {
         values.fitClearance = designRequiredNumber(draft, 'fitClearance', 'Slot clearance', errors, 0, true);
         if (template === 'dice-tray' || template === 'divider-tray') {
+          values.jointStyle = String(draft.jointStyle || '');
           values.trayWidth = designRequiredNumber(draft, 'trayWidth', 'Inside tray width', errors, 20, true);
           values.trayDepth = designRequiredNumber(draft, 'trayDepth', 'Inside tray depth', errors, 20, true);
           values.trayHeight = designRequiredNumber(draft, 'trayHeight', 'Wall height', errors, 10, true);
@@ -3198,9 +3282,98 @@
       for (let index = 0; index < text.length; index++) { hash ^= text.charCodeAt(index); hash = Math.imul(hash, 16777619); }
       return (hash >>> 0).toString(16).padStart(8, '0');
     }
+    function traySvgComparison(svg) {
+      const documentNode = new DOMParser().parseFromString(svg, 'image/svg+xml'), root = documentNode.documentElement, group = root?.querySelector(':scope > g'), attributes = element => [...(element?.attributes || [])].map(attribute => `${attribute.name}=${attribute.value}`), elements = group ? [...group.children].map(element => ({ type:element.tagName, attributes:attributes(element) })) : [];
+      return { width:root?.getAttribute('width') || '', height:root?.getAttribute('height') || '', viewBox:root?.getAttribute('viewBox') || '', groups:[...(root?.children || [])].filter(element => element.tagName === 'g').map(element => attributes(element)), elements };
+    }
+    function trayModelMaterialBoxes(model) {
+      const byId = Object.fromEntries(model.components.map(component => [component.id, component]));
+      return model.layout.materialComponentIds.map(id => byId[id]).filter(Boolean).map(component => ({ minX:component.geometry.xMm, minY:component.geometry.yMm, maxX:component.geometry.xMm + component.geometry.widthMm, maxY:component.geometry.yMm + component.geometry.heightMm }));
+    }
+    function runTrayModelFixtures() {
+      const results = [], add = (name, pass, expected = '', actual = '') => results.push({ name:`Tray model - ${name}`, pass:!!pass, expected, actual }), defaultsFor = (template, overrides = {}) => ({ ...designDefaults(), template, ...overrides });
+      const matrix = [
+        ['Dice default Finger','dice-tray',{}],
+        ['Dice default Tab-and-slot','dice-tray',{jointStyle:'tab-slot'}],
+        ['Dice zero clearance','dice-tray',{fitClearance:'0'}],
+        ['Dice thicker material','dice-tray',{materialThickness:'4.5'}],
+        ['Dice minimum Finger plan','dice-tray',{trayWidth:'42',trayDepth:'48'}],
+        ['Dice large plan','dice-tray',{trayWidth:'500',trayDepth:'420'}],
+        ['Dice shallow wall','dice-tray',{trayHeight:'10'}],
+        ['Dice tall wall','dice-tray',{trayHeight:'180'}],
+        ['Dice square plan','dice-tray',{trayWidth:'160',trayDepth:'160'}],
+        ['Dice long narrow plan','dice-tray',{trayWidth:'80',trayDepth:'360'}],
+        ['Divider default Finger count 2','divider-tray',{}],
+        ['Divider default Tab-and-slot count 2','divider-tray',{jointStyle:'tab-slot'}],
+        ['Divider zero clearance count 2','divider-tray',{fitClearance:'0'}],
+        ['Divider thicker material count 2','divider-tray',{materialThickness:'4.5'}],
+        ['Divider minimum Finger plan count 1','divider-tray',{trayWidth:'42',trayDepth:'48',dividerCount:'1'}],
+        ['Divider large plan count 6','divider-tray',{trayWidth:'500',trayDepth:'420',dividerCount:'6'}],
+        ['Divider shallow wall count 1','divider-tray',{trayHeight:'10',dividerCount:'1'}],
+        ['Divider tall wall count 6','divider-tray',{trayHeight:'180',dividerCount:'6'}],
+        ['Divider square plan count 2','divider-tray',{trayWidth:'160',trayDepth:'160',dividerCount:'2'}],
+        ['Divider long narrow plan count 6','divider-tray',{trayWidth:'80',trayDepth:'360',dividerCount:'6'}],
+        ['Divider shallow depth count 1','divider-tray',{trayDepth:'60',dividerCount:'1'}],
+        ['Divider deep narrow spacing count 6','divider-tray',{trayWidth:'90',trayDepth:'90',dividerCount:'6'}],
+        ['Divider wide spacing count 1','divider-tray',{trayWidth:'360',trayDepth:'260',dividerCount:'1'}]
+      ];
+      matrix.forEach(([name, template, overrides]) => {
+        const draft = defaultsFor(template, overrides), normalized = normalizeDesignDraft(draft), valuesBefore = JSON.stringify(normalized.values), model = buildTrayModel(normalized.values), legacySvg = legacyDesignSvg(normalized.draft), compatibilitySvg = serializeTrayCompatibilitySvg(model), legacy = traySvgComparison(legacySvg), compatibility = traySvgComparison(compatibilitySvg), legacyValidation = designSvgValidation(legacySvg), compatibilityValidation = designSvgValidation(compatibilitySvg);
+        add(`${name} is valid`, !normalized.errors.length && model.valid && legacyValidation.valid && compatibilityValidation.valid, 'valid model and SVGs', JSON.stringify({ errors:normalized.errors, modelErrors:model.errors, legacyErrors:legacyValidation.errors, compatibilityErrors:compatibilityValidation.errors }));
+        add(`${name} is byte-identical`, legacySvg === compatibilitySvg);
+        add(`${name} preserves document dimensions and viewBox`, legacy.width === compatibility.width && legacy.height === compatibility.height && legacy.viewBox === compatibility.viewBox && model.layout.widthMm > 0 && model.layout.heightMm > 0);
+        add(`${name} preserves element count`, legacy.elements.length === compatibility.elements.length, String(legacy.elements.length), String(compatibility.elements.length));
+        add(`${name} preserves element type and attributes`, JSON.stringify(legacy.elements) === JSON.stringify(compatibility.elements));
+        add(`${name} preserves anonymous red cut-group structure`, JSON.stringify(legacy.groups) === JSON.stringify(compatibility.groups) && legacy.groups.length === 1 && legacy.groups[0].join('|') === 'fill=none|stroke=#ff0000|stroke-width=0.1');
+        add(`${name} has no invalid numeric token`, !/NaN|Infinity|undefined/.test(legacySvg) && !/NaN|Infinity|undefined/.test(compatibilitySvg));
+        add(`${name} leaves normalized values unmutated`, JSON.stringify(normalized.values) === valuesBefore);
+      });
+      const diceDraft = defaultsFor('dice-tray'), diceNormalized = normalizeDesignDraft(diceDraft), diceValuesBefore = JSON.stringify(diceNormalized.values), dice = buildTrayModel(diceNormalized.values), diceRepeat = buildTrayModel({ ...diceNormalized.values }), diceComponents = Object.fromEntries(dice.components.map(component => [component.id, component]));
+      add('Dice model is deterministic and source values are unmutated', JSON.stringify(dice) === JSON.stringify(diceRepeat) && JSON.stringify(diceNormalized.values) === diceValuesBefore);
+      add('Dice model has one base and four stable named walls', dice.components.filter(component => component.kind === 'base').length === 1 && dice.components.filter(component => component.kind === 'wall').map(component => component.id).join('|') === 'wall-front|wall-back|wall-left|wall-right');
+      add('Dice model has no divider components', !dice.components.some(component => component.kind === 'divider' || component.kind === 'base-divider-slot'));
+      add('Dice dimensions preserve base and slot formulas', dice.dimensions.baseOutsideWidthMm === 226 && dice.dimensions.baseOutsideDepthMm === 166 && dice.dimensions.slotWidthMm === 3.15);
+      add('Dice orientation uses the approved stable IDs', JSON.stringify(dice.orientation) === JSON.stringify({ interiorFace:'top', frontWallId:'wall-front', backWallId:'wall-back', leftWallId:'wall-left', rightWallId:'wall-right' }));
+      add('Dice records cut-only operations', dice.operations.cutPaths.length === dice.layout.items.length && !dice.operations.scorePaths.length && !dice.operations.labels.length);
+      add('Dice layout has stable component references and unique IDs', new Set(dice.components.map(component => component.id)).size === dice.components.length && dice.layout.items.every(item => !!diceComponents[item.componentId]) && new Set(dice.layout.items.map(item => item.componentId)).size === dice.components.length);
+      add('Dice layout components stay inside bounds', dice.layout.items.every(item => item.geometry.xMm >= 0 && item.geometry.yMm >= 0 && item.geometry.xMm + item.geometry.widthMm <= dice.layout.widthMm && item.geometry.yMm + item.geometry.heightMm <= dice.layout.heightMm));
+      const diceBoxes = trayModelMaterialBoxes(dice);
+      add('Dice material panels do not overlap in the projected layout', diceBoxes.every((box, index) => diceBoxes.slice(index + 1).every(other => !designBoxesOverlap(box, other))));
+      const dividerDraft = defaultsFor('divider-tray',{ dividerCount:'6' }), dividerNormalized = normalizeDesignDraft(dividerDraft), dividerValuesBefore = JSON.stringify(dividerNormalized.values), divider = buildTrayModel(dividerNormalized.values), dividerRepeat = buildTrayModel({ ...dividerNormalized.values }), dividerSlots = divider.components.filter(component => component.kind === 'base-divider-slot'), dividerPanels = divider.components.filter(component => component.kind === 'divider'), dividerComponents = Object.fromEntries(divider.components.map(component => [component.id, component]));
+      add('Divider model is deterministic and source values are unmutated', JSON.stringify(divider) === JSON.stringify(dividerRepeat) && JSON.stringify(dividerNormalized.values) === dividerValuesBefore);
+      add('Divider count produces matching slots, panels, and compartments', dividerSlots.length === 6 && dividerPanels.length === 6 && divider.metrics.dividerCount === 6 && divider.metrics.compartmentCount === 7);
+      add('Each Divider panel references exactly one matching base slot', dividerPanels.every((panel, index) => panel.baseSlotId === dividerSlots[index].id && dividerComponents[panel.baseSlotId]?.kind === 'base-divider-slot'));
+      add('Divider positions follow the current equal-spacing formula', dividerPanels.every((panel, index) => panel.positionFromFrontMm === divider.inputs.insideDepthMm * (index + 1) / (divider.inputs.dividerCount + 1)));
+      add('Divider orientation and numbering follow the approved contract', divider.orientation.dividerSpan === 'left-to-right' && divider.orientation.dividerOrder === 'front-to-back' && dividerPanels.every((panel, index) => panel.span === 'left-to-right' && panel.order === 'front-to-back' && panel.dividerIndex === index + 1) && dividerPanels[0].positionFromFrontMm < dividerPanels[1].positionFromFrontMm);
+      add('Divider model has no cross-divider or fixed-retention claim', dividerPanels.every(panel => panel.intendedAssembly === 'removable' && panel.retention === 'unspecified') && !divider.components.some(component => /cross|fixed/i.test(component.kind + component.name)));
+      add('Divider records cut-only operations', divider.operations.cutPaths.length === divider.layout.items.length && !divider.operations.scorePaths.length && !divider.operations.labels.length);
+      add('Divider layout has stable component references and unique IDs', new Set(divider.components.map(component => component.id)).size === divider.components.length && divider.layout.items.every(item => !!dividerComponents[item.componentId]) && new Set(divider.layout.items.map(item => item.componentId)).size === divider.components.length);
+      add('Divider layout components stay inside bounds', divider.layout.items.every(item => item.geometry.xMm >= 0 && item.geometry.yMm >= 0 && item.geometry.xMm + item.geometry.widthMm <= divider.layout.widthMm && item.geometry.yMm + item.geometry.heightMm <= divider.layout.heightMm));
+      const dividerBoxes = trayModelMaterialBoxes(divider);
+      add('Divider material panels do not overlap in the projected layout', dividerBoxes.every((box, index) => dividerBoxes.slice(index + 1).every(other => !designBoxesOverlap(box, other))));
+      const invalidCases = [
+        ['invalid material thickness',{ materialThickness:'0' }], ['invalid clearance',{ fitClearance:'-0.01' }], ['zero width',{ trayWidth:'0' }], ['negative width',{ trayWidth:'-1' }], ['zero depth',{ trayDepth:'0' }], ['negative depth',{ trayDepth:'-1' }], ['zero height',{ trayHeight:'0' }], ['negative height',{ trayHeight:'-1' }], ['width too short',{ trayWidth:'20' }], ['depth too short',{ trayDepth:'20' }], ['invalid joint style',{ jointStyle:'dovetail' }], ['Divider count below one',{ dividerCount:'0' }], ['Divider count above six',{ dividerCount:'7' }], ['Divider count non-integer',{ dividerCount:'1.5' }]
+      ];
+      invalidCases.forEach(([name, overrides]) => {
+        const draft = defaultsFor('divider-tray', overrides), normalized = normalizeDesignDraft(draft), legacy = buildLegacyDesignResult(normalizeDesignDraft(draft)), model = buildTrayModel(normalized.values);
+        add(`Invalid parity: ${name}`, !legacy.valid && !model.valid && !model.components.length && !model.layout.items.length && !buildDesignResult(draft).valid, 'both reject without components', JSON.stringify({ legacyErrors:legacy.errors, modelErrors:model.errors }));
+      });
+      add('Invalid tray UI validation wording remains unchanged', buildLegacyDesignResult(normalizeDesignDraft(defaultsFor('dice-tray',{ trayWidth:'0' }))).errors.includes('Inside tray width must be at least 20 mm.'));
+      const storageBefore = localStorage.getItem(STORAGE_KEY); buildTrayModel(diceNormalized.values); const storageAfter = localStorage.getItem(STORAGE_KEY);
+      add('Tray model generation does not write localStorage', storageBefore === storageAfter);
+      add('Compatibility serializer returns no SVG for invalid model', serializeTrayCompatibilitySvg(buildTrayModel({ template:'dice-tray' })) === '');
+      const defaultDiceSvg = legacyDesignSvg(diceNormalized.draft), defaultDividerNormalized = normalizeDesignDraft(defaultsFor('divider-tray')), defaultDividerSvg = legacyDesignSvg(defaultDividerNormalized.draft);
+      add('Dice default golden length and hash remain unchanged', defaultDiceSvg.length === 1726 && designFixtureHash(defaultDiceSvg) === '51a55721', '1726/51a55721', `${defaultDiceSvg.length}/${designFixtureHash(defaultDiceSvg)}`);
+      add('Divider default golden length and hash remain unchanged', defaultDividerSvg.length === 1965 && designFixtureHash(defaultDividerSvg) === 'a55dda6e', '1965/a55dda6e', `${defaultDividerSvg.length}/${designFixtureHash(defaultDividerSvg)}`);
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      return { passed, failed, results };
+    }
+    window.runTrayModelFixtures = runTrayModelFixtures;
     function runDesignGeometryFixtures() {
       const fixture = (name, pass, expected = '', actual = '') => ({ name, pass: !!pass, expected, actual });
       const results = [], add = (name, pass, expected = '', actual = '') => results.push(fixture(name, pass, expected, actual));
+      const trayModelFixtures = runTrayModelFixtures();
+      results.push(...trayModelFixtures.results);
       const defaultsFor = (template, overrides = {}) => ({ ...designDefaults(), template, ...overrides });
       const baselines = {
         'qr-stand': { length:359, hash:'fe737a09' },
