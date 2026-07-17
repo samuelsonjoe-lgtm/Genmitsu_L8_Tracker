@@ -1871,7 +1871,7 @@
         ? 'Eight through-cut pieces form a Front-loading box: five body panels, one shouldered lid, and two identical glue-on inner channel rails. Optional guide marks are blue score geometry; the marks sit slightly inward from the end joinery so they remain on retained material, and the complete Right side panel is mirrored with its guides. The optional coupon adds six non-interlocking fit-test pieces. All fit values are experimental starting points; test the body joints and sliding fit on scrap.'
         : box
         ? 'The open-top body uses complementary rectangular fingers at all four corners and all four bottom joints. A loose lid is a separate plain panel with no retention.'
-        : tray ? `${d.jointStyle === 'finger' ? 'Finger-tab' : 'Tab-and-slot'} tray layout includes a slotted base and wall tabs. Corner glue is recommended after a dry fit.`
+        : tray ? 'Tabs on each wall bottom mate with through-slots in the base. Adjacent walls meet as butt joints and need glue after a dry fit. This is not corner finger joinery. Fit clearance is a starting value; test on scrap or with a future fit coupon.'
         : hanging ? 'Hanging sign exports a clean panel with two mounting holes.'
         : 'Freestanding sign exports a base and upright with matching centered slots. The upright is intentionally blank for your QR, logo, or text in LightBurn.';
       return `
@@ -1880,7 +1880,7 @@
         <form id="designForm" class="panel" onsubmit="return false">
           <div class="formgrid">
             ${templateField}
-            ${box || sliding || cabinet || jointCoupon ? '' : tray ? select('jointStyle','Tray joint style',d.jointStyle,['finger','tab-slot']) : '<div></div>'}
+            ${box || sliding || cabinet || jointCoupon ? '' : tray ? designSelect('jointStyle','Wall-to-base tab profile',d.jointStyle,[['finger','Four-tab walls (wall-to-base)'],['tab-slot','Two-tab walls (wall-to-base)']]) : '<div></div>'}
             ${field('materialThickness','Measured material thickness (mm)',d.materialThickness,'number','min="0.1" step="0.01"','Measure the actual sheet; nominal plywood thickness can differ.')}
             ${jointCoupon ? jointCouponFields : cabinet ? cabinetFields : sliding ? slidingFields : box ? boxFields : field('fitClearance','Slot clearance (mm)',d.fitClearance,'number','min="0" step="0.01"','Added to legacy slot width. Start small and test on scrap.') + legacyFields}
           </div>
@@ -2196,28 +2196,6 @@
       return { length, count, actualWidth, minimumWidth, boundaries: Array.from({ length: count + 1 }, (_, index) => designRound(actualWidth * index)) };
     }
     function designPatternEdge(pattern, phase, depth, clearance) { return { pattern, phase, depth, clearance }; }
-    function designEdgePoints(start, end, inward, edge) {
-      if (!edge?.pattern) return [start, end];
-      const { pattern, phase, depth, clearance } = edge, horizontal = start.y === end.y, direction = horizontal ? Math.sign(end.x - start.x) : Math.sign(end.y - start.y);
-      const pointAt = (distance, offset) => horizontal
-        ? { x: start.x + direction * distance + inward.x * offset, y: start.y + inward.y * offset }
-        : { x: start.x + inward.x * offset, y: start.y + direction * distance + inward.y * offset };
-      const isFinger = index => (index % 2 === 0) === phase;
-      const points = [{ ...start }], firstOffset = isFinger(0) ? 0 : depth;
-      if (firstOffset) points.push(pointAt(0, firstOffset));
-      for (let index = 0; index < pattern.count; index++) {
-        const currentFinger = isFinger(index), currentOffset = currentFinger ? 0 : depth;
-        let distance = pattern.length;
-        if (index < pattern.count - 1) {
-          const nominal = pattern.actualWidth * (index + 1);
-          distance = nominal + (currentFinger ? -clearance / 2 : clearance / 2);
-        }
-        points.push(pointAt(distance, currentOffset));
-        if (index < pattern.count - 1) points.push(pointAt(distance, isFinger(index + 1) ? 0 : depth));
-      }
-      if (!isFinger(pattern.count - 1)) points.push({ ...end });
-      return points;
-    }
     function designCompactPoints(points) {
       const compact = [];
       points.forEach(point => {
@@ -3411,7 +3389,7 @@
       add('Dice Finished View renderer is deterministic and finite',diceFinishedSvg===buildDiceTrayFinishedViewSvg(diceResult)&&!!diceFinishedRoot&&!/NaN|Infinity|undefined/.test(diceFinishedSvg)&&diceFinishedRoot.getAttribute('viewBox')==='0 0 480 330');
       add('Dice Finished View shows the open top and four semantic walls once',diceFinishedRoot?.querySelector('#dice-tray-interior')&&diceFinishedRoot.querySelectorAll('.dice-tray-wall').length===4&&['Front','Back','Left','Right','Open top'].every(label=>diceFinishedRoot.textContent.includes(label)));
       add('Dice Finished View dimensions and wall-slot identities match the model',diceFinishedRoot?.textContent.includes(`Inside usable: ${designNumberText(dice.inputs.insideWidthMm)} × ${designNumberText(dice.inputs.insideDepthMm)} mm`)&&diceFinishedRoot.textContent.includes(`Wall height: ${designNumberText(dice.inputs.wallHeightMm)} mm`)&&['front','back','left','right'].every(role=>diceFinishedRoot.querySelector(`#dice-tray-wall-${role}`)?.getAttribute('data-wall-id')===dice.orientation[`${role}WallId`]&&diceFinishedRoot.querySelector(`#dice-tray-wall-${role}`)?.getAttribute('data-base-slot-ids')===dice.components.find(component=>component.id===dice.orientation[`${role}WallId`])?.baseSlotIds.join('|')));
-      add('Dice Finished View states distinguish the current two- and four-tab wall profiles without corner-joinery claims',diceFinishedSvg.includes('Four-tab wall profile')&&!/finger-jointed corner|interlocking corner/i.test(diceFinishedSvg)&&buildDiceTrayFinishedViewSvg(buildDesignResult(defaultsFor('dice-tray',{jointStyle:'tab-slot'}))).includes('Two-tab wall profile'));
+      add('Dice Finished View states honest wall-to-base profiles without corner-joinery claims',diceFinishedSvg.includes('Four-tab wall profile')&&diceFinishedSvg.includes('Walls align with base slots')&&!/finger-jointed corner|interlocking corner/i.test(diceFinishedSvg)&&buildDiceTrayFinishedViewSvg(buildDesignResult(defaultsFor('dice-tray',{jointStyle:'tab-slot'}))).includes('Two-tab wall profile'));
       const finishedScenarios=[{jointStyle:'finger'},{jointStyle:'tab-slot'},{trayWidth:'160',trayDepth:'160'},{trayWidth:'80',trayDepth:'360'},{trayWidth:'500',trayDepth:'60'},{trayWidth:'42',trayDepth:'48'},{trayWidth:'500',trayDepth:'420'},{trayHeight:'10'},{trayHeight:'180'},{fitClearance:'0'},{materialThickness:'4.5'}];
       add('Dice Finished View remains finite across valid profile, plan, height, clearance, and thickness boundaries',finishedScenarios.every(overrides=>{const result=buildDesignResult(defaultsFor('dice-tray',overrides)), svg=buildDiceTrayFinishedViewSvg(result); return result.valid&&!!svg&&!/NaN|Infinity|undefined/.test(svg)&&new DOMParser().parseFromString(svg,'image/svg+xml').documentElement.querySelectorAll('.dice-tray-wall').length===4;}));
       const invalidDiceFinished=buildDesignResult(defaultsFor('dice-tray',{trayWidth:'0'}));
@@ -3440,7 +3418,7 @@
       add('Divider Finished View renderer is deterministic finite and shows canonical orientation',dividerSvg===buildDividerTrayFinishedViewSvg(dividerResult)&&!!dividerRoot&&!/NaN|Infinity|undefined/.test(dividerSvg)&&dividerRoot.getAttribute('viewBox')==='0 0 480 360'&&['Front','Back','Left','Right','Divider 01 nearest Front'].every(text=>dividerRoot.textContent.includes(text)));
       add('Divider Finished View renders four walls two dividers and three compartments from semantic positions',dividerRoot?.querySelector('#divider-tray-interior')&&dividerRoot.querySelectorAll('.divider-tray-wall').length===4&&dividerRoot.querySelectorAll('.divider-tray-divider').length===2&&dividerRoot.textContent.includes('2 dividers · 3 compartments')&&[...dividerRoot.querySelectorAll('.divider-tray-divider-group')].every((node,index)=>node.getAttribute('data-divider-id')===dividerView.dividers[index].id&&node.getAttribute('data-base-slot-id')===dividerView.dividers[index].baseSlotId&&node.getAttribute('data-position-from-front-mm')===String(dividerView.dividers[index].positionFromFrontMm)));
       add('Divider Finished View preserves Front-to-Back ordering and removable-intent wording without fabricated mechanisms',[...dividerRoot.querySelectorAll('.divider-tray-divider-group')].every((node,index,all)=>node.getAttribute('data-span')==='left-to-right'&&node.getAttribute('data-order')==='front-to-back'&&node.getAttribute('data-intended-assembly')==='removable'&&node.getAttribute('data-retention')==='unspecified'&&(!index||Number(node.getAttribute('data-position-from-front-mm'))>Number(all[index-1].getAttribute('data-position-from-front-mm'))))&&dividerSvg.includes('Intended removable divider arrangement')&&!/cross-divider|secure fit|snug fit|friction fit|locked|retained|captive|magnet|clip|hinge|fastener|dovetail/i.test(dividerSvg));
-      add('Divider Finished View keeps current two- and four-tab wall-profile wording',dividerSvg.includes('Four-tab wall profile')&&buildDividerTrayFinishedViewSvg(buildDesignResult(defaultsFor('divider-tray',{jointStyle:'tab-slot'}))).includes('Two-tab wall profile'));
+      add('Divider Finished View keeps honest wall-to-base profile wording',dividerSvg.includes('Four-tab wall profile')&&dividerSvg.includes('Dividers align with base slots')&&!/finger-jointed corner|interlocking corner/i.test(dividerSvg)&&buildDividerTrayFinishedViewSvg(buildDesignResult(defaultsFor('divider-tray',{jointStyle:'tab-slot'}))).includes('Two-tab wall profile'));
       const singularDividerSvg=buildDividerTrayFinishedViewSvg(buildDesignResult(defaultsFor('divider-tray',{dividerCount:'1'})));
       add('Divider Finished View uses singular and plural divider count wording',singularDividerSvg.includes('1 divider · 2 compartments')&&!singularDividerSvg.includes('1 dividers')&&dividerSvg.includes('2 dividers · 3 compartments'));
       const dividerFinishedScenarios=[{dividerCount:'1'},{dividerCount:'2'},{dividerCount:'6'},{dividerCount:'6',jointStyle:'tab-slot'},{dividerCount:'2',trayWidth:'160',trayDepth:'160'},{dividerCount:'6',trayWidth:'80',trayDepth:'360'},{dividerCount:'1',trayWidth:'360',trayDepth:'260'},{dividerCount:'1',trayWidth:'42',trayDepth:'48'},{dividerCount:'6',trayWidth:'500',trayDepth:'420'},{dividerCount:'1',trayHeight:'10'},{dividerCount:'6',trayHeight:'180'},{dividerCount:'2',fitClearance:'0'},{dividerCount:'2',materialThickness:'4.5'}];
@@ -3460,6 +3438,17 @@
         add(`Existing validation and model reject: ${name}`, validationInput.errors.length > 0 && !model.valid && !model.components.length && !model.layout.items.length && !live.valid, 'all reject without components', JSON.stringify({ validationErrors:validationInput.errors, modelErrors:model.errors, liveErrors:live.errors }));
       });
       add('Invalid tray UI validation wording remains unchanged', buildDesignResult(defaultsFor('dice-tray',{ trayWidth:'0' })).errors.includes('Inside tray width must be at least 20 mm.'));
+      const savedTrayDraft=designDraft;
+      try {
+        designDraft=defaultsFor('dice-tray');
+        const trayFormHtml=renderDesigns();
+        add('Tray form uses honest wall-to-base field and option labels while preserving internal IDs',trayFormHtml.includes('Wall-to-base tab profile')&&trayFormHtml.includes('<option value="finger" selected>Four-tab walls (wall-to-base)</option>')&&trayFormHtml.includes('<option value="tab-slot" >Two-tab walls (wall-to-base)</option>'));
+        add('Tray help identifies wall-bottom tabs, butt joints, dry-fit glue, and provisional clearance without corner-joinery claims',trayFormHtml.includes('Tabs on each wall bottom mate with through-slots in the base.')&&trayFormHtml.includes('Adjacent walls meet as butt joints and need glue after a dry fit.')&&trayFormHtml.includes('This is not corner finger joinery.')&&trayFormHtml.includes('Fit clearance is a starting value; test on scrap or with a future fit coupon.')&&!/interlocking tray corners|finger-jointed tray corners|self-locking assembly|glue-free construction|secure or proven fit/i.test(trayFormHtml));
+        designDraft=defaultsFor('dice-tray',{jointStyle:'tab-slot'});
+        const tabSlotTrayFormHtml=renderDesigns();
+        add('Both supported internal tray jointStyle values remain valid and select their visible wall-to-base labels',buildDesignResult(defaultsFor('dice-tray',{jointStyle:'finger'})).valid&&buildDesignResult(defaultsFor('dice-tray',{jointStyle:'tab-slot'})).valid&&tabSlotTrayFormHtml.includes('<option value="tab-slot" selected>Two-tab walls (wall-to-base)</option>'));
+      } finally { designDraft=savedTrayDraft; }
+      add('Removed designEdgePoints is absent while the safe pattern helper remains present and used',typeof designEdgePoints==='undefined'&&typeof designSafePatternEdgePoints==='function'&&buildSlidingLidBodyPanel.toString().includes('designSafePatternEdgePoints'));
       const storageBefore = localStorage.getItem(STORAGE_KEY); buildTrayModel(diceNormalized.values); const storageAfter = localStorage.getItem(STORAGE_KEY);
       add('Tray model generation does not write localStorage', storageBefore === storageAfter);
       add('Compatibility serializer returns no SVG for invalid model', serializeTrayCompatibilitySvg(buildTrayModel({ template:'dice-tray' })) === '');
