@@ -44,3 +44,9 @@ An isolated Sliding-Lid reproducibility probe built its default production SVG b
 LightBurn Pro 2.1.03 imported the original J2 blue score layer as Fill and reported “Open shapes skipped” because open `cleat-placement` guide paths and closed `assembly-labels` paths shared the same blue color. J2 now serializes the open no-fill guides as blue `#0000ff` and the deterministic no-fill label paths as green `#00ff00`, followed by the unchanged red `#ff0000` cut group. The intentional default production SVG change is `4171` bytes / `ca0cfb8e` to `4099` bytes / `c9bfd05c`; the red cut group remains `1606` bytes / `c16a9ef5`, and all non-J2 production goldens passed unchanged.
 
 Focused layer/open-path/label/order/cut-stability checks, Tray-model (`264 / 0`), Designs (`1037 / 0`), and the complete available suite (`1829 / 0`) passed. Joe must still re-export and re-import the corrected SVG in LightBurn Pro 2.1.03 to confirm no warning, separate Line-mode guides, visible engravable labels, and correct red cuts.
+
+## J2.3 footprint-registration correction
+
+The first physical dry fit showed that the prior short, inset guide ticks did not span a cleat footprint, so a base cleat could align to either end mark without a unique vertical position. J2 now uses four minimal blue L-corner ticks for each installed Base-cleat A, Base-cleat B, and Wall-A seam-cleat footprint; all four extents are explicit without adding a full engraved rectangle. The red cut group remains `1606` bytes / `c16a9ef5`; the intentional J2 production SVG change is `4099` bytes / `c9bfd05c` to `4457` bytes / `88721533`.
+
+Focused footprint/extent/corner-uniqueness checks for all three cleats, Tray-model (`264 / 0`), Designs (`1040 / 0`), and the complete available suite (`1832 / 0`) passed. A physical dry fit must still confirm that the engraved corner ticks provide unambiguous real-stock registration before relying on the guide system.
