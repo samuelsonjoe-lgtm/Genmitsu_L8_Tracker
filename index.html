@@ -59,14 +59,15 @@
     }
     textarea { resize: vertical; }
     label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: #424b5a; }
-    .shell { max-width: 1180px; margin: 0 auto; padding: 20px 18px 70px; }
+    .shell { max-width: 1180px; min-width: 0; margin: 0 auto; padding: 20px 18px 70px; }
     .topbar, .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand { display: flex; min-width: 0; align-items: center; gap: 12px; }
+    .brand > div:last-child { min-width: 0; }
     .mark { width: 42px; height: 42px; border-radius: 9px; background: #283342; position: relative; }
     .mark:before { content: ""; position: absolute; width: 22px; height: 4px; border-radius: 4px; background: #e2833a; top: 19px; left: 10px; transform: rotate(45deg); box-shadow: 0 7px 0 #e2833a, 0 -7px 0 #e2833a; }
     h1 { margin: 0; font-size: 21px; }
     .subtitle { color: var(--muted); font-size: 13px; }
-    .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line); margin: 18px 0; overflow-x: auto; }
+    .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line); margin: 18px 0; overflow-x: auto; overscroll-behavior-x: contain; scroll-padding-inline: 8px; scrollbar-gutter: stable both-edges; }
     .tab { min-height: 40px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: 11px 2px 9px; color: var(--muted); background: transparent; white-space: nowrap; }
     .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
     .topbar .row > button, .actions > button, .modal-actions > button, .project-section > summary { min-height: 40px; }
@@ -90,7 +91,7 @@
     .muted { color: var(--muted); }
     .small { font-size: 12px; }
     .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .spread { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+    .spread { display: flex; min-width: 0; justify-content: space-between; gap: 12px; align-items: flex-start; }
     .pill { border-radius: 999px; padding: 3px 8px; background: #eef1f5; color: #425166; font-size: 12px; font-weight: 700; }
     .pill.good { background: #eef8f1; color: var(--green); }
     .pill.warn { background: #fff4db; color: var(--amber); }
@@ -132,10 +133,11 @@
       justify-content: center;
       padding: 28px 14px;
       overflow-y: auto;
+      overscroll-behavior: contain;
       z-index: 10;
     }
     .modal.open { display: flex; }
-    .dialog { background: white; width: min(720px, 100%); border-radius: 10px; padding: 20px; }
+    .dialog { background: white; width: min(720px, 100%); max-height: calc(100vh - 56px); min-width: 0; overflow-y: auto; border-radius: 10px; padding: 20px; }
     .formgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .span2 { grid-column: span 2; }
     .project-section { border: 1px solid var(--line); border-radius: 8px; background: #fbfcfe; padding: 0; overflow: hidden; }
@@ -179,8 +181,10 @@
     table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 720px; }
     th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
     th { background: #f3f5f8; color: #475467; font-size: 12px; text-transform: uppercase; }
-    .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: white; }
-    .grid-table { overflow-x: auto; background: white; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+    .tablewrap, .grid-table { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-gutter: stable both-edges; border: 1px solid var(--line); border-radius: 8px; background: white; }
+    .grid-table { padding: 12px; }
+    .tabs.has-horizontal-scroll, .tablewrap.has-horizontal-scroll, .grid-table.has-horizontal-scroll, .design-svg-preview.has-horizontal-scroll { box-shadow: inset -14px 0 14px -14px rgba(35, 109, 156, .75); }
+    th, td { overflow-wrap: anywhere; }
     .matrix { display: inline-grid; gap: 5px; align-items: center; }
     .cell { width: 76px; height: 54px; border: 1px solid var(--line); border-radius: 7px; display: grid; place-items: center; text-align: center; cursor: pointer; background: #f8fafc; font-size: 12px; font-weight: 800; }
     .cell.done { background: #eef8f1; border-color: #78b38d; color: var(--green); }
@@ -199,8 +203,9 @@
     .nested-browser-detail hr { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
     .design-preview-layout { display: grid; grid-template-columns: minmax(280px, .85fr) minmax(360px, 1.15fr); gap: 14px; margin-top: 14px; }
     .design-preview-layout > * { min-width: 0; }
-    .design-svg-preview { min-height: 280px; display: grid; place-items: center; background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: auto; padding: 8px; }
+    .design-svg-preview { min-width: 0; max-width: 100%; min-height: 280px; display: grid; place-items: center; background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable both-edges; padding: 8px; }
     .design-svg-preview object { display: block; width: 100%; min-height: 360px; border: 0; }
+    .design-svg-preview > svg { display: block; max-width: 100%; height: auto; }
     .drawer-front-svg { display: block; width: 100%; height: auto; max-height: 620px; }
     .drawer-front-legend { width: 100%; margin-top: 8px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: #f7f9fb; color: #425166; font-size: 12px; line-height: 1.45; }
     .design-preview-selector { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
@@ -211,8 +216,17 @@
     .design-message.warning { border-left-color: var(--amber); }
     .print-only { display: none; }
     @media (max-width: 700px) {
+      .shell { padding: 14px 12px 56px; }
+      .topbar { align-items: stretch; }
+      .topbar > .brand, .topbar > .row, .toolbar > .row, .toolbar > .spread { width: 100%; min-width: 0; }
+      .topbar > .row { justify-content: flex-start; }
+      .toolbar > *, .row > *, .spread > * { min-width: 0; }
+      .spread { flex-wrap: wrap; }
+      .toolbar .row input, .toolbar .row select { max-width: 100%; }
+      .cards { grid-template-columns: minmax(0, 1fr); }
+      .first-run-onboarding { padding-inline: 2px; }
       .modal { padding: 10px 8px; }
-      .dialog { padding: 14px; }
+      .dialog { max-height: calc(100dvh - 16px); padding: 14px; }
       .formgrid { grid-template-columns: 1fr; }
       .span2 { grid-column: span 1; }
       .metrics { grid-template-columns: 1fr; }
@@ -900,6 +914,92 @@
       return { passed, failed, results };
     }
     window.runAccessibilityPolishFixtures = runAccessibilityPolishFixtures;
+    function runResponsiveTuningFixtures() {
+      const results = [], add = (name, pass, actual = '') => results.push({ name, pass:!!pass, actual });
+      const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY), backupBefore = JSON.stringify(backupObject()), dismissedBefore = firstRunOnboardingDismissed, gridBefore = activeGridId, cellBefore = activeCellKey, draftBefore = JSON.stringify(designDraft);
+      const modalIds = [...document.querySelectorAll('.modal')].map(modal => modal.id);
+      const modalSnapshots = Object.fromEntries(modalIds.map(id => { const modal = document.getElementById(id); return [id, { html:modal.innerHTML, open:modal.classList.contains('open'), aria:modal.getAttribute('aria-hidden') }]; }));
+      const originsBefore = [...modalFocusOrigins.entries()], orderBefore = [...modalOpenOrder], focusBefore = document.activeElement, styleText = document.querySelector('style')?.textContent || '';
+      const narrow = window.matchMedia('(max-width: 700px)').matches;
+      const restore = () => {
+        Object.assign(state, JSON.parse(stateBefore));
+        if (storageBefore === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, storageBefore);
+        firstRunOnboardingDismissed = dismissedBefore; activeGridId = gridBefore; activeCellKey = cellBefore; designDraft = JSON.parse(draftBefore);
+        modalFocusOrigins.clear(); originsBefore.forEach(([id, origin]) => modalFocusOrigins.set(id, origin)); modalOpenOrder.splice(0, modalOpenOrder.length, ...orderBefore);
+        render();
+        modalIds.forEach(id => { const modal = document.getElementById(id), snapshot = modalSnapshots[id]; modal.innerHTML = snapshot.html; modal.classList.toggle('open', snapshot.open); if (snapshot.aria === null) modal.removeAttribute('aria-hidden'); else modal.setAttribute('aria-hidden', snapshot.aria); });
+        if (focusBefore?.isConnected) try { focusBefore.focus({ preventScroll:true }); } catch (_) { focusBefore.focus(); }
+      };
+      try {
+        add('Responsive tuning adds no persisted preference', !Object.keys(freshState()).some(key => /responsive|viewport|mobile/i.test(key)) && !Object.keys(backupObject()).some(key => /responsive|viewport|mobile/i.test(key)));
+        add('Storage key remains unchanged', STORAGE_KEY === 'genmitsu-l8-tracker-v1');
+        add('Schema version remains unchanged', SCHEMA_VERSION === 2);
+        add('Release identity remains unchanged', APP_VERSION === '0.9.0' && BUILD_DATE === '2026-07-19' && APP_ID === 'genmitsu-l8-tracker' && BACKUP_FORMAT === 'genmitsu-l8-tracker-backup-v1');
+        state.activeTab = 'log'; render();
+        const tabsRoot = document.getElementById('tabs'), tabsNow = [...tabsRoot.querySelectorAll('[role="tab"]')], panel = document.getElementById('app');
+        add('Primary tabs retain tablist tab and tabpanel semantics', tabsRoot.getAttribute('role') === 'tablist' && tabsNow.length === tabs.length && tabsNow.filter(tab => tab.getAttribute('aria-selected') === 'true').length === 1 && panel.getAttribute('role') === 'tabpanel');
+        const logTab = document.getElementById('tab-log'); logTab.focus(); logTab.dispatchEvent(new KeyboardEvent('keydown', { key:'ArrowRight', bubbles:true, cancelable:true }));
+        add('Primary tab Arrow navigation remains active', state.activeTab === 'library' && document.activeElement === document.getElementById('tab-library'));
+        add('Tablist retains local horizontal overflow behavior', getComputedStyle(tabsRoot).overflowX === 'auto' && /scroll-padding-inline/.test(styleText));
+        add('Header control groups permit wrapping', getComputedStyle(document.querySelector('.topbar')).flexWrap === 'wrap' && getComputedStyle(document.querySelector('.topbar > .row')).flexWrap === 'wrap');
+        add('Toolbar and action groups permit wrapping', getComputedStyle(document.querySelector('.toolbar') || document.querySelector('.topbar')).flexWrap === 'wrap' && getComputedStyle(document.querySelector('.actions') || document.querySelector('.row')).flexWrap === 'wrap');
+        add('Form grids collapse at the narrow breakpoint', (() => { const probe = document.createElement('div'); probe.className = 'formgrid'; document.body.appendChild(probe); const columns = getComputedStyle(probe).gridTemplateColumns.trim().split(/\s+/).filter(Boolean); probe.remove(); return !narrow || columns.length === 1; })());
+        add('Controls use border-box and available-width sizing', getComputedStyle(document.getElementById('search') || document.getElementById('librarySearch')).boxSizing === 'border-box' && /toolbar \.row input, \.toolbar \.row select \{ max-width: 100%/.test(styleText));
+        add('Table wrappers retain local horizontal overflow', getComputedStyle(document.getElementById('app')).boxSizing === 'border-box' && /\.tablewrap, \.grid-table \{ max-width: 100%; overflow-x: auto/.test(styleText));
+        add('Grid tables retain local horizontal overflow', /\.grid-table \{ padding: 12px; \}/.test(styleText) && /overscroll-behavior-x: contain/.test(styleText));
+        add('The responsive shell does not set a document-level minimum width', /\.shell \{ max-width: 1180px; min-width: 0/.test(styleText) && !/body\s*\{[^}]*min-width:\s*[1-9]/.test(styleText));
+        add('Dense action groups remain wrappable and bounded', getComputedStyle(document.querySelector('.row')).flexWrap === 'wrap' && /\.tablewrap button, \.grid-table button \{ min-height: 34px; \}/.test(styleText));
+        add('Primary actions retain the 40px target treatment', /\.topbar \.row > button, \.actions > button, \.modal-actions > button, \.project-section > summary \{ min-height: 40px; \}/.test(styleText));
+        openEntry(); const entryDialog = modalDialog(document.getElementById('entryModal'));
+        add('Modal dialogs use viewport-bounded width and vertical scrolling', getComputedStyle(entryDialog).maxHeight !== 'none' && getComputedStyle(entryDialog).overflowY === 'auto' && entryDialog.getBoundingClientRect().width <= window.innerWidth);
+        add('Modal action groups retain wrapping', getComputedStyle(entryDialog.querySelector('.modal-actions, .actions')).flexWrap === 'wrap');
+        closeModal('entryModal');
+        Object.assign(state, freshState()); firstRunOnboardingDismissed = false; state.activeTab = 'log'; render();
+        add('First-run action group remains present and wrappable', !!document.getElementById('firstRunOnboarding') && getComputedStyle(document.querySelector('#firstRunOnboarding .actions')).flexWrap === 'wrap');
+        openHelp(); const helpDialog = modalDialog(document.getElementById('helpModal'));
+        add('Help content has no fixed width exceeding the viewport', helpDialog.getBoundingClientRect().width <= window.innerWidth && getComputedStyle(helpDialog).overflowY === 'auto');
+        closeModal('helpModal'); state.activeTab = 'reference'; render();
+        const machineForm = document.getElementById('machineSetupForm');
+        add('Machine setup remains labelled', ['machineName','machineWorkAreaWidth','machineWorkAreaHeight'].every(id => document.getElementById(id)?.closest('label')) && !!machineForm);
+        add('Machine setup form follows the responsive one-column contract', !narrow || getComputedStyle(machineForm.querySelector('.formgrid')).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length === 1);
+        const referenceTableRegion = document.querySelector('.tablewrap'); updateHorizontalScrollRegions();
+        add('Reference tables retain a bounded local scroll region', !!referenceTableRegion && getComputedStyle(referenceTableRegion).overflowX === 'auto' && referenceTableRegion.getBoundingClientRect().width <= window.innerWidth);
+        state.entries = [{ ...formDefaults('entry'), id:'responsive-entry', material:'Very long responsive fixture material name for a narrow result surface', notes:'A multi-word note that verifies cards and controls wrap without changing stored fixture data.', software:'LightBurn', settingsFile:'very-long-responsive-fixture-settings-file-name.lbrn2' }]; state.activeTab = 'log'; render();
+        add('Populated Log renders without document-level overflow', document.documentElement.scrollWidth <= window.innerWidth + 1 && !!document.querySelector('#logResults .card'));
+        const longGrid = { ...formDefaults('grid'), id:'responsive-grid', name:'Very long responsive Test Grid fixture name for a narrow matrix surface', material:'Very long responsive fixture material name', powerMin:'10', powerMax:'30', powerStep:'10', speedMin:'100', speedMax:'500', speedStep:'100', machine:activeMachineSnapshot(), cells:{} };
+        state.grids = [longGrid]; state.activeTab = 'grids'; activeGridId = longGrid.id; render(); const matrixRegion = document.querySelector('.grid-table'); updateHorizontalScrollRegions();
+        add('Test Grid matrix remains inside a local scroll region', !!matrixRegion && getComputedStyle(matrixRegion).overflowX === 'auto' && matrixRegion.getBoundingClientRect().width <= window.innerWidth + 2 && document.documentElement.scrollWidth <= window.innerWidth + 1, matrixRegion ? `${Math.round(matrixRegion.getBoundingClientRect().width)}/${matrixRegion.scrollWidth}/${matrixRegion.clientWidth}; document ${document.documentElement.scrollWidth}/${window.innerWidth}` : 'missing');
+        add('Actual overflowing regions expose a labelled keyboard scroll stop', [...document.querySelectorAll('.tablewrap, .grid-table, .design-svg-preview')].filter(region => region.scrollWidth > region.clientWidth + 1).every(region => region.getAttribute('tabindex') === '0' && !!region.getAttribute('aria-label')));
+        designDraft = designDefaults(); state.activeTab = 'designs'; render(); const designPreview = document.querySelector('.design-svg-preview'), productionBefore = buildDesignResult(designDraft).svg;
+        add('Designs preview uses a bounded local preview container', !!designPreview && getComputedStyle(designPreview).maxWidth !== 'none' && ['auto','scroll'].includes(getComputedStyle(designPreview).overflowX));
+        add('Designs preview CSS is display-only and production bytes stay neutral', /\.design-svg-preview > svg \{ display: block; max-width: 100%; height: auto; \}/.test(styleText) && buildDesignResult(designDraft).svg === productionBefore);
+        state.projects = [{ ...formDefaults('project'), id:'responsive-project', name:'Very long responsive project name with a long descriptive filename reference', material:'Long material name', notes:'Long project notes remain in normal document flow.', settings:{ ...settingsFromSetting(formDefaults('entry')), settingsFile:'very-long-project-settings-file-name.lbrn2' } }]; state.activeTab = 'projects'; render();
+        add('Projects render long sample content without document overflow', document.documentElement.scrollWidth <= window.innerWidth + 1 && !!document.querySelector('#projectViewResults'));
+        state.inventory = { rawMaterials:[{ id:'responsive-raw', name:'Very long responsive raw material name', quantity:4, unit:'sheets', unitCost:12.5, lowStockThreshold:1, category:'sheet', notes:'Long inventory notes', aliases:[] }], finishedBatches:[] }; state.activeTab = 'inventory'; render();
+        add('Inventory action rows remain available with populated content', document.documentElement.scrollWidth <= window.innerWidth + 1 && !!document.getElementById('newRawMaterial'));
+        state.activeTab = 'pricing'; render();
+        add('Pricing retains readable responsive form and totals containers', !!document.getElementById('pricingForm') && document.getElementById('pricingForm').getBoundingClientRect().width <= window.innerWidth + 1 && document.documentElement.scrollWidth <= window.innerWidth + 1);
+        add('Project photos and finished previews use max-width-safe contracts', /\.photo-preview-large \{ max-width: 100%/.test(styleText) && /\.drawer-front-svg \{ display: block; width: 100%; height: auto/.test(styleText));
+        add('Long labels and summaries have wrapping support', /\.wizard-summary \{ white-space: pre-line; overflow-wrap: anywhere; \}/.test(styleText) && /th, td \{ overflow-wrap: anywhere; \}/.test(styleText));
+        add('Release footer remains rendered and reachable', !!document.getElementById('releaseIdentity') && document.getElementById('releaseIdentity').getBoundingClientRect().width <= window.innerWidth);
+        add('Responsive renders introduce no duplicate IDs', (() => { const ids = [...document.querySelectorAll('[id]')].map(element => element.id); return new Set(ids).size === ids.length; })());
+        add('No external dependency or network URL is introduced', document.querySelectorAll('script[src], link[rel="stylesheet"][href]').length === 0 && !/https?:\/\//.test(document.querySelector('style')?.textContent || ''));
+        add('Existing accessibility-polish fixtures remain passing', runAccessibilityPolishFixtures().failed === 0);
+        add('Existing modal-accessibility fixtures remain passing', runModalAccessibilityFixtures().failed === 0);
+        add('Existing Help and Safety fixtures remain passing', runHelpSafetyFixtures().failed === 0);
+        add('Existing first-run fixtures remain passing', runFirstRunOnboardingFixtures().failed === 0);
+        add('Existing machine-setup fixtures remain passing', runMachineSetupFixtures().failed === 0);
+        add('Existing storage and recovery fixtures remain passing', runStorageRecoveryFixtures().failed === 0);
+        add('Existing Designs geometry fixtures remain passing', runDesignGeometryFixtures().failed === 0);
+        add('Existing Tray-model fixtures remain passing', runTrayModelFixtures().failed === 0);
+        Object.assign(state, JSON.parse(stateBefore)); firstRunOnboardingDismissed = dismissedBefore; activeGridId = gridBefore; activeCellKey = cellBefore; designDraft = JSON.parse(draftBefore); render();
+        add('Storage and backup remain byte-identical after responsive fixture cleanup', localStorage.getItem(STORAGE_KEY) === storageBefore && JSON.stringify(backupObject()) === backupBefore);
+      } finally { restore(); }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Responsive tuning fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runResponsiveTuningFixtures = runResponsiveTuningFixtures;
     function backupObject() {
       return {
         app: APP_ID,
@@ -944,7 +1044,10 @@
       render();
       if (options.focusTab) {
         const activeTab = document.getElementById(`tab-${tab}`);
-        if (activeTab) try { activeTab.focus({ preventScroll:true }); } catch (_) { activeTab.focus(); }
+        if (activeTab) {
+          try { activeTab.scrollIntoView({ block:'nearest', inline:'nearest' }); } catch (_) {}
+          try { activeTab.focus({ preventScroll:true }); } catch (_) { activeTab.focus(); }
+        }
       }
     }
     function roundUnitValue(value) {
@@ -1398,6 +1501,7 @@
       if (state.activeTab === 'inventory') root.innerHTML = renderInventory();
       if (state.activeTab === 'pricing') root.innerHTML = renderPricing();
       bindPage();
+      updateHorizontalScrollRegions();
     }
     function storageRecoveryFilename() {
       const now = new Date();
@@ -1432,6 +1536,36 @@
         const active = state.activeTab === id;
         return `<button id="tab-${id}" class="tab ${active ? 'active' : ''}" type="button" role="tab" aria-selected="${active}" aria-controls="app" tabindex="${active ? '0' : '-1'}" data-tab="${id}">${esc(tabLabel)}</button>`;
       }).join('');
+    }
+    function horizontalScrollRegionLabel(region) {
+      if (region.id === 'tabs') return 'Scrollable primary sections';
+      if (region.classList.contains('grid-table')) return 'Scrollable Test Grid matrix. Use Left and Right Arrow keys to scroll.';
+      if (region.classList.contains('design-svg-preview')) return 'Scrollable Designs preview. Use Left and Right Arrow keys to scroll.';
+      return 'Scrollable table. Use Left and Right Arrow keys to scroll.';
+    }
+    function handleHorizontalScrollKeydown(event) {
+      if (event.altKey || event.ctrlKey || event.metaKey || !['ArrowLeft','ArrowRight'].includes(event.key)) return;
+      const amount = Math.max(80, Math.round(this.clientWidth * .75));
+      this.scrollLeft += event.key === 'ArrowRight' ? amount : -amount;
+      event.preventDefault();
+    }
+    function updateHorizontalScrollRegions() {
+      document.querySelectorAll('.tabs, .tablewrap, .grid-table, .design-svg-preview').forEach(region => {
+        const scrollable = region.scrollWidth > region.clientWidth + 1;
+        region.classList.toggle('has-horizontal-scroll', scrollable);
+        if (region.id === 'tabs') return;
+        if (scrollable && !region.hasAttribute('tabindex')) {
+          region.dataset.responsiveScrollRegion = 'true';
+          region.setAttribute('tabindex', '0');
+          region.setAttribute('aria-label', horizontalScrollRegionLabel(region));
+          region.onkeydown = handleHorizontalScrollKeydown;
+        } else if (!scrollable && region.dataset.responsiveScrollRegion === 'true') {
+          region.removeAttribute('tabindex');
+          region.removeAttribute('aria-label');
+          region.onkeydown = null;
+          delete region.dataset.responsiveScrollRegion;
+        }
+      });
     }
     function filteredEntries() {
       const q = state.search.toLowerCase();
@@ -11822,6 +11956,7 @@
       reader.readAsText(file); e.target.value = '';
     };
     document.addEventListener('keydown', handleShortcuts);
+    window.addEventListener('resize', updateHorizontalScrollRegions);
     window.addEventListener('beforeunload', flushPricingPersist);
     initializeModalAccessibility();
     renderReleaseIdentity();
@@ -11846,6 +11981,7 @@
     if (selftest === 'help' || selftest === 'all') runHelpSafetyFixtures();
     if (selftest === 'modal' || selftest === 'all') runModalAccessibilityFixtures();
     if (selftest === 'accessibility' || selftest === 'all') runAccessibilityPolishFixtures();
+    if (selftest === 'responsive' || selftest === 'all') runResponsiveTuningFixtures();
     if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
     if (selftest === 'design' || selftest === 'designs' || selftest === 'all') runDesignGeometryFixtures();
   })();
