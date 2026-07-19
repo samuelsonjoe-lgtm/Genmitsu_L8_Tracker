@@ -1932,7 +1932,7 @@
           ${sliding ? '<div class="small muted" style="margin-top:8px"><b>Open end:</b> Front &nbsp; <b>Slide direction:</b> Front toward Back &nbsp; <b>Rails:</b> two laminated through-cut inner channels. Glue the rails top-flush and back-flush with both channels facing inward. Kerf is not included in generated geometry.</div>' : ''}
           ${cabinet ? '<div class="small muted" style="margin-top:8px"><b>Construction:</b> The cabinet front is open and its back is closed. The bottom drawers rest on the cabinet bottom; upper drawers rest on full-width edge-glued shelves. Vertical partitions are manually positioned and glued with no partition-placement guides in this phase. Separate thickness requires separate material and laser settings for the Shell and Interior files. Clearances are nominal geometry only. Dry-fit, square, clamp, and physically test the cabinet before production use.</div>' : ''}
           ${jointCoupon ? `<div class="small muted" style="margin-top:8px"><b>Test order:</b> ${wallBaseCoupon ? 'Rows follow the entered top-to-bottom candidate order. Start with the loosest row, then move toward tighter values. This local coupon does not prove a full tray or Divider retention; write any winner down manually for now.' : 'Start with looser positive values, then move toward zero and negative interference values. Stop if insertion force crushes, splits, or permanently locks the material. A successful coupon selects the next full prototype setting; it does not replace final box testing.'}</div>` : ''}
-          <div class="actions" style="margin-top:12px"><button class="primary" id="downloadDesignSvg" type="button" ${result.valid && !result.requiresMultipleProductionOutputs ? '' : 'disabled'}>${result.requiresMultipleProductionOutputs ? 'Use Shell and Interior downloads below' : 'Download LightBurn SVG'}</button><button id="resetDesign" type="button">Reset defaults</button></div>
+          <div class="actions" style="margin-top:12px"><button class="primary" id="downloadDesignSvg" type="button" ${result.valid && !result.requiresMultipleProductionOutputs ? '' : 'disabled'}>${result.requiresMultipleProductionOutputs ? 'Use Shell and Interior downloads below' : 'Download LightBurn SVG'}</button><button id="startProjectFromDesign" type="button" ${result.valid ? '' : 'disabled'}>Start Project from Design</button><button id="resetDesign" type="button">Reset defaults</button></div>
         </form>
         <div id="designResults">${designResultsHtml(result)}</div>
       `;
@@ -3648,9 +3648,10 @@
       return `${designPreviewSelectorHtml(result)}${drawerCabinetSeparateFinishedNote}<div class="design-preview-layout"><div class="panel" role="status" aria-live="polite" aria-atomic="false"><h4>Result summary</h4><div class="metrics" style="margin-top:10px">${productionSvgSize}${operations}${metrics}</div>${messageGroup || (result.valid?'<div class="design-message"><b>Ready:</b> Preview and download use the same validated SVG.</div>':'')}${assemblyGroup}${promotionEntry}</div>${preview}</div>`;
     }
     function refreshDesignPreview() {
-      const result = buildDesignResult(designDraft), results = document.getElementById('designResults'), download = document.getElementById('downloadDesignSvg');
+      const result = buildDesignResult(designDraft), results = document.getElementById('designResults'), download = document.getElementById('downloadDesignSvg'), startProject = document.getElementById('startProjectFromDesign');
       if (results) results.innerHTML = designResultsHtml(result);
       if (download) download.disabled = !result.valid || !!result.requiresMultipleProductionOutputs;
+      if (startProject) startProject.disabled = !result.valid;
       bindDesignPreviewActions();
       return result;
     }
@@ -3664,6 +3665,8 @@
       });
       document.querySelectorAll('[data-promote-joint-coupon]').forEach(button => button.onclick = () => openJointCouponPromotion(designDraft, buildDesignResult(designDraft)));
       document.querySelectorAll('[data-download-production-output]').forEach(button => button.onclick = () => downloadDrawerCabinetProductionOutput(button.getAttribute('data-download-production-output')));
+      const startProject = document.getElementById('startProjectFromDesign');
+      if (startProject) startProject.onclick = () => startProjectFromDesign();
     }
     function downloadCurrentDesignSvg(download = downloadTextFile) {
       updateDesignDraft(document.getElementById('designForm'));
@@ -3681,6 +3684,64 @@
     }
     function updateDesignDraft(form) {
       [...form.elements].forEach(element => { if (element.name) designDraft[element.name] = element.type === 'checkbox' ? element.checked : element.value; });
+    }
+    function projectDesignTemplateName(template) {
+      return ({
+        'qr-stand':'Freestanding QR / sign stand','hanging-sign':'Hanging sign','dice-tray':'Dice Tray','divider-tray':'Divider Tray','finger-box':'Finger-jointed box','sliding-lid-box':'Sliding-lid finger box','drawer-cabinet':'Drawer Cabinet','joint-fit-coupon':'Joint Fit Coupon','concealed-cleat-corner-prototype':'Concealed Cleat Corner Prototype','concealed-cleat-full-box-prototype':'Concealed Cleat Full-Box Prototype'
+      })[template] || 'Generated Design';
+    }
+    function projectDesignDimensions(...values) { return values.length && values.every(value=>Number.isFinite(Number(value))&&Number(value)>0) ? designDimensionsText(...values) : ''; }
+    function projectDesignWarningNote(warnings = []) {
+      const text=warnings.join(' ');
+      if (/negative .*clearance/i.test(text)) return 'Fit warning: negative clearance creates interference; prototype with the intended material and kerf.';
+      if (/unusually loose|zero .*clearance|will not slide reliably|will not rack/i.test(text)) return 'Fit warning: verify the intended clearance on a physical test before production.';
+      if (/underside cover plate is cosmetic/i.test(text)) return 'The underside cover plate is cosmetic only.';
+      return '';
+    }
+    function projectDraftFromDesign(result, draft) {
+      if (!result?.valid) return null;
+      const metrics=result.metrics || {}, finished=result.finishedView || {}, template=metrics.template || draft?.template || '', templateName=projectDesignTemplateName(template), dimensions=metrics.dimensions || {}, notes=[], warningNote=projectDesignWarningNote(result.warnings), thickness=Number(template==='drawer-cabinet'?metrics.shellThickness:metrics.materialThickness ?? finished.materialThicknessMm), addNote=text=>{if(text)notes.push(text);};
+      let name=templateName;
+      if (template==='qr-stand' || template==='hanging-sign') {
+        const size=projectDesignDimensions(metrics.finishedWidth,metrics.finishedHeight); if(size) name=`${templateName} ${size}`;
+      } else if (template==='dice-tray') {
+        const size=projectDesignDimensions(finished.baseOutsideWidthMm,finished.baseOutsideDepthMm); if(size) name=`Dice Tray ${size}`;
+      } else if (template==='divider-tray') {
+        const size=projectDesignDimensions(finished.insideWidthMm,finished.insideDepthMm); if(size) name=`Divider Tray ${size}`; addNote(`Divider Tray with ${finished.dividerCount || metrics.dividerCount || 0} removable divider${(finished.dividerCount || metrics.dividerCount || 0)===1?'':'s'}.`);
+      } else if (template==='finger-box') {
+        const size=projectDesignDimensions(dimensions.outsideWidth,dimensions.outsideDepth,dimensions.outsideHeight); if(size) name=`Finger-jointed box ${size}`;
+        if(metrics.boxLid==='loose') addNote('Loose flat lid has no retention or locating feature.');
+        if(metrics.cornerDecoration==='faux-dovetail-engrave') addNote('Faux dovetail engraving is decorative only; the structural joint remains finger-jointed.');
+      } else if (template==='sliding-lid-box') {
+        const size=projectDesignDimensions(dimensions.outsideWidth,dimensions.outsideDepth,dimensions.outsideHeight); if(size) name=`Sliding-lid finger box ${size}`;
+        if(metrics.fitCoupon) addNote('Includes a sliding-fit test coupon; verify fit on the intended material.');
+      } else if (template==='drawer-cabinet') {
+        if(metrics.layoutMode==='custom-row') { name='Drawer Cabinet — custom rows'; addNote(`Custom row drawer counts: ${(metrics.rowDrawerCounts || []).join(' / ')}.`); }
+        else name=`Drawer Cabinet ${metrics.columns || 1} × ${metrics.rows || 1}`;
+        const size=projectDesignDimensions(dimensions.cabinetOutsideWidth,dimensions.cabinetOutsideDepth,dimensions.cabinetOutsideHeight); if(size) name+=` ${size}`;
+        if(metrics.useSeparateInteriorThickness || result.requiresMultipleProductionOutputs) { addNote(`Interior/drawer stock: ${designNumberText(metrics.interiorThickness)} mm. Two production SVG files are required.`); }
+      } else if (template==='joint-fit-coupon') {
+        if(metrics.couponType==='wall-base-tab') { name='Joint Fit Coupon — Wall-to-Base'; addNote('Test coupon for wall-to-base slot-clearance behavior; no winning clearance is assumed.'); }
+        else { name='Joint Fit Coupon — Finger Edge'; addNote('Test coupon for finger-edge clearance; no winning value is assumed.'); }
+      } else if (template==='concealed-cleat-corner-prototype') {
+        name='Concealed Cleat Corner Prototype'; addNote('Assembly and registration prototype; not a strength or load-capacity test.');
+      } else if (template==='concealed-cleat-full-box-prototype') {
+        const size=projectDesignDimensions(metrics.Ow,metrics.Od,metrics.H); name=`Concealed Cleat Full-Box Prototype${size?` ${size}`:''}`; addNote('Assembly and registration prototype; not a strength or load-capacity test.');
+      }
+      if (template==='dice-tray') addNote('Dice Tray design; dry-fit and test the wall-to-base joint on intended material.');
+      if (template==='hanging-sign') addNote('Hanging sign panel design.');
+      if (template==='qr-stand') addNote('Freestanding sign stand design.');
+      if (warningNote) addNote(warningNote);
+      return { name, material:'', ...(Number.isFinite(thickness)&&thickness>0?{thicknessValue:thickness,thicknessUnit:'mm'}:{}), jobType:'cut', quantity:'1', status:'kept', notes:notes.join('\n\n'), sourceEntryId:null, sourceProfileId:null };
+    }
+    function startProjectFromDesign() {
+      const form=document.getElementById('designForm'); if(form) updateDesignDraft(form);
+      const result=buildDesignResult(designDraft); if(!result.valid) return result;
+      if(document.getElementById('projectModal')?.classList.contains('open')) { showInfoToast('A Project form is already open. Save or close it before starting another Project draft.'); return result; }
+      const draft=projectDraftFromDesign(result,designDraft); if(!draft) return result;
+      openProject(draft,{draftNote:'Draft from a generated Design. Add the material you will actually use, review every field, and click Save project to keep it. Nothing is saved until then.'});
+      if(!pendingUndo) showInfoToast('Project draft opened from Design. Click Save project to keep it.');
+      return result;
     }
     function designFixtureHash(text) {
       let hash = 2166136261;
@@ -10213,6 +10274,76 @@
       return { passed, failed, results };
     }
     window.runProjectBrowserFixtures = runProjectBrowserFixtures;
+    function runDesignToProjectHandoffFixtures() {
+      const fixture = (name, pass, actual = '') => ({ name, pass: !!pass, actual });
+      const results = [], add = (name, pass, actual = '') => results.push(fixture(name, pass, actual));
+      const savedState = JSON.stringify(state), savedStorage = localStorage.getItem(STORAGE_KEY), savedDesignDraft = { ...designDraft }, savedPreviewMode = designPreviewMode;
+      const projectModal = document.getElementById('projectModal'), savedProjectModal = projectModal.innerHTML, savedProjectModalOpen = projectModal.classList.contains('open');
+      const savedEditingProjectId = editingProjectId, savedPhotos = projectPhotosDraft, savedMaterialLines = projectMaterialLinesDraft;
+      const form = document.getElementById('designForm');
+      if (form) form.id = 'designForm-handoff-fixture-saved';
+      const restore = () => {
+        closeModal('projectModal');
+        Object.assign(state, JSON.parse(savedState));
+        if (savedStorage === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, savedStorage);
+        designDraft = { ...savedDesignDraft }; designPreviewMode = savedPreviewMode; editingProjectId = savedEditingProjectId; projectPhotosDraft = savedPhotos; projectMaterialLinesDraft = savedMaterialLines;
+        if (form) form.id = 'designForm';
+        projectModal.innerHTML = savedProjectModal; projectModal.classList.toggle('open', savedProjectModalOpen);
+      };
+      const build = overrides => {
+        const draft = { ...designDefaults(), ...overrides }, result = buildDesignResult(draft);
+        return { draft, result, handoff: projectDraftFromDesign(result, draft) };
+      };
+      try {
+        const cases = [
+          build({ template:'qr-stand' }), build({ template:'hanging-sign' }), build({ template:'dice-tray' }), build({ template:'divider-tray', dividerCount:'3' }),
+          build({ template:'finger-box', boxLid:'loose', boxCornerDecoration:'faux-dovetail-engrave' }), build({ template:'sliding-lid-box', slidingFitCoupon:true }),
+          build({ template:'drawer-cabinet', drawerRows:'3', drawerColumns:'2' }), build({ template:'drawer-cabinet', drawerRows:'3', drawerColumns:'2', drawerUseSeparateInteriorThickness:true, drawerInteriorThickness:'2.7' }),
+          build({ template:'drawer-cabinet', drawerRows:'3', drawerLayoutMode:'custom-row', drawerBottomColumns:'2', drawerMiddleColumns:'3', drawerTopColumns:'1' }),
+          build({ template:'joint-fit-coupon', couponType:'finger-edge' }), build({ template:'joint-fit-coupon', couponType:'wall-base-tab' }),
+          build({ template:'concealed-cleat-corner-prototype' }), build({ template:'concealed-cleat-full-box-prototype' })
+        ];
+        const stateBefore = JSON.stringify(state), backupBefore = JSON.stringify(backupObject()), inputBefore = JSON.stringify(cases.map(item => [item.result, item.draft]));
+        cases.forEach(item => projectDraftFromDesign(item.result, item.draft));
+        add('Draft builder is pure for every registered Design handoff case', JSON.stringify(cases.map(item => [item.result, item.draft])) === inputBefore && JSON.stringify(state) === stateBefore && JSON.stringify(backupObject()) === backupBefore);
+        add('Every valid Design maps only concise normal Project core fields', cases.every(({ result, handoff }) => result.valid && handoff && handoff.name && handoff.material === '' && handoff.jobType === 'cut' && handoff.quantity === '1' && handoff.status === 'kept' && handoff.sourceEntryId === null && handoff.sourceProfileId === null && !('materialLines' in handoff) && !('settings' in handoff) && !('materialCost' in handoff) && !('svg' in handoff) && !/\.svg|<svg|blob:/i.test(handoff.notes)));
+        add('Measured thickness is copied only as millimeters and Drawer Cabinet uses shell stock', cases.every(({ handoff }) => !('thicknessValue' in handoff) || (Number.isFinite(handoff.thicknessValue) && handoff.thicknessValue > 0 && handoff.thicknessUnit === 'mm')) && cases[7].handoff.thicknessValue === Number(cases[7].result.metrics.shellThickness));
+        add('Names retain template semantics without piece-count quantity inflation', cases[0].handoff.name.includes('mm') && cases[1].handoff.name.includes('mm') && cases[6].handoff.name.includes('2 × 3') && cases[8].handoff.name.includes('custom rows') && cases.every(item => item.handoff.quantity === '1'));
+        add('Finger and sliding limitations are concise editable notes', /no retention/i.test(cases[4].handoff.notes) && /decorative/i.test(cases[4].handoff.notes) && /fit test coupon/i.test(cases[5].handoff.notes));
+        add('Both coupon modes identify an unproven test artifact', cases[9].handoff.name === 'Joint Fit Coupon — Finger Edge' && /test coupon/i.test(cases[9].handoff.notes) && /no winning clearance/i.test(cases[10].handoff.notes));
+        add('Concealed-cleat prototypes retain assembly and non-strength boundaries', [cases[11], cases[12]].every(item => /Prototype/.test(item.handoff.name) && /assembly and registration prototype/i.test(item.handoff.notes) && /not a strength or load-capacity test/i.test(item.handoff.notes)));
+        add('Separate-output Drawer Cabinet records interior stock only in notes', cases[7].result.requiresMultipleProductionOutputs && /Interior\/drawer stock: 2.7 mm/i.test(cases[7].handoff.notes) && /Two production SVG files are required/i.test(cases[7].handoff.notes) && !('materialLines' in cases[7].handoff));
+        designDraft = { ...cases[7].draft }; const validMarkup = renderDesigns(), warningCase = build({ template:'finger-box', jointClearance:'-0.04' }); designDraft = { ...warningCase.draft }; const warningMarkup = renderDesigns(), invalid = build({ template:'drawer-cabinet', drawerInsideWidth:'' }); designDraft = { ...invalid.draft }; const invalidMarkup = renderDesigns();
+        add('Start Project action is visible, native-enabled for warnings and multi-output, and disabled only for invalid Designs', /id="startProjectFromDesign"[^>]*>Start Project from Design/.test(validMarkup) && !/id="startProjectFromDesign"[^>]*disabled/.test(validMarkup) && warningCase.result.valid && warningCase.result.warnings.length > 0 && !/id="startProjectFromDesign"[^>]*disabled/.test(warningMarkup) && /Fit warning: negative clearance/i.test(warningCase.handoff.notes) && /id="startProjectFromDesign"[^>]*disabled/.test(invalidMarkup));
+        const invalidStateBefore = JSON.stringify(state), invalidStorageBefore = localStorage.getItem(STORAGE_KEY), invalidBackupBefore = JSON.stringify(backupObject());
+        designDraft = { ...invalid.draft }; const invalidReturn = startProjectFromDesign();
+        add('Invalid direct activation opens no Project and leaves storage isolated', !invalidReturn.valid && !projectModal.classList.contains('open') && JSON.stringify(state) === invalidStateBefore && localStorage.getItem(STORAGE_KEY) === invalidStorageBefore && JSON.stringify(backupObject()) === invalidBackupBefore);
+        const lifecycle = cases[4], productionBefore = lifecycle.result.svg, finishedBefore = lifecycle.result.finishedView?.svg || '';
+        designDraft = { ...lifecycle.draft }; const lifecycleStateBefore = JSON.stringify(state), lifecycleStorageBefore = localStorage.getItem(STORAGE_KEY), lifecycleBackupBefore = JSON.stringify(backupObject()), inventoryBefore = JSON.stringify(state.inventory), pricingBefore = JSON.stringify(state.pricing);
+        startProjectFromDesign(); const projectForm = document.getElementById('projectForm'), snapshotName = projectForm?.elements.name?.value || '', snapshotMaterial = projectForm?.elements.material?.value || '', snapshotNotes = projectForm?.elements.notes?.value || '';
+        add('Opening a handoff uses the existing reviewable New Project modal without saving', projectModal.classList.contains('open') && editingProjectId === null && projectModal.textContent.includes('New project') && projectModal.textContent.includes('Nothing is saved until then.') && snapshotName === lifecycle.handoff.name && snapshotMaterial === '' && snapshotNotes === lifecycle.handoff.notes && JSON.stringify(state) === lifecycleStateBefore && localStorage.getItem(STORAGE_KEY) === lifecycleStorageBefore && JSON.stringify(backupObject()) === lifecycleBackupBefore && JSON.stringify(state.inventory) === inventoryBefore && JSON.stringify(state.pricing) === pricingBefore);
+        designDraft = { ...lifecycle.draft, boxWidth:'150' }; projectForm.elements.name.value = 'Edited Project draft';
+        add('The open Project is a point-in-time snapshot, not a live Design link', snapshotName !== 'Edited Project draft' && projectForm.elements.name.value === 'Edited Project draft' && designDraft.boxWidth === '150');
+        const existingName = projectForm.elements.name.value; startProjectFromDesign();
+        add('Repeated activation preserves an existing unsaved Project form', projectModal.classList.contains('open') && projectForm.elements.name.value === existingName && state.projects.length === JSON.parse(lifecycleStateBefore).projects.length);
+        projectModal.querySelector('[data-close]').click();
+        add('Cancel closes the modal with no Project, storage, or Design mutation', !projectModal.classList.contains('open') && JSON.stringify(state) === lifecycleStateBefore && localStorage.getItem(STORAGE_KEY) === lifecycleStorageBefore && JSON.stringify(backupObject()) === lifecycleBackupBefore && buildDesignResult(lifecycle.draft).svg === productionBefore && (buildDesignResult(lifecycle.draft).finishedView?.svg || '') === finishedBefore);
+        designDraft = { ...lifecycle.draft }; startProjectFromDesign(); const saveForm = document.getElementById('projectForm'), nativeAlert = window.alert; let alerts = 0; window.alert = () => { alerts++; };
+        saveForm.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true })); const blocked = state.projects.length === JSON.parse(lifecycleStateBefore).projects.length && alerts === 1 && projectModal.classList.contains('open');
+        saveForm.elements.material.value = 'Fixture material'; saveForm.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true })); window.alert = nativeAlert;
+        const savedProject = state.projects[0];
+        add('Existing Save project validation and submit path create exactly one normal Project', blocked && state.projects.length === JSON.parse(lifecycleStateBefore).projects.length + 1 && savedProject.material === 'Fixture material' && savedProject.quantity === 1 && savedProject.jobType === 'cut' && savedProject.sourceEntryId === null && savedProject.sourceProfileId === null && !Object.keys(savedProject).some(key => /design|svg|template/i.test(key)) && JSON.stringify(state.inventory) === inventoryBefore && JSON.stringify(state.pricing) === pricingBefore);
+        add('Handoff builder, modal lifecycle, and Save leave production and Finished View bytes unchanged', buildDesignResult(lifecycle.draft).svg === productionBefore && (buildDesignResult(lifecycle.draft).finishedView?.svg || '') === finishedBefore);
+        const machineDraft = cases[12].draft, savedMachineProfile = state.machineProfile; state.machineProfile = '20W'; const handoff20 = projectDraftFromDesign(buildDesignResult(machineDraft), machineDraft), svg20 = buildDesignResult(machineDraft).svg; state.machineProfile = '40W'; const handoff40 = projectDraftFromDesign(buildDesignResult(machineDraft), machineDraft), svg40 = buildDesignResult(machineDraft).svg; state.machineProfile = savedMachineProfile;
+        add('Machine profile does not alter the Project draft or production SVG', JSON.stringify(handoff20) === JSON.stringify(handoff40) && svg20 === svg40);
+      } finally {
+        restore();
+      }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Designs-to-Projects handoff fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runDesignToProjectHandoffFixtures = runDesignToProjectHandoffFixtures;
     function runGridBrowserFixtures() {
       const fixture = (name, pass, actual = '') => ({ name, pass: !!pass, actual });
       const grids = [
@@ -11113,6 +11244,7 @@
     if (selftest === 'materials' || selftest === 'all') window.runMaterialBrowserFixtures();
     if (selftest === 'library-browser' || selftest === 'all') runLibraryBrowserFixtures();
     if (selftest === 'project-browser' || selftest === 'all') runProjectBrowserFixtures();
+    if (selftest === 'design-project' || selftest === 'all') runDesignToProjectHandoffFixtures();
     if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
     if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
