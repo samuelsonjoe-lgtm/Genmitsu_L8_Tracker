@@ -58,6 +58,9 @@
     .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line); margin: 18px 0; overflow-x: auto; }
     .tab { border: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: 11px 2px 9px; color: var(--muted); background: transparent; white-space: nowrap; }
     .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .release-identity { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+    .release-identity details { color: var(--muted); }
+    .release-identity summary { cursor: pointer; }
     .grid { display: grid; gap: 14px; }
     .stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 18px; }
     .cards { grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); }
@@ -242,6 +245,7 @@
     <section id="storageRecoveryPanel" hidden></section>
     <nav class="tabs" id="tabs"></nav>
     <section id="app"></section>
+    <footer id="releaseIdentity" class="release-identity small" aria-label="Application release identity"></footer>
   </main>
 
   <div class="modal" id="entryModal"></div>
@@ -261,6 +265,11 @@
   (() => {
     const STORAGE_KEY = 'genmitsu-l8-tracker-v1';
     const SCHEMA_VERSION = 2;
+    const APP_ID = 'genmitsu-l8-tracker';
+    const APP_NAME = 'Genmitsu L8 Tracker';
+    const APP_VERSION = '0.9.0';
+    const BUILD_DATE = '2026-07-19';
+    const BACKUP_FORMAT = 'genmitsu-l8-tracker-backup-v1';
     const tabs = [
       ['log', 'Log'],
       ['library', 'Library'],
@@ -411,6 +420,13 @@
       }
       return { status: 'ok', data };
     }
+    function validateBackupImport(data) {
+      if (!data || Array.isArray(data) || typeof data !== 'object') return { accepted:false, message:'The selected JSON file does not appear to be a supported Genmitsu L8 Tracker backup.' };
+      if (typeof data.schemaVersion === 'number' && data.schemaVersion > SCHEMA_VERSION) return { accepted:false, message:'This backup was created by a newer data format. Importing it into this older version could damage or lose information.' };
+      if ('app' in data && data.app !== APP_ID) return { accepted:false, message:'The selected JSON file does not appear to be a supported Genmitsu L8 Tracker backup.' };
+      if ('backupFormat' in data && data.backupFormat !== BACKUP_FORMAT) return { accepted:false, message:'The selected JSON file does not appear to be a supported Genmitsu L8 Tracker backup.' };
+      return { accepted:true, message:'' };
+    }
     function designDefaults() {
       return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', trayBottomCover: false, hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', boxCornerDecoration: 'none', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated', slidingGuideMarks: false, slidingFitCoupon: false, drawerInsideWidth: '100', drawerInsideDepth: '70', drawerInsideHeight: '30', drawerRows: '1', drawerColumns: '1', drawerLayoutMode: 'uniform', drawerBottomColumns: '1', drawerMiddleColumns: '1', drawerTopColumns: '1', drawerUseSeparateInteriorThickness: false, drawerInteriorThickness: '3', cabinetJointClearance: '0.10', drawerJointClearance: '0.10', drawerPreferredFingerWidth: '12', drawerLateralClearance: '0.45', drawerVerticalClearance: '0.30', drawerRearClearance: '0.50', drawerShelfGuides: false, jointCouponEdgeLength: '45', jointCouponBodyDepth: '22', jointCouponPreferredFingerWidth: '9', jointCouponClearances: '0.06, 0.04, 0.02, 0.00, -0.02, -0.04', jointCouponLabels: true, couponType: 'finger-edge', jointCouponWallJointStyle: 'finger', jointCouponWallLength: '80', jointCouponWallClearances: '0.20, 0.15, 0.10, 0.05, 0.00', cleatLegLength: '80', cleatWallHeight: '50', boxOutsideWidth: '180', boxOutsideDepth: '150', boxWallHeight: '90', assemblyLabels: false };
     }
@@ -493,6 +509,10 @@
     }
     function runStorageRecoveryFixtures() {
       const fixture = (name, check) => ({ name, ...check() });
+      const restore = (stateSnapshot, storageSnapshot) => {
+        Object.assign(state, JSON.parse(stateSnapshot));
+        if (storageSnapshot === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, storageSnapshot);
+      };
       const results = [
         fixture('Null input is empty', () => { const actual = decodeStoredState(null); return { expected: 'empty', actual: actual.status, pass: actual.status === 'empty' && actual.data === null }; }),
         fixture('Empty string is empty', () => { const actual = decodeStoredState(''); return { expected: 'empty', actual: actual.status, pass: actual.status === 'empty' && actual.data === null }; }),
@@ -501,7 +521,14 @@
         fixture('Malformed JSON is corrupt', () => { const actual = decodeStoredState('{bad'); return { expected: 'corrupt', actual: actual.status, pass: actual.status === 'corrupt' }; }),
         fixture('Corrupt result preserves exact raw text', () => { const raw = '{ bad\n'; const actual = decodeStoredState(raw); return { expected: JSON.stringify(raw), actual: JSON.stringify(actual.raw), pass: actual.status === 'corrupt' && actual.raw === raw }; }),
         fixture('Parsed array is rejected', () => { const actual = decodeStoredState('[]'); return { expected: 'corrupt', actual: actual.status, pass: actual.status === 'corrupt' }; }),
-        fixture('Parsed primitive and null are rejected', () => { const primitive = decodeStoredState('42'); const nullValue = decodeStoredState('null'); return { expected: 'both corrupt', actual: `${primitive.status} / ${nullValue.status}`, pass: primitive.status === 'corrupt' && nullValue.status === 'corrupt' }; })
+        fixture('Parsed primitive and null are rejected', () => { const primitive = decodeStoredState('42'); const nullValue = decodeStoredState('null'); return { expected: 'both corrupt', actual: `${primitive.status} / ${nullValue.status}`, pass: primitive.status === 'corrupt' && nullValue.status === 'corrupt' }; }),
+        fixture('New backups carry release identity and supported format metadata', () => { const backup = backupObject(); return { expected: `${APP_ID} / ${APP_VERSION} / ${BACKUP_FORMAT} / ${SCHEMA_VERSION}`, actual: `${backup.app} / ${backup.appVersion} / ${backup.backupFormat} / ${backup.schemaVersion}`, pass: backup.app === APP_ID && backup.appVersion === APP_VERSION && backup.backupFormat === BACKUP_FORMAT && backup.schemaVersion === SCHEMA_VERSION }; }),
+        fixture('Legacy backups without release metadata or schema version remain accepted', () => { const legacy = { schemaVersion: 1, entries: [] }, decoded = decodeStoredState(JSON.stringify(legacy)), validation = validateBackupImport(decoded.data), missingSchema = validateBackupImport({ entries:[] }); return { expected: 'accepted legacy backups', actual: `${validation.accepted} / ${missingSchema.accepted}`, pass: decoded.status === 'ok' && validation.accepted && missingSchema.accepted }; }),
+        fixture('Future schema backups are refused before import decisions', () => { const validation = validateBackupImport({ ...backupObject(), schemaVersion: SCHEMA_VERSION + 1 }); return { expected: 'future format refusal', actual: validation.message, pass: !validation.accepted && /newer data format/i.test(validation.message) }; }),
+        fixture('Foreign app and unsupported backup formats are refused', () => { const foreign = validateBackupImport({ ...backupObject(), app:'other-tracker' }), format = validateBackupImport({ ...backupObject(), backupFormat:'other-backup-v9' }); return { expected: 'two supported-backup refusals', actual: `${foreign.accepted} / ${format.accepted}`, pass: !foreign.accepted && !format.accepted && /supported Genmitsu L8 Tracker backup/i.test(foreign.message) && /supported Genmitsu L8 Tracker backup/i.test(format.message) }; }),
+        fixture('Refused imports do not reach merge or replace or mutate storage', () => { const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY); const result = applyBackupImport({ ...backupObject(), app:'foreign-app' }, 'merge'); return { expected: 'refused without mutation', actual: `${result.accepted} / ${JSON.stringify(state) === stateBefore} / ${localStorage.getItem(STORAGE_KEY) === storageBefore}`, pass: !result.accepted && JSON.stringify(state) === stateBefore && localStorage.getItem(STORAGE_KEY) === storageBefore }; }),
+        fixture('Current-format backups retain merge behavior', () => { const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY); try { state.entries = [{ id:'existing-entry', material:'Existing' }]; const incoming = { ...backupObject(), entries:[{ id:'incoming-entry', material:'Incoming', futureEntryField:'preserve' }] }, result = applyBackupImport(incoming, 'merge'); return { expected: 'existing and incoming entries', actual: state.entries.map(entry => entry.id).join('|'), pass: result.accepted && result.mergeStats?.log.added === 1 && state.entries.some(entry => entry.id === 'existing-entry') && state.entries.some(entry => entry.id === 'incoming-entry' && entry.futureEntryField === 'preserve') }; } finally { restore(stateBefore, storageBefore); } }),
+        fixture('Current-format backups retain replace behavior and additive record fields', () => { const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY); try { state.entries = [{ id:'old-entry', material:'Old' }]; const incoming = { ...backupObject(), entries:[{ id:'replacement-entry', material:'Replacement', futureEntryField:'preserve' }] }, result = applyBackupImport(incoming, 'replace'), roundTrip = backupObject(); return { expected: 'replacement entry with additive field', actual: `${state.entries.map(entry => entry.id).join('|')} / ${roundTrip.entries[0]?.futureEntryField}`, pass: result.accepted && state.entries.length === 1 && state.entries[0]?.id === 'replacement-entry' && state.entries[0]?.futureEntryField === 'preserve' && roundTrip.entries[0]?.futureEntryField === 'preserve' }; } finally { restore(stateBefore, storageBefore); } })
       ];
       const passed = results.filter(result => result.pass).length;
       const failed = results.length - passed;
@@ -515,6 +542,9 @@
     window.runStorageRecoveryFixtures = runStorageRecoveryFixtures;
     function backupObject() {
       return {
+        app: APP_ID,
+        appVersion: APP_VERSION,
+        backupFormat: BACKUP_FORMAT,
         schemaVersion: SCHEMA_VERSION,
         entries: state.entries,
         profiles: state.profiles,
@@ -886,6 +916,11 @@
         selected: resolved,
         hidden: !!resolved && !visible.some(record => record.id === resolved.id)
       };
+    }
+    function renderReleaseIdentity() {
+      const identity = document.getElementById('releaseIdentity');
+      if (!identity) return;
+      identity.innerHTML = `<span><b>${esc(APP_NAME)} v${esc(APP_VERSION)}</b></span><details><summary>About</summary><div class="small muted" style="margin-top:6px">${esc(APP_NAME)} v${esc(APP_VERSION)} · Build ${esc(BUILD_DATE)} · Storage schema ${esc(SCHEMA_VERSION)} · Backup format ${esc(BACKUP_FORMAT)}. Works offline and stores records locally in this browser.</div></details>`;
     }
     function findTreePathForRecord(nodes, recordId, path = []) {
       for (const node of nodes || []) {
@@ -11025,6 +11060,12 @@
       applyBackupPreferences(data);
       return stats;
     }
+    function applyBackupImport(data, mode, validation = validateBackupImport(data)) {
+      if (!validation.accepted) return validation;
+      if (mode === 'merge') return { accepted:true, message:'', mergeStats:mergeData(data) };
+      replaceData(data);
+      return { accepted:true, message:'', mergeStats:null };
+    }
     function hideUndoToast() {
       const toast = document.getElementById('undoToast');
       toast.classList.remove('show');
@@ -11209,14 +11250,14 @@
           const decoded = decodeStoredState(reader.result);
           if (decoded.status !== 'ok') throw new Error('Invalid backup JSON.');
           const data = decoded.data;
+          const validation = validateBackupImport(data);
+          if (!validation.accepted) { alert(validation.message); return; }
           const merge = confirm('Import mode: OK = merge with current data, Cancel = replace everything.');
-          let mergeStats = null;
-          if (merge) {
-            mergeStats = mergeData(data);
-          } else {
+          if (!merge) {
             if (!confirm('Replace all current entries, library, grids, projects, and inventory?')) return;
-            replaceData(data);
           }
+          const importResult = applyBackupImport(data, merge ? 'merge' : 'replace', validation);
+          const mergeStats = importResult.mergeStats;
           if (projectWizard) closeModal('projectWizardModal');
           const recovering = !!storageRecoveryIssue;
           if (!persist({ allowRecoveryOverwrite: recovering })) {
@@ -11249,6 +11290,7 @@
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
     if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
     if (selftest === 'design' || selftest === 'designs' || selftest === 'all') runDesignGeometryFixtures();
+    renderReleaseIdentity();
     render();
   })();
   </script>
