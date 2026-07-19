@@ -35,6 +35,17 @@
       font-weight: 650;
       cursor: pointer;
     }
+    button:disabled, input:disabled, select:disabled, textarea:disabled { cursor: not-allowed; opacity: .65; }
+    :where(button, input, select, textarea, summary, [tabindex]):focus-visible {
+      outline: 3px solid #075985;
+      outline-offset: 2px;
+    }
+    @supports not selector(:focus-visible) {
+      :where(button, input, select, textarea, summary, [tabindex]):focus {
+        outline: 3px solid #075985;
+        outline-offset: 2px;
+      }
+    }
     button.primary { background: var(--blue); border-color: var(--blue); color: white; }
     button.danger { color: var(--red); }
     button.ghost { background: transparent; }
@@ -56,8 +67,11 @@
     h1 { margin: 0; font-size: 21px; }
     .subtitle { color: var(--muted); font-size: 13px; }
     .tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line); margin: 18px 0; overflow-x: auto; }
-    .tab { border: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: 11px 2px 9px; color: var(--muted); background: transparent; white-space: nowrap; }
+    .tab { min-height: 40px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; padding: 11px 2px 9px; color: var(--muted); background: transparent; white-space: nowrap; }
     .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .topbar .row > button, .actions > button, .modal-actions > button, .project-section > summary { min-height: 40px; }
+    .spread > button[data-close] { min-width: 40px; min-height: 40px; }
+    .tablewrap button, .grid-table button { min-height: 34px; }
     .release-identity { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
     .release-identity details { color: var(--muted); }
     .release-identity summary { cursor: pointer; }
@@ -250,8 +264,8 @@
     </header>
 
     <section id="storageRecoveryPanel" hidden></section>
-    <nav class="tabs" id="tabs"></nav>
-    <section id="app"></section>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Tracker sections"></nav>
+    <section id="app" role="tabpanel" aria-labelledby="tab-log"></section>
     <footer id="releaseIdentity" class="release-identity small" aria-label="Application release identity"></footer>
   </main>
 
@@ -807,6 +821,85 @@
       return { passed, failed, results };
     }
     window.runHelpSafetyFixtures = runHelpSafetyFixtures;
+    function runAccessibilityPolishFixtures() {
+      const results = [], add = (name, pass, actual = '') => results.push({ name, pass:!!pass, actual });
+      const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY), backupBefore = JSON.stringify(backupObject()), dismissedBefore = firstRunOnboardingDismissed;
+      const modalIds = [...document.querySelectorAll('.modal')].map(modal => modal.id);
+      const modalSnapshots = Object.fromEntries(modalIds.map(id => { const modal = document.getElementById(id); return [id, { html:modal.innerHTML, open:modal.classList.contains('open'), aria:modal.getAttribute('aria-hidden') }]; }));
+      const originsBefore = [...modalFocusOrigins.entries()], orderBefore = [...modalOpenOrder], focusBefore = document.activeElement;
+      const key = (target, value) => target.dispatchEvent(new KeyboardEvent('keydown', { key:value, bubbles:true, cancelable:true }));
+      const restore = () => {
+        Object.assign(state, JSON.parse(stateBefore));
+        if (storageBefore === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, storageBefore);
+        firstRunOnboardingDismissed = dismissedBefore;
+        modalFocusOrigins.clear(); originsBefore.forEach(([id, origin]) => modalFocusOrigins.set(id, origin)); modalOpenOrder.splice(0, modalOpenOrder.length, ...orderBefore);
+        render();
+        modalIds.forEach(id => { const modal = document.getElementById(id), snapshot = modalSnapshots[id]; modal.innerHTML = snapshot.html; modal.classList.toggle('open', snapshot.open); if (snapshot.aria === null) modal.removeAttribute('aria-hidden'); else modal.setAttribute('aria-hidden', snapshot.aria); });
+        if (focusBefore?.isConnected) try { focusBefore.focus({ preventScroll:true }); } catch (_) { focusBefore.focus(); }
+      };
+      const styleText = document.querySelector('style')?.textContent || '';
+      const sentinel = document.createElement('button'); sentinel.type = 'button'; sentinel.textContent = 'Accessibility fixture focus sentinel'; document.body.appendChild(sentinel);
+      try {
+        state.activeTab = 'log'; render();
+        const tablist = document.getElementById('tabs'), tabButtons = [...tablist.querySelectorAll('[role="tab"]')], active = tabButtons.filter(tab => tab.getAttribute('aria-selected') === 'true');
+        add('Primary navigation is a named tablist', tablist?.getAttribute('role') === 'tablist' && tablist.getAttribute('aria-label') === 'Tracker sections');
+        add('Every primary tab has a unique stable ID', tabButtons.length === tabs.length && new Set(tabButtons.map(tab => tab.id)).size === tabs.length && tabButtons.every(tab => /^tab-[a-z-]+$/.test(tab.id)));
+        add('Every primary tab has role tab and controls the shared content panel', tabButtons.every(tab => tab.getAttribute('role') === 'tab' && tab.getAttribute('aria-controls') === 'app'));
+        add('Exactly one primary tab is selected', active.length === 1 && active[0]?.id === 'tab-log');
+        add('Primary tabs use roving tabindex', tabButtons.every(tab => tab.getAttribute('tabindex') === (tab.getAttribute('aria-selected') === 'true' ? '0' : '-1')));
+        const panel = document.getElementById('app');
+        add('The shared app region is one labelled tabpanel', panel?.getAttribute('role') === 'tabpanel' && panel.getAttribute('aria-labelledby') === 'tab-log');
+        add('Active tab retains the visible selected treatment', document.getElementById('tab-log')?.classList.contains('active') && /\.tab\.active\s*\{[^}]*border-bottom-color:\s*var\(--blue\)/.test(styleText));
+        add('A clear global focus-visible indicator is defined', /:focus-visible\s*\{[\s\S]*?outline:\s*3px solid #075985/.test(styleText));
+        add('A focus-visible fallback is defined for older engines', /@supports not selector\(:focus-visible\)/.test(styleText));
+        add('Primary tabs and common action controls have bounded touch-target sizing', /\.tab\s*\{[^}]*min-height:\s*40px/.test(styleText) && /\.topbar \.row > button, \.actions > button/.test(styleText));
+        add('Dense table controls retain a compact scoped size', /\.tablewrap button, \.grid-table button \{ min-height: 34px; \}/.test(styleText));
+        add('Disabled controls remain disabled rather than becoming focusable', /button:disabled, input:disabled, select:disabled, textarea:disabled/.test(styleText));
+        const logTab = document.getElementById('tab-log'); logTab.focus(); key(logTab, 'ArrowRight');
+        add('Right Arrow activates the next tab and restores tab focus', state.activeTab === 'library' && document.activeElement === document.getElementById('tab-library'));
+        const libraryTab = document.getElementById('tab-library'); libraryTab.focus(); key(libraryTab, 'ArrowLeft');
+        add('Left Arrow activates the previous tab and restores tab focus', state.activeTab === 'log' && document.activeElement === document.getElementById('tab-log'));
+        document.getElementById('tab-log').focus(); key(document.getElementById('tab-log'), 'ArrowLeft');
+        add('Left Arrow wraps from the first tab to the last tab', state.activeTab === tabs.at(-1)[0] && document.activeElement === document.getElementById(`tab-${tabs.at(-1)[0]}`));
+        const lastTab = document.getElementById(`tab-${tabs.at(-1)[0]}`); lastTab.focus(); key(lastTab, 'ArrowRight');
+        add('Right Arrow wraps from the last tab to the first tab', state.activeTab === 'log' && document.activeElement === document.getElementById('tab-log'));
+        document.getElementById('tab-pricing').focus(); key(document.getElementById('tab-pricing'), 'Home');
+        add('Home activates the first tab', state.activeTab === 'log' && document.activeElement === document.getElementById('tab-log'));
+        document.getElementById('tab-log').focus(); key(document.getElementById('tab-log'), 'End');
+        add('End activates the last tab', state.activeTab === tabs.at(-1)[0] && document.activeElement === document.getElementById(`tab-${tabs.at(-1)[0]}`));
+        document.getElementById(`tab-${tabs.at(-1)[0]}`).focus(); key(document.getElementById(`tab-${tabs.at(-1)[0]}`), 'Enter');
+        add('Enter retains automatic activation on the focused tab', state.activeTab === tabs.at(-1)[0] && document.activeElement === document.getElementById(`tab-${tabs.at(-1)[0]}`));
+        sentinel.focus(); setTab('reference');
+        add('Programmatic tab changes do not move focus', state.activeTab === 'reference' && document.activeElement === sentinel);
+        setTab('log'); const search = document.getElementById('search'); search.focus(); key(search, 'ArrowRight');
+        add('Arrow keys in a text input do not switch tabs', state.activeTab === 'log' && document.activeElement === search);
+        setTab('reference'); const machineProfile = document.getElementById('machineProfile'); machineProfile.focus(); key(machineProfile, 'ArrowLeft');
+        add('Arrow keys in a select do not switch tabs', state.activeTab === 'reference' && document.activeElement === machineProfile);
+        setTab('log'); const headerHelp = document.getElementById('helpBtn'); headerHelp.focus(); headerHelp.click(); const helpModal = document.getElementById('helpModal'); key(document.activeElement, 'ArrowRight');
+        add('Keys inside an open modal do not switch tabs', helpModal.classList.contains('open') && state.activeTab === 'log');
+        key(document.activeElement, 'Escape');
+        add('Escape retains the existing Help close and focus return behavior', !helpModal.classList.contains('open') && document.activeElement === headerHelp);
+        document.getElementById('tab-log').focus(); key(document.getElementById('tab-log'), '/');
+        add('Slash still focuses the active search from a primary tab', document.activeElement === document.getElementById('search'));
+        setTab('reference');
+        const machineForm = document.getElementById('machineSetupForm');
+        add('Machine setup fields keep their accessible nested labels', ['machineName', 'machineWorkAreaWidth', 'machineWorkAreaHeight'].every(id => document.getElementById(id)?.closest('label')) && !!machineForm);
+        add('Reference Help remains a named button', document.getElementById('openReferenceHelp')?.tagName === 'BUTTON' && /help/i.test(document.getElementById('openReferenceHelp')?.textContent || ''));
+        add('First-run actions remain real buttons when the welcome panel is eligible', (() => { const prior = JSON.stringify(state); Object.assign(state, freshState()); firstRunOnboardingDismissed = false; state.activeTab = 'log'; render(); const buttons = ['firstRunLogJob', 'firstRunPlanGrid', 'firstRunOpenReference', 'firstRunDismissOnboarding'].every(id => document.getElementById(id)?.tagName === 'BUTTON'); Object.assign(state, JSON.parse(prior)); firstRunOnboardingDismissed = dismissedBefore; render(); return buttons; })());
+        add('The document has no duplicate IDs after tab renders', (() => { const ids = [...document.querySelectorAll('[id]')].map(element => element.id); return new Set(ids).size === ids.length; })());
+        add('The application has no external scripts or stylesheets', document.querySelectorAll('script[src], link[rel="stylesheet"][href]').length === 0);
+        add('Storage and backup content remain unchanged by tab and keyboard interaction', localStorage.getItem(STORAGE_KEY) === storageBefore && JSON.stringify(backupObject()) === backupBefore);
+        add('Existing first-run fixtures remain passing', runFirstRunOnboardingFixtures().failed === 0);
+        add('Existing machine setup fixtures remain passing', runMachineSetupFixtures().failed === 0);
+        add('Existing Help and safety fixtures remain passing', runHelpSafetyFixtures().failed === 0);
+        add('Existing modal accessibility fixtures remain passing', runModalAccessibilityFixtures().failed === 0);
+        add('Storage identity and schema constants remain unchanged', STORAGE_KEY === 'genmitsu-l8-tracker-v1' && SCHEMA_VERSION === 2 && APP_VERSION === '0.9.0' && BUILD_DATE === '2026-07-19');
+      } finally { sentinel.remove(); restore(); }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Accessibility polish fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runAccessibilityPolishFixtures = runAccessibilityPolishFixtures;
     function backupObject() {
       return {
         app: APP_ID,
@@ -845,7 +938,15 @@
     function projectPhotoCount(projects = state.projects) {
       return projects.reduce((sum, project) => sum + normalizeProjectPhotos(project.photos).length, 0);
     }
-    function setTab(tab) { state.activeTab = tab; render(); }
+    function setTab(tab, options = {}) {
+      if (!tabs.some(([id]) => id === tab)) return;
+      state.activeTab = tab;
+      render();
+      if (options.focusTab) {
+        const activeTab = document.getElementById(`tab-${tab}`);
+        if (activeTab) try { activeTab.focus({ preventScroll:true }); } catch (_) { activeTab.focus(); }
+      }
+    }
     function roundUnitValue(value) {
       return Math.round(value * 10000) / 10000;
     }
@@ -1287,6 +1388,7 @@
       document.getElementById('unitMm').className = state.unit === 'mm' ? 'primary' : '';
       renderStorageRecoveryPanel();
       const root = document.getElementById('app');
+      root.setAttribute('aria-labelledby', `tab-${state.activeTab}`);
       if (state.activeTab === 'log') root.innerHTML = renderLog();
       if (state.activeTab === 'library') root.innerHTML = renderLibrary();
       if (state.activeTab === 'grids') root.innerHTML = renderGrids();
@@ -1327,7 +1429,8 @@
       const lowStock = normalizeInventory(state.inventory).rawMaterials.filter(rawIsLow).length;
       document.getElementById('tabs').innerHTML = tabs.map(([id, label]) => {
         const tabLabel = id === 'inventory' && lowStock ? `${label} (${lowStock} low)` : label;
-        return `<button class="tab ${state.activeTab === id ? 'active' : ''}" data-tab="${id}">${esc(tabLabel)}</button>`;
+        const active = state.activeTab === id;
+        return `<button id="tab-${id}" class="tab ${active ? 'active' : ''}" type="button" role="tab" aria-selected="${active}" aria-controls="app" tabindex="${active ? '0' : '-1'}" data-tab="${id}">${esc(tabLabel)}</button>`;
       }).join('');
     }
     function filteredEntries() {
@@ -9962,6 +10065,28 @@
     function isTypingTarget(target) {
       return target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
     }
+    function isPrimaryTab(target) {
+      return target instanceof Element && document.activeElement === target && target.matches('#tabs [role="tab"][data-tab]');
+    }
+    function handlePrimaryTabKeys(e) {
+      if (!isPrimaryTab(e.target) || e.altKey || e.ctrlKey || e.metaKey) return false;
+      const tabButtons = [...document.querySelectorAll('#tabs [role="tab"][data-tab]')];
+      const index = tabButtons.indexOf(e.target);
+      if (index < 0) return false;
+      let nextIndex = index;
+      if (e.key === 'ArrowRight') nextIndex = (index + 1) % tabButtons.length;
+      else if (e.key === 'ArrowLeft') nextIndex = (index - 1 + tabButtons.length) % tabButtons.length;
+      else if (e.key === 'Home') nextIndex = 0;
+      else if (e.key === 'End') nextIndex = tabButtons.length - 1;
+      else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        setTab(e.target.dataset.tab, { focusTab:true });
+        return true;
+      } else return false;
+      e.preventDefault();
+      setTab(tabButtons[nextIndex].dataset.tab, { focusTab:true });
+      return true;
+    }
     function openActiveNewItem() {
       if (state.activeTab === 'log') return openEntry();
       if (state.activeTab === 'library') return openProfile();
@@ -9984,6 +10109,7 @@
     function handleShortcuts(e) {
       const modal = activeModal();
       if (modal && e.key === 'Tab') { trapModalFocus(modal, e); return; }
+      if (!modal && handlePrimaryTabKeys(e)) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && modal) {
         const form = modal.querySelector('form');
         if (form) { e.preventDefault(); form.requestSubmit(); }
@@ -11719,6 +11845,7 @@
     if (selftest === 'machine' || selftest === 'all') runMachineSetupFixtures();
     if (selftest === 'help' || selftest === 'all') runHelpSafetyFixtures();
     if (selftest === 'modal' || selftest === 'all') runModalAccessibilityFixtures();
+    if (selftest === 'accessibility' || selftest === 'all') runAccessibilityPolishFixtures();
     if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
     if (selftest === 'design' || selftest === 'designs' || selftest === 'all') runDesignGeometryFixtures();
   })();
