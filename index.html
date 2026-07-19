@@ -244,6 +244,7 @@
         <button id="unitMm">mm</button>
         <button id="importBtn" title="Import a JSON backup. You can merge records or replace current data.">Import</button>
         <button id="exportBtn" title="Export records plus portable preferences such as Pricing, machine profile, and saved sort settings.">Export</button>
+        <button id="helpBtn" type="button" aria-label="Open Help and Safety">Help</button>
         <input id="importFile" type="file" accept="application/json" hidden>
       </div>
     </header>
@@ -265,6 +266,7 @@
   <div class="modal" id="productionEvidenceModal"></div>
   <div class="modal" id="materialTestWizardModal"></div>
   <div class="modal" id="projectWizardModal"></div>
+  <div class="modal" id="helpModal"></div>
   <div class="toast" id="undoToast"></div>
 
   <script>
@@ -651,6 +653,64 @@
       return { passed, failed, results };
     }
     window.runModalAccessibilityFixtures = runModalAccessibilityFixtures;
+    function runHelpSafetyFixtures() {
+      const results = [], add = (name, pass) => results.push({ name, pass:!!pass });
+      const modalIds = [...document.querySelectorAll('.modal')].map(modal => modal.id), modalSnapshots = Object.fromEntries(modalIds.map(id => { const modal = document.getElementById(id); return [id, { html:modal.innerHTML, open:modal.classList.contains('open'), aria:modal.getAttribute('aria-hidden') }]; }));
+      const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY), backupBefore = JSON.stringify(backupObject()), dismissedBefore = firstRunOnboardingDismissed, originsBefore = [...modalFocusOrigins.entries()], orderBefore = [...modalOpenOrder], focusBefore = document.activeElement;
+      const restore = () => {
+        Object.assign(state, JSON.parse(stateBefore)); if (storageBefore === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, storageBefore); firstRunOnboardingDismissed = dismissedBefore;
+        modalFocusOrigins.clear(); originsBefore.forEach(([id, origin]) => modalFocusOrigins.set(id, origin)); modalOpenOrder.splice(0, modalOpenOrder.length, ...orderBefore); render();
+        modalIds.forEach(id => { const modal = document.getElementById(id), snapshot = modalSnapshots[id]; modal.innerHTML = snapshot.html; modal.classList.toggle('open', snapshot.open); if (snapshot.aria === null) modal.removeAttribute('aria-hidden'); else modal.setAttribute('aria-hidden', snapshot.aria); });
+        if (focusBefore?.isConnected) try { focusBefore.focus({ preventScroll:true }); } catch (_) { focusBefore.focus(); }
+      };
+      try {
+        const header = document.getElementById('helpBtn');
+        add('Header Help control is a named button', header?.tagName === 'BUTTON' && /help/i.test(header.textContent) && /help/i.test(header.getAttribute('aria-label') || ''));
+        header.focus(); header.click(); const modal = document.getElementById('helpModal'), dialog = modalDialog(modal), heading = dialog?.querySelector('h2'), helpText = dialog?.textContent || '';
+        add('Header Help button opens helpModal', modal.classList.contains('open'));
+        add('Help uses shared dialog semantics', dialog?.getAttribute('role') === 'dialog' && dialog.getAttribute('aria-modal') === 'true' && modal.getAttribute('aria-hidden') === 'false');
+        add('Help heading has one valid stable accessible-name target', heading?.id === modalHeadingId('helpModal') && dialog.getAttribute('aria-labelledby') === heading.id && document.querySelectorAll(`#${heading.id}`).length === 1);
+        add('Focus enters Help on open', dialog.contains(document.activeElement));
+        const focusable = modalFocusableElements(modal), first = focusable[0], last = focusable.at(-1); last?.focus(); document.dispatchEvent(new KeyboardEvent('keydown', { key:'Tab', bubbles:true, cancelable:true })); add('Tab stays contained in Help', document.activeElement === first);
+        document.dispatchEvent(new KeyboardEvent('keydown', { key:'Escape', bubbles:true, cancelable:true })); add('Escape closes Help and restores header focus', !modal.classList.contains('open') && document.activeElement === header);
+        state.activeTab = 'reference'; render(); const referenceTrigger = document.getElementById('openReferenceHelp');
+        add('Reference contains a compact Help and Safety callout', !!document.getElementById('referenceHelpCallout') && referenceTrigger?.tagName === 'BUTTON');
+        referenceTrigger.focus(); referenceTrigger.click(); add('Reference Help control opens the same helpModal', modal.classList.contains('open') && modalDialog(modal)?.getAttribute('role') === 'dialog');
+        modal.querySelector('[data-close]').click(); add('Closing Help restores Reference trigger focus', !modal.classList.contains('open') && document.activeElement === referenceTrigger);
+        openHelp(); const content = modalDialog(modal), text = content.textContent, readme = content.querySelector('a[href="README.md"]'), manual = content.querySelector('a[href="docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf"]');
+        add('Help renders current application identity constants', text.includes(APP_NAME) && text.includes(APP_VERSION) && text.includes(BUILD_DATE) && text.includes(String(SCHEMA_VERSION)) && text.includes(BACKUP_FORMAT));
+        add('Help accurately describes offline local-browser storage without cloud claims', /works offline/i.test(text) && /this browser/i.test(text) && /no account, cloud synchronization, or remote recovery/i.test(text));
+        add('Help describes Export and supported Import merge or Replace behavior', /Export saves Tracker records as a JSON backup/i.test(text) && /Import can merge/i.test(text) && /replace the current workspace/i.test(text));
+        add('Help does not imply automatic Export', /not automatic/i.test(text));
+        add('Help explains newer-schema refusal', /newer unsupported schema are refused/i.test(text));
+        add('Help covers browser loss, photo storage, and existing recovery tools', /cleared, lost, or become inaccessible/i.test(text) && /Project photos use much more browser storage/i.test(text) && /storage warning and recovery tools/i.test(text));
+        add('Help gives the 100 percent LightBurn scale requirement', /100% scale/i.test(text) && /Import it into LightBurn/i.test(text));
+        add('Help requires unit and dimension verification, layer assignment, and framing', /Verify units and finished dimensions/i.test(text) && /assign suitable engraving and cutting operations/i.test(text) && /frame the job/i.test(text));
+        add('Help states that Tracker does not send jobs directly to the laser', /does not send jobs to the laser/i.test(text));
+        add('Help explains physical-result variation and validation', /Kerf, clearance, thickness, coatings, glue layers, flatness, moisture, and machine variation/i.test(text) && /do not guarantee fit, strength, or final appearance/i.test(text));
+        add('Help includes ventilation guidance', /active ventilation and fume extraction/i.test(text));
+        add('Help includes fire-watch, unattended, and suppression guidance', /active fire watch/i.test(text) && /never leave the laser unattended/i.test(text) && /suitable fire suppression nearby/i.test(text));
+        add('Help includes focus, secure material, framing, clean optics, and controlled air assist', /Confirm focus/i.test(text) && /flat and secure/i.test(text) && /Frame or preview/i.test(text) && /optics and the work area clean/i.test(text) && /controlled air assist/i.test(text));
+        add('Help explicitly prohibits PVC, vinyl, chlorinated plastics, mystery materials, and unknown coatings', /Do not laser PVC, vinyl, chlorinated plastics, mystery plastics, unidentified materials, or unknown coatings/i.test(text));
+        add('Help cautions fiberglass, carbon fiber, reflective surfaces, coated metals, foams, leather, adhesives, and composites', /fiberglass, carbon fiber, reflective surfaces, coated metals, foams, leather, adhesives, and composite materials/i.test(text));
+        add('Help rejects laserable marketing as a safety substitute', /Laserable” marketing does not replace composition checks/i.test(text));
+        add('Help describes Reference values as starting points rather than guarantees', /starting points, not guarantees/i.test(text));
+        add('Help recommends material tests and physical validation', /Run material tests when settings are unproven/i.test(text) && /physically validate cutting, fit, strength, and finish/i.test(text));
+        add('Help links the verified relative README target only', readme?.getAttribute('target') === '_blank' && readme?.getAttribute('rel') === 'noopener' && new URL(readme.href).pathname.endsWith('/README.md'));
+        add('Help links the verified bundled manual target only', manual?.getAttribute('target') === '_blank' && manual?.getAttribute('rel') === 'noopener' && new URL(manual.href).pathname.endsWith('/docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf'));
+        add('Help documentation links exclude development reports and external URLs', [...content.querySelectorAll('a[href]')].every(link => !/docs\/.+IMPLEMENTATION|AUDIT|REVIEW|^https?:/i.test(link.getAttribute('href'))));
+        const ids = [...document.querySelectorAll('[id]')].map(element => element.id); add('Help introduces no duplicate HTML IDs', new Set(ids).size === ids.length);
+        add('Release footer About remains intact and matches Help identity values', !!document.getElementById('releaseIdentity') && [APP_VERSION, BUILD_DATE, String(SCHEMA_VERSION), BACKUP_FORMAT].every(value => document.getElementById('releaseIdentity').textContent.includes(value)) && /About/i.test(document.getElementById('releaseIdentity').innerHTML));
+        add('First-run onboarding remains session-only and unpersisted', typeof firstRunOnboardingHtml === 'function' && !('help' in freshState()) && !Object.keys(backupObject()).some(key => /help|safety/i.test(key)));
+        add('STORAGE_KEY and SCHEMA_VERSION remain unchanged', STORAGE_KEY === 'genmitsu-l8-tracker-v1' && SCHEMA_VERSION === 2);
+        add('Help leaves backup serialization unchanged', JSON.stringify(backupObject()) === backupBefore);
+        add('Help adds no external dependency or network URL', [...content.querySelectorAll('a[href]')].every(link => !/^https?:/i.test(link.getAttribute('href'))));
+      } finally { restore(); }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Help and safety fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runHelpSafetyFixtures = runHelpSafetyFixtures;
     function backupObject() {
       return {
         app: APP_ID,
@@ -1032,6 +1092,17 @@
       const identity = document.getElementById('releaseIdentity');
       if (!identity) return;
       identity.innerHTML = `<span><b>${esc(APP_NAME)} v${esc(APP_VERSION)}</b></span><details><summary>About</summary><div class="small muted" style="margin-top:6px">${esc(APP_NAME)} v${esc(APP_VERSION)} · Build ${esc(BUILD_DATE)} · Storage schema ${esc(SCHEMA_VERSION)} · Backup format ${esc(BACKUP_FORMAT)}. Works offline and stores records locally in this browser.</div></details>`;
+    }
+    function openHelp() {
+      openModal('helpModal', `<div class="dialog"><div class="spread"><h2>Help &amp; Safety</h2><button type="button" data-close aria-label="Close Help and Safety">&times;</button></div>
+        <section class="panel" style="margin-top:12px"><h3>About this Tracker</h3><p class="small">${esc(APP_NAME)} v${esc(APP_VERSION)} · Build ${esc(BUILD_DATE)} · Storage schema ${esc(SCHEMA_VERSION)} · Backup format ${esc(BACKUP_FORMAT)}.</p><p class="small muted">It works offline when opened directly from <code>index.html</code>. Records stay in this browser; there is no account, cloud synchronization, or remote recovery.</p></section>
+        <section class="panel" style="margin-top:10px"><h3>Your data and backups</h3><p class="small">Export saves Tracker records as a JSON backup. Export regularly; it is not automatic. Import can merge a supported backup or replace the current workspace, so review Replace carefully. Backups from a newer unsupported schema are refused rather than silently downgraded.</p><p class="small muted">Browser data can be cleared, lost, or become inaccessible. Project photos use much more browser storage than text records. Use the existing storage warning and recovery tools if saved data cannot be read; Tracker backups do not include external LightBurn files, source images, or PDFs.</p></section>
+        <section class="panel" style="margin-top:10px"><h3>Using Designs with LightBurn</h3><ol class="small"><li>Generate and preview the design here, then download its production SVG.</li><li>Import it into LightBurn and keep it at <b>100% scale</b>.</li><li>Verify units and finished dimensions, assign suitable engraving and cutting operations, then frame the job and confirm placement before running it.</li></ol><p class="small muted">The Tracker creates geometry; it does not send jobs to the laser. Rescaling changes physical dimensions and fit. Kerf, clearance, thickness, coatings, glue layers, flatness, moisture, and machine variation affect results. Previews do not guarantee fit, strength, or final appearance; use material tests and fit coupons when results matter.</p></section>
+        <section class="panel" style="margin-top:10px;background:#fff8e7;border-color:#ead59f"><h3>Laser safety</h3><ul class="small"><li>Maintain active ventilation and fume extraction, keep an active fire watch, never leave the laser unattended, and keep suitable fire suppression nearby.</li><li>Confirm focus; keep material flat and secure; frame or preview the job; keep optics and the work area clean; and use controlled air assist appropriate to the operation and material.</li><li>Verify the exact material and coating composition before lasering. Do not laser PVC, vinyl, chlorinated plastics, mystery plastics, unidentified materials, or unknown coatings.</li><li>Use additional caution with fiberglass, carbon fiber, reflective surfaces, coated metals, foams, leather, adhesives, and composite materials. “Laserable” marketing does not replace composition checks and safe ventilation requirements.</li></ul></section>
+        <section class="panel" style="margin-top:10px"><h3>Starting points and physical validation</h3><p class="small">Manufacturer and Reference values are starting points, not guarantees. Material batches, color, coatings, glue, moisture, flatness, focus, lens condition, ventilation, and machine variation all affect results. Run material tests when settings are unproven, and physically validate cutting, fit, strength, and finish on the actual material. Experimental generators retain their specific warnings.</p></section>
+        <section class="panel" style="margin-top:10px"><h3>Documentation</h3><div class="actions"><a href="README.md" target="_blank" rel="noopener">Open README</a><a href="docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf" target="_blank" rel="noopener">Open bundled user manual</a></div></section>
+        <div class="actions" style="margin-top:12px"><button type="button" data-close>Close Help</button></div></div>`);
+      bindModal('helpModal');
     }
     function initializeModalAccessibility() { document.querySelectorAll('.modal').forEach(modal => modal.setAttribute('aria-hidden', modal.classList.contains('open') ? 'false' : 'true')); }
     function findTreePathForRecord(nodes, recordId, path = []) {
@@ -5177,6 +5248,9 @@
         <div class="panel" style="margin-bottom:14px;background:#fff8e7;border-color:#ead59f">
           <b>Material safety reminder.</b>
           <span class="small">Use ventilation and fire watch, never leave the laser unattended, and verify unknown materials before lasering. Avoid PVC, vinyl, and chlorinated plastics.</span>
+        </div>
+        <div class="panel" id="referenceHelpCallout" style="margin-bottom:14px">
+          <div class="toolbar"><div><b>Help &amp; Safety</b><div class="small muted">Reference values are starting points. Verify material composition, maintain ventilation, and keep an active fire watch.</div></div><button id="openReferenceHelp" type="button">Open Help &amp; Safety</button></div>
         </div>
         <div class="grid refgrid" style="margin-bottom:16px">
           ${notes.map(([title, body]) => `<div class="card"><b>${esc(title)}</b><p class="small muted">${esc(body)}</p></div>`).join('')}
@@ -9616,6 +9690,8 @@
       if (createProjectFromPricingBtn) createProjectFromPricingBtn.onclick = createProjectFromPricing;
       const newEntry = document.getElementById('newEntry');
       if (newEntry) newEntry.onclick = () => openEntry();
+      const referenceHelp = document.getElementById('openReferenceHelp');
+      if (referenceHelp) referenceHelp.onclick = () => openHelp();
       const newProfile = document.getElementById('newProfile');
       if (newProfile) newProfile.onclick = () => openProfile();
       const openMaterialTestWizardBtn = document.getElementById('openMaterialTestWizard');
@@ -11431,6 +11507,7 @@
     }
     document.getElementById('unitIn').onclick = () => setUnit('in');
     document.getElementById('unitMm').onclick = () => setUnit('mm');
+    document.getElementById('helpBtn').onclick = () => openHelp();
     document.getElementById('exportBtn').onclick = () => {
       const backupJson = JSON.stringify(backupObject(), null, 2);
       const blob = new Blob([backupJson], { type: 'application/json' });
@@ -11493,6 +11570,7 @@
     if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
     if (selftest === 'first-run' || selftest === 'all') runFirstRunOnboardingFixtures();
+    if (selftest === 'help' || selftest === 'all') runHelpSafetyFixtures();
     if (selftest === 'modal' || selftest === 'all') runModalAccessibilityFixtures();
     if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
     if (selftest === 'design' || selftest === 'designs' || selftest === 'all') runDesignGeometryFixtures();
