@@ -103,6 +103,12 @@
     .project-browser-photo img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
     .photo-preview-large { max-width: 100%; max-height: 72vh; border-radius: 8px; display: block; margin: 10px auto 0; }
     .empty { text-align: center; padding: 48px 20px; color: var(--muted); }
+    .first-run-onboarding { margin: 14px auto 0; max-width: 640px; text-align: left; }
+    .first-run-onboarding h2 { margin: 0 0 8px; font-size: 18px; color: var(--ink); }
+    .first-run-onboarding p { margin: 0 0 10px; color: var(--muted); font-size: 14px; font-weight: 500; line-height: 1.45; }
+    .first-run-onboarding ul { margin: 0 0 12px; padding-left: 1.2em; color: var(--muted); font-size: 14px; font-weight: 500; line-height: 1.45; }
+    .first-run-onboarding li { margin: 0 0 4px; }
+    .first-run-onboarding .actions { margin-top: 4px; }
     .modal {
       position: fixed;
       inset: 0;
@@ -369,6 +375,7 @@
     };
     const fmt = (v, u) => v === '' || v == null ? '-' : `${v}${u || ''}`;
     let storageRecoveryIssue = null;
+    let firstRunOnboardingDismissed = false;
     const state = loadState();
     let activeGridId = null;
     let activeCellKey = null;
@@ -540,6 +547,71 @@
       return { passed, failed, results };
     }
     window.runStorageRecoveryFixtures = runStorageRecoveryFixtures;
+    function runFirstRunOnboardingFixtures() {
+      const fixture = (name, pass, actual = '') => ({ name, pass: !!pass, actual });
+      const results = [], add = (name, pass, actual = '') => results.push(fixture(name, pass, actual));
+      const savedState = JSON.stringify(state), savedStorage = localStorage.getItem(STORAGE_KEY), savedDismissed = firstRunOnboardingDismissed, savedTab = state.activeTab;
+      const entryModal = document.getElementById('entryModal'), gridModal = document.getElementById('gridModal');
+      const savedEntryModal = entryModal.innerHTML, savedEntryOpen = entryModal.classList.contains('open');
+      const savedGridModal = gridModal.innerHTML, savedGridOpen = gridModal.classList.contains('open');
+      const restore = () => {
+        Object.assign(state, JSON.parse(savedState));
+        if (savedStorage === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, savedStorage);
+        firstRunOnboardingDismissed = savedDismissed;
+        state.activeTab = savedTab;
+        closeModal('entryModal'); closeModal('gridModal');
+        entryModal.innerHTML = savedEntryModal; entryModal.classList.toggle('open', savedEntryOpen);
+        gridModal.innerHTML = savedGridModal; gridModal.classList.toggle('open', savedGridOpen);
+      };
+      try {
+        const emptyWorkspace = { ...freshState() };
+        add('Fresh workspace is eligible for first-run onboarding', isFirstRunWorkspaceEmpty(emptyWorkspace) && isFirstRunWorkspaceEmpty(freshState()));
+        add('Log entries suppress onboarding eligibility', !isFirstRunWorkspaceEmpty({ ...freshState(), entries:[{ id:'e1' }] }));
+        add('Library profiles suppress onboarding eligibility', !isFirstRunWorkspaceEmpty({ ...freshState(), profiles:[{ id:'p1' }] }));
+        add('Test Grids suppress onboarding eligibility', !isFirstRunWorkspaceEmpty({ ...freshState(), grids:[{ id:'g1' }] }));
+        add('Projects suppress onboarding eligibility', !isFirstRunWorkspaceEmpty({ ...freshState(), projects:[{ id:'pr1' }] }));
+        add('Inventory raw materials suppress onboarding eligibility', !isFirstRunWorkspaceEmpty({ ...freshState(), inventory:{ rawMaterials:[{ id:'r1', name:'Basswood' }], finishedBatches:[] } }));
+        add('Inventory finished batches suppress onboarding eligibility', !isFirstRunWorkspaceEmpty({ ...freshState(), inventory:{ rawMaterials:[], finishedBatches:[{ id:'b1', itemName:'Coasters' }] } }));
+        add('Pricing, machine profile, and UI preferences alone do not suppress onboarding', isFirstRunWorkspaceEmpty({ ...freshState(), unit:'mm', machineProfile:'40W', pricing:{ ...pricingDefaults(), salePrice:25 }, pricingPrefs:{ ...pricingPreferenceDefaults() }, entrySort:'rating-desc', libraryViewMode:'browse', search:'noise' }));
+        Object.assign(state, freshState()); firstRunOnboardingDismissed = false; state.activeTab = 'log'; state.search = ''; state.materialFilter = 'all';
+        const emptyLogHtml = logResultsHtml([]);
+        add('Eligible Log empty-state renders welcome panel and ordinary empty copy', /No entries yet/.test(emptyLogHtml) && /id="firstRunOnboarding"/.test(emptyLogHtml) && /Welcome to Genmitsu L8 Tracker/.test(emptyLogHtml) && /id="firstRunLogJob"/.test(emptyLogHtml) && /id="firstRunPlanGrid"/.test(emptyLogHtml) && /id="firstRunOpenReference"/.test(emptyLogHtml) && /id="firstRunDismissOnboarding"/.test(emptyLogHtml) && /Export/.test(emptyLogHtml) && /Import/.test(emptyLogHtml));
+        add('Onboarding panel uses unique IDs only once', (emptyLogHtml.match(/id="firstRunOnboarding"/g) || []).length === 1 && (emptyLogHtml.match(/id="firstRunLogJob"/g) || []).length === 1);
+        state.entries = [{ id:'filter-only', material:'Oak', notes:'keep', software:'LightBurn', settingsFile:'' }]; state.search = 'zzz-no-match';
+        const filterMissHtml = logResultsHtml(filteredEntries());
+        add('Filtered Log with no matches does not show onboarding', /No log entries match/.test(filterMissHtml) && !/id="firstRunOnboarding"/.test(filterMissHtml) && !/Welcome to Genmitsu L8 Tracker/.test(filterMissHtml));
+        state.entries = []; state.profiles = [{ id:'p-only' }]; state.search = '';
+        add('Empty Log with other workshop records hides onboarding', !isFirstRunWorkspaceEmpty(state) && !/id="firstRunOnboarding"/.test(logResultsHtml([])));
+        Object.assign(state, freshState()); firstRunOnboardingDismissed = false;
+        const storageBeforeDismiss = localStorage.getItem(STORAGE_KEY), backupBeforeDismiss = JSON.stringify(backupObject()), stateBeforeDismiss = JSON.stringify(state);
+        firstRunOnboardingDismissed = true;
+        add('Session dismissal hides panel without mutating state, storage, or backup', !/id="firstRunOnboarding"/.test(logResultsHtml([])) && JSON.stringify(state) === stateBeforeDismiss && localStorage.getItem(STORAGE_KEY) === storageBeforeDismiss && JSON.stringify(backupObject()) === backupBeforeDismiss && !Object.keys(backupObject()).some(key => /onboard|firstRun|dismiss/i.test(key)));
+        firstRunOnboardingDismissed = false;
+        Object.assign(state, freshState()); state.activeTab = 'log'; render();
+        document.getElementById('firstRunLogJob')?.click();
+        add('Log your first job opens the existing New log entry modal', document.getElementById('entryModal')?.classList.contains('open') && /New log entry/i.test(document.getElementById('entryModal')?.textContent || ''));
+        closeModal('entryModal');
+        Object.assign(state, freshState()); firstRunOnboardingDismissed = false; state.activeTab = 'log'; render();
+        document.getElementById('firstRunPlanGrid')?.click();
+        add('Plan a Test Grid reaches Test Grids and opens New test grid', state.activeTab === 'grids' && document.getElementById('gridModal')?.classList.contains('open') && /New test grid/i.test(document.getElementById('gridModal')?.textContent || ''));
+        closeModal('gridModal');
+        Object.assign(state, freshState()); firstRunOnboardingDismissed = false; state.activeTab = 'log'; render();
+        document.getElementById('firstRunOpenReference')?.click();
+        add('Open Reference switches to the Reference tab', state.activeTab === 'reference' && !!document.getElementById('app')?.innerHTML);
+        Object.assign(state, freshState()); firstRunOnboardingDismissed = false; state.activeTab = 'log'; render();
+        const footer = document.getElementById('releaseIdentity');
+        add('Release identity / About footer remains intact after onboarding render', !!footer && footer.textContent.includes(APP_VERSION) && /About/i.test(footer.innerHTML));
+        add('STORAGE_KEY and SCHEMA_VERSION remain unchanged', STORAGE_KEY === 'genmitsu-l8-tracker-v1' && SCHEMA_VERSION === 2);
+        add('freshState still omits onboarding flags and backupObject has no onboarding fields', !('firstRunOnboardingDismissed' in freshState()) && !Object.keys(backupObject()).some(key => /onboard|firstRun|dismiss/i.test(key)));
+      } finally {
+        restore();
+        render();
+      }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('First-run onboarding fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runFirstRunOnboardingFixtures = runFirstRunOnboardingFixtures;
     function backupObject() {
       return {
         app: APP_ID,
@@ -1058,10 +1130,47 @@
         return materialOk && (!q || hay.includes(q));
       }), state.entrySort);
     }
+    function isFirstRunWorkspaceEmpty(source = state) {
+      const inventory = normalizeInventory(source?.inventory);
+      return !((source?.entries || []).length || (source?.profiles || []).length || (source?.grids || []).length || (source?.projects || []).length || inventory.rawMaterials.length || inventory.finishedBatches.length);
+    }
+    function firstRunOnboardingHtml() {
+      if (firstRunOnboardingDismissed || !isFirstRunWorkspaceEmpty() || state.entries.length) return '';
+      return `<section class="panel first-run-onboarding" id="firstRunOnboarding" aria-labelledby="firstRunOnboardingHeading">
+        <h2 id="firstRunOnboardingHeading">Welcome to Genmitsu L8 Tracker</h2>
+        <p>This Tracker works offline. Your Log, Library, Test Grids, Projects, and Inventory are stored locally in this browser—not in the cloud.</p>
+        <p>Browser data can be cleared or become unavailable, so use <b>Export</b> in the header regularly to save a JSON backup file. Restore a backup anytime with <b>Import</b>.</p>
+        <p>When you are ready, pick a starting step:</p>
+        <ul>
+          <li>Log your first laser job.</li>
+          <li>Plan a Test Grid for a new material.</li>
+          <li>Open Reference for official starting guidance.</li>
+        </ul>
+        <div class="actions">
+          <button type="button" class="primary" id="firstRunLogJob">Log your first job</button>
+          <button type="button" id="firstRunPlanGrid">Plan a Test Grid</button>
+          <button type="button" id="firstRunOpenReference">Open Reference</button>
+          <button type="button" id="firstRunDismissOnboarding">Hide this introduction</button>
+        </div>
+      </section>`;
+    }
+    function bindFirstRunOnboardingActions(root = document) {
+      const logJob = root.querySelector('#firstRunLogJob');
+      if (logJob) logJob.onclick = () => openEntry();
+      const planGrid = root.querySelector('#firstRunPlanGrid');
+      if (planGrid) planGrid.onclick = () => { state.activeTab = 'grids'; render(); openGridForm(); };
+      const openReference = root.querySelector('#firstRunOpenReference');
+      if (openReference) openReference.onclick = () => setTab('reference');
+      const dismiss = root.querySelector('#firstRunDismissOnboarding');
+      if (dismiss) dismiss.onclick = () => { firstRunOnboardingDismissed = true; render(); };
+    }
     function logResultsHtml(filtered) {
-      return state.entries.length
-        ? (filtered.length ? `<div class="grid cards">${filtered.map(entryCard).join('')}</div>` : empty('No log entries match', 'Adjust the search or material filter.'))
-        : empty('No entries yet', 'Log your first cut or engrave to start building a repeatable settings history.');
+      if (state.entries.length) {
+        return filtered.length
+          ? `<div class="grid cards">${filtered.map(entryCard).join('')}</div>`
+          : empty('No log entries match', 'Adjust the search or material filter.');
+      }
+      return empty('No entries yet', 'Log your first cut or engrave to start building a repeatable settings history.') + firstRunOnboardingHtml();
     }
     function bindLogResultActions(root) {
       root.querySelectorAll('[data-edit-entry]').forEach(button => button.onclick = () => openEntry(state.entries.find(entry => entry.id === button.dataset.editEntry)));
@@ -1069,6 +1178,7 @@
       root.querySelectorAll('[data-delete-entry]').forEach(button => button.onclick = () => del('entries', button.dataset.deleteEntry, 'Delete this log entry?', 'Log entry'));
       root.querySelectorAll('[data-promote-entry]').forEach(button => button.onclick = () => promoteEntry(button.dataset.promoteEntry));
       root.querySelectorAll('[data-project-entry]').forEach(button => button.onclick = () => projectFromEntry(button.dataset.projectEntry));
+      bindFirstRunOnboardingActions(root);
     }
     function refreshLogSearchResults() {
       const count = document.getElementById('logShownCount');
@@ -11288,6 +11398,7 @@
     if (selftest === 'design-project' || selftest === 'all') runDesignToProjectHandoffFixtures();
     if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
+    if (selftest === 'first-run' || selftest === 'all') runFirstRunOnboardingFixtures();
     if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
     if (selftest === 'design' || selftest === 'designs' || selftest === 'all') runDesignGeometryFixtures();
     renderReleaseIdentity();

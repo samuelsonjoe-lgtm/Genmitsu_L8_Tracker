@@ -6,3 +6,4 @@
 - Added machine-readable app, version, and backup-format metadata to exported backups.
 - Added safeguards against future-schema and incompatible backup imports.
 - Preserved compatibility with legacy backups that lack the new metadata.
+- Added a session-only first-run onboarding panel on an empty Log tab that explains local browser storage, regular Export backups, and starter actions for Log, Test Grids, and Reference.
