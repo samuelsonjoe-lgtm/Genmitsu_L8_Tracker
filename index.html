@@ -61,6 +61,15 @@
     label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: #424b5a; }
     .shell { max-width: 1180px; min-width: 0; margin: 0 auto; padding: 20px 18px 70px; }
     .topbar, .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .active-machine-control { display: flex; align-items: end; gap: 6px; min-width: 0; }
+    .active-machine-control label { min-width: 0; }
+    .active-machine-control select { width: min(230px, 34vw); }
+    .machine-list { display: grid; gap: 10px; }
+    .machine-card { min-width: 0; }
+    .machine-card.active-machine { border-color: var(--blue); box-shadow: inset 4px 0 0 var(--blue); }
+    .machine-card.archived-machine { opacity: .78; background: #f5f6f8; }
+    .machine-meta { display: flex; gap: 7px 12px; flex-wrap: wrap; margin-top: 7px; }
+    .machine-meta span { overflow-wrap: anywhere; }
     .brand { display: flex; min-width: 0; align-items: center; gap: 12px; }
     .brand > div:last-child { min-width: 0; }
     .mark { width: 42px; height: 42px; border-radius: 9px; background: #283342; position: relative; }
@@ -220,6 +229,9 @@
       .topbar { align-items: stretch; }
       .topbar > .brand, .topbar > .row, .toolbar > .row, .toolbar > .spread { width: 100%; min-width: 0; }
       .topbar > .row { justify-content: flex-start; }
+      .active-machine-control { width: 100%; align-items: end; }
+      .active-machine-control label { flex: 1 1 170px; }
+      .active-machine-control select { width: 100%; }
       .toolbar > *, .row > *, .spread > * { min-width: 0; }
       .spread { flex-wrap: wrap; }
       .toolbar .row input, .toolbar .row select { max-width: 100%; }
@@ -268,6 +280,7 @@
         </div>
       </div>
       <div class="row">
+        <div id="activeMachineControls" class="active-machine-control"></div>
         <button id="unitIn">in</button>
         <button id="unitMm">mm</button>
         <button id="importBtn" title="Import a JSON backup. You can merge records or replace current data.">Import</button>
@@ -296,6 +309,7 @@
   <div class="modal" id="projectWizardModal"></div>
   <div class="modal" id="helpModal"></div>
   <div class="modal" id="importModeModal"></div>
+  <div class="modal" id="machineModal"></div>
   <div class="toast" id="undoToast"></div>
 
   <script>
@@ -444,6 +458,12 @@
     let pricingPersistTimer = null;
     let pendingImport = null;
     let importApplying = false;
+    let machineManagerSearch = '';
+    let machineManagerShowArchived = false;
+    let machineModalMode = '';
+    let machineModalOperation = '';
+    let machineModalSourceId = '';
+    let machineModalInitial = '';
     const modalFocusOrigins = new Map();
     const modalOpenOrder = [];
     const PRICING_PERSIST_DELAY = 400;
@@ -552,6 +572,53 @@
       const name = typeof source?.machineIdentity?.name === 'string' ? source.machineIdentity.name.trim() : '';
       if (name) return name;
       return source?.machineProfile === '40W' ? 'Genmitsu L8 40W' : 'Genmitsu L8 20W';
+    }
+    function ownedMachineDisplayName(machine) {
+      const name = typeof machine?.name === 'string' ? machine.name.trim() : '';
+      return name || 'Unnamed workshop machine';
+    }
+    function machineTypeLabel(type) {
+      return ({ diode:'Diode', co2:'CO₂', fiber:'Fiber', other:'Other' })[type] || 'Other';
+    }
+    function machineWorkAreaLabel(machine) {
+      return Number.isFinite(machine?.workAreaWidthMm) && Number.isFinite(machine?.workAreaHeightMm) ? `${machine.workAreaWidthMm} × ${machine.workAreaHeightMm} mm usable work area` : '';
+    }
+    function machineReferencePaths(machineId) {
+      const matches = [], seen = new Set();
+      const scan = (value, path) => {
+        if (!value || typeof value !== 'object' || seen.has(value)) return;
+        seen.add(value);
+        if (!Array.isArray(value) && value.machineId === machineId) matches.push(path || 'record');
+        if (Array.isArray(value)) value.forEach((item, index) => scan(item, `${path}[${index}]`));
+        else Object.entries(value).forEach(([key, item]) => { if (key !== 'machines' && key !== 'machineIdentity') scan(item, path ? `${path}.${key}` : key); });
+      };
+      scan({ grids:state.grids, profiles:state.profiles, projects:state.projects, entries:state.entries, inventory:state.inventory }, '');
+      return matches;
+    }
+    function machineModalHasUnsavedChanges() {
+      const form = document.getElementById('machineForm');
+      return !!(document.getElementById('machineModal')?.classList.contains('open') && machineModalMode === 'form' && form && machineModalInitial !== machineFormSnapshot(form));
+    }
+    function machineFormSnapshot(form) {
+      return JSON.stringify([...new FormData(form).entries()].sort(([a], [b]) => a.localeCompare(b)));
+    }
+    function renderHeaderMachineControls() {
+      const root = document.getElementById('activeMachineControls');
+      if (!root) return;
+      const machines = normalizeMachines(state.machines);
+      const active = machineById(state.activeMachineId, machines);
+      if (!machines.length) {
+        root.innerHTML = `<span class="small muted"><b>Active machine:</b> No workshop machine configured</span><button type="button" id="manageMachinesHeader">Manage machines</button>`;
+        return;
+      }
+      const choices = machines.filter(machine => !machine.archived || machine.id === state.activeMachineId);
+      root.innerHTML = `<label>Active machine<select id="activeMachineSelect" aria-label="Active machine">${choices.map(machine => `<option value="${esc(machine.id)}" ${machine.id === state.activeMachineId ? 'selected' : ''}>${esc(ownedMachineDisplayName(machine))}${machine.archived ? ' (Archived)' : ''}</option>`).join('')}</select></label><button type="button" id="manageMachinesHeader">Manage machines</button>`;
+    }
+    function bindHeaderMachineControls() {
+      const activeMachineSelect = document.getElementById('activeMachineSelect');
+      if (activeMachineSelect) activeMachineSelect.onchange = e => setActiveWorkshopMachine(e.target.value);
+      const manageMachinesHeader = document.getElementById('manageMachinesHeader');
+      if (manageMachinesHeader) manageMachinesHeader.onclick = () => setTab('reference');
     }
     function freshState() {
       return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', libraryViewMode: 'manage', gridViewMode: 'manage', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', projectViewMode: 'manage', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', inventoryViewMode: 'manage', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', machines: [], activeMachineId: '', machineIdentity: normalizeMachineIdentity(), pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
@@ -750,12 +817,12 @@
         const backup = backupObject();
         add('Backups retain machines, activeMachineId, and machineIdentity with stable identity constants', backup.machines?.[0]?.id === 'active' && backup.activeMachineId === 'active' && backup.machineIdentity.name === 'Active' && backup.app === APP_ID && backup.backupFormat === BACKUP_FORMAT && backup.schemaVersion === SCHEMA_VERSION);
         add('Machine root storage does not change machineProfile', state.machineProfile === '20W');
-        state.activeTab = 'reference'; render(); const form = document.getElementById('machineSetupForm'); form.querySelector('#machineName').value = 'Edited active'; form.querySelector('#machineWorkAreaWidth').value = '450'; form.querySelector('#machineWorkAreaHeight').value = '350'; form.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
+        state.activeTab = 'reference'; render(); openMachineForm('edit', 'active'); const form = document.getElementById('machineForm'); form.elements.name.value = 'Edited active'; form.elements.workAreaWidthMm.value = '450'; form.elements.workAreaHeightMm.value = '350'; form.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
         add('Existing machine editor updates active machine while preserving advanced fields and ID', state.activeMachineId === 'active' && state.machines[0].id === 'active' && state.machines[0].name === 'Edited active' && state.machines[0].manufacturer === 'Keep maker' && state.machines[0].futureField === 'keep' && state.machineIdentity.name === 'Edited active');
-        form.querySelector('#machineName').value = ''; form.querySelector('#machineWorkAreaWidth').value = ''; form.querySelector('#machineWorkAreaHeight').value = ''; form.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
-        add('Clearing visible editor fields retains the owned machine and mirrors blanks', state.machines.length === 1 && state.machines[0].id === 'active' && state.machineIdentity.name === '' && state.machineIdentity.workAreaWidthMm === null);
-        Object.assign(state, freshState()); state.activeTab = 'reference'; render(); const newForm = document.getElementById('machineSetupForm'); newForm.querySelector('#machineName').value = 'Created'; newForm.querySelector('#machineWorkAreaWidth').value = '300'; newForm.querySelector('#machineWorkAreaHeight').value = '200'; newForm.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
-        add('Editor creates one UID-based active machine only when none exists', state.machines.length === 1 && state.machines[0].id !== 'legacy-workshop-machine' && state.activeMachineId === state.machines[0].id && state.machineIdentity.name === 'Created');
+        openMachineForm('edit', 'active'); const invalidForm = document.getElementById('machineForm'); invalidForm.elements.name.value = ''; invalidForm.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
+        add('Manager preserves the owned machine and mirror when an edit lacks its required name', state.machines.length === 1 && state.machines[0].id === 'active' && state.machineIdentity.name === 'Edited active' && !document.getElementById('machineFormError').hidden); closeModal('machineModal');
+        Object.assign(state, freshState()); state.activeTab = 'reference'; render(); openMachineForm('add'); const newForm = document.getElementById('machineForm'); newForm.elements.name.value = 'Created'; newForm.elements.workAreaWidthMm.value = '300'; newForm.elements.workAreaHeightMm.value = '200'; newForm.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
+        add('Manager creates one UID-based active machine only when none exists', state.machines.length === 1 && state.machines[0].id !== 'legacy-workshop-machine' && state.activeMachineId === state.machines[0].id && state.machineIdentity.name === 'Created');
         Object.assign(state, freshState()); state.machines = [machine('local-a', 'Same'), machine('local-b', 'Local active')]; state.activeMachineId = 'local-b'; synchronizeMachineIdentity(); const localMachineSnapshot = JSON.stringify(state.machines);
         mergeData({ ...backupObject(), machines:[machine('local-a', 'Overwrite attempt', { notes:'no' }), machine('import-a', 'Same', { archived:true, futureField:'incoming' })], activeMachineId:'import-a', machineIdentity:{ name:'Imported identity' } });
         add('Merge retains local machines/order/same-ID winner and adds unique IDs without name deduplication', state.machines.map(item => item.id).join('|') === 'local-a|local-b|import-a' && JSON.stringify(state.machines.slice(0,2)) === localMachineSnapshot && state.machines[2].name === 'Same' && state.machines[2].archived && state.machines[2].futureField === 'incoming');
@@ -776,83 +843,152 @@
       return { passed, failed, results };
     }
     window.runMultiMachineStorageFixtures = runMultiMachineStorageFixtures;
-    function runMachineSetupFixtures() {
-      const results = [], add = (name, pass, actual = '') => results.push({ name, pass: !!pass, actual });
-      const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY), dismissedBefore = firstRunOnboardingDismissed, tabBefore = state.activeTab;
-      const helpModal = document.getElementById('helpModal'), helpSnapshot = { html: helpModal.innerHTML, open: helpModal.classList.contains('open'), aria: helpModal.getAttribute('aria-hidden') };
-      const restore = () => {
-        Object.assign(state, JSON.parse(stateBefore));
-        if (storageBefore === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, storageBefore);
-        firstRunOnboardingDismissed = dismissedBefore; state.activeTab = tabBefore;
-        closeModal('helpModal'); helpModal.innerHTML = helpSnapshot.html; helpModal.classList.toggle('open', helpSnapshot.open);
-        if (helpSnapshot.aria === null) helpModal.removeAttribute('aria-hidden'); else helpModal.setAttribute('aria-hidden', helpSnapshot.aria);
-        render();
-      };
-      const renderReferenceForm = () => { state.activeTab = 'reference'; render(); return document.getElementById('machineSetupForm'); };
-      const submit = form => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    function runMachineManagerFixtures() {
+      const results = [], add = (name, pass) => results.push({ name, pass:!!pass });
+      const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY), dismissedBefore = firstRunOnboardingDismissed, draftBefore = JSON.stringify(designDraft), previewBefore = designPreviewMode, searchBefore = machineManagerSearch, archivedBefore = machineManagerShowArchived, modeBefore = machineModalMode, operationBefore = machineModalOperation, sourceBefore = machineModalSourceId, initialBefore = machineModalInitial, originsBefore = [...modalFocusOrigins.entries()], orderBefore = [...modalOpenOrder], focusBefore = document.activeElement;
+      const modal = document.getElementById('machineModal'), modalSnapshot = { html:modal.innerHTML, open:modal.classList.contains('open'), aria:modal.getAttribute('aria-hidden') };
+      const restore = () => { Object.assign(state, JSON.parse(stateBefore)); if (storageBefore === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, storageBefore); firstRunOnboardingDismissed = dismissedBefore; designDraft = JSON.parse(draftBefore); designPreviewMode = previewBefore; machineManagerSearch = searchBefore; machineManagerShowArchived = archivedBefore; machineModalMode = modeBefore; machineModalOperation = operationBefore; machineModalSourceId = sourceBefore; machineModalInitial = initialBefore; modalFocusOrigins.clear(); originsBefore.forEach(([id, origin]) => modalFocusOrigins.set(id, origin)); modalOpenOrder.splice(0, modalOpenOrder.length, ...orderBefore); render(); modal.innerHTML = modalSnapshot.html; modal.classList.toggle('open', modalSnapshot.open); if (modalSnapshot.aria === null) modal.removeAttribute('aria-hidden'); else modal.setAttribute('aria-hidden', modalSnapshot.aria); if (focusBefore?.isConnected) try { focusBefore.focus({ preventScroll:true }); } catch (_) { focusBefore.focus(); } };
+      const reset = () => { Object.assign(state, freshState()); state.activeTab = 'reference'; machineManagerSearch = ''; machineManagerShowArchived = false; render(); };
+      const submit = () => document.getElementById('machineForm').dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
       try {
-        // Normalization
-        add('freshState contains the default machineIdentity shape', (() => { const m = freshState().machineIdentity; return m && m.name === '' && m.workAreaWidthMm === null && m.workAreaHeightMm === null; })());
-        add('Legacy state missing machineIdentity normalizes to the default', (() => { const m = normalizeMachineIdentity(undefined); return m.name === '' && m.workAreaWidthMm === null && m.workAreaHeightMm === null; })());
-        add('normalizeMachineIdentity is side-effect free', (() => { const input = { name: 'Rig', workAreaWidthMm: '400', workAreaHeightMm: '300', extra: 'keep' }, snapshot = JSON.stringify(input); const out = normalizeMachineIdentity(input); return JSON.stringify(input) === snapshot && out !== input; })());
-        add('Repeated normalization is stable', (() => { const once = normalizeMachineIdentity({ name: ' Laser ', workAreaWidthMm: '400.5', workAreaHeightMm: 300, junk: 1 }); return JSON.stringify(normalizeMachineIdentity(once)) === JSON.stringify(once); })());
-        add('A valid custom name is preserved', normalizeMachineIdentity({ name: 'My diode laser' }).name === 'My diode laser');
-        add('Name is coerced to a safe string without HTML interpretation and preserved verbatim for later escaping', (() => { const m = normalizeMachineIdentity({ name: '<b>x</b>' }); return m.name === '<b>x</b>' && esc(m.name) === '&lt;b&gt;x&lt;/b&gt;'; })());
-        add('Valid decimal width and height are preserved as finite numbers', (() => { const m = normalizeMachineIdentity({ workAreaWidthMm: '400.5', workAreaHeightMm: 300.25 }); return m.workAreaWidthMm === 400.5 && m.workAreaHeightMm === 300.25; })());
-        add('Blank dimensions normalize to null', (() => { const m = normalizeMachineIdentity({ workAreaWidthMm: '', workAreaHeightMm: '   ' }); return m.workAreaWidthMm === null && m.workAreaHeightMm === null; })());
-        add('Zero dimensions normalize to null', (() => { const m = normalizeMachineIdentity({ workAreaWidthMm: 0, workAreaHeightMm: '0' }); return m.workAreaWidthMm === null && m.workAreaHeightMm === null; })());
-        add('Negative dimensions normalize to null', (() => { const m = normalizeMachineIdentity({ workAreaWidthMm: -5, workAreaHeightMm: '-3.2' }); return m.workAreaWidthMm === null && m.workAreaHeightMm === null; })());
-        add('NaN and Infinity normalize to null', (() => { const m = normalizeMachineIdentity({ workAreaWidthMm: NaN, workAreaHeightMm: Infinity }); return m.workAreaWidthMm === null && m.workAreaHeightMm === null; })());
-        add('Nonnumeric text, objects, and arrays normalize to null', (() => { const m = normalizeMachineIdentity({ workAreaWidthMm: '400mm', workAreaHeightMm: {} }), n = normalizeMachineIdentity({ workAreaWidthMm: [400], workAreaHeightMm: 'wide' }); return m.workAreaWidthMm === null && m.workAreaHeightMm === null && n.workAreaWidthMm === null && n.workAreaHeightMm === null; })());
-        add('Unknown additive machineIdentity fields survive normalization', normalizeMachineIdentity({ name: 'x', workAreaWidthMm: 400, workAreaHeightMm: 300, futureField: 'keep' }).futureField === 'keep');
-        add('Malformed non-object input normalizes to the default shape', (() => { const m = normalizeMachineIdentity('nonsense'), n = normalizeMachineIdentity([1, 2]); return m.name === '' && m.workAreaWidthMm === null && n.name === '' && n.workAreaHeightMm === null; })());
-        // Display helper
-        add('currentMachineDisplayName uses the custom name when present', currentMachineDisplayName({ machineIdentity: { name: '  Shop Laser  ' }, machineProfile: '20W' }) === 'Shop Laser');
-        add('currentMachineDisplayName falls back to the Genmitsu profile when the custom name is blank', currentMachineDisplayName({ machineIdentity: { name: '' }, machineProfile: '20W' }) === 'Genmitsu L8 20W' && currentMachineDisplayName({ machineIdentity: { name: '' }, machineProfile: '40W' }) === 'Genmitsu L8 40W');
-        // Real save path
-        (() => { const form = renderReferenceForm(); form.querySelector('#machineName').value = '  Bench Laser  '; form.querySelector('#machineWorkAreaWidth').value = '400.5'; form.querySelector('#machineWorkAreaHeight').value = '300'; submit(form); add('Two valid dimensions and a name save through the real Reference form with trimmed name', state.machineIdentity.name === 'Bench Laser' && state.machineIdentity.workAreaWidthMm === 400.5 && state.machineIdentity.workAreaHeightMm === 300); })();
-        (() => { const profileBefore = state.machineProfile; const form = renderReferenceForm(); form.querySelector('#machineWorkAreaWidth').value = '400'; form.querySelector('#machineWorkAreaHeight').value = '300'; submit(form); add('Saving machine setup does not change the Genmitsu Reference profile', state.machineProfile === profileBefore); })();
-        (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Keep', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const form = renderReferenceForm(); form.querySelector('#machineWorkAreaWidth').value = '400'; form.querySelector('#machineWorkAreaHeight').value = ''; const before = JSON.stringify(state.machineIdentity); submit(form); const errorEl = document.getElementById('machineSetupError'); add('Partial work-area input is rejected by the real save path without partial save', JSON.stringify(state.machineIdentity) === before && errorEl && errorEl.hidden === false); })();
-        (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Clear me', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const form = renderReferenceForm(); form.querySelector('#machineWorkAreaWidth').value = ''; form.querySelector('#machineWorkAreaHeight').value = ''; submit(form); add('Blank width and height clear the configured work area while keeping the name', state.machineIdentity.workAreaWidthMm === null && state.machineIdentity.workAreaHeightMm === null && state.machineIdentity.name === 'Clear me'); })();
-        (() => { state.machineIdentity = normalizeMachineIdentity(); const form = renderReferenceForm(); form.querySelector('#machineWorkAreaWidth').value = '-5'; form.querySelector('#machineWorkAreaHeight').value = '300'; submit(form); add('Non-positive dimensions are rejected by the real save path', state.machineIdentity.workAreaWidthMm === null && state.machineIdentity.workAreaHeightMm === null && document.getElementById('machineSetupError').hidden === false); })();
-        // machineProfile independence and record safety
-        (() => { state.machines = [normalizeOwnedMachine({ id:'fixture-custom', name:'Custom Laser', type:'diode' })]; state.activeMachineId = 'fixture-custom'; synchronizeMachineIdentity(); state.machineProfile = '20W'; renderReferenceForm(); const select = document.getElementById('machineProfile'); select.value = '40W'; select.dispatchEvent(new Event('change', { bubbles: true })); add('Selecting a Genmitsu Reference profile does not change machineIdentity', state.machineProfile === '40W' && state.machineIdentity.name === 'Custom Laser' && state.machines[0].id === 'fixture-custom'); })();
-        add('Custom machine name does not leak into Genmitsu Test Grid machine identity', (() => { state.machineProfile = '20W'; state.machineIdentity = normalizeMachineIdentity({ name: 'Custom Laser' }); return activeMachineSnapshot().label === 'Genmitsu L8 20W' && currentMachineDisplayName() === 'Custom Laser'; })());
-        add('Changing machineIdentity does not rewrite existing records', (() => { state.grids = [{ id: 'g-fixture', name: 'G', material: 'Basswood', machine: { key: 'genmitsu-l8-20w', label: 'Genmitsu L8 20W' } }]; const before = JSON.stringify(state.grids); const form = renderReferenceForm(); form.querySelector('#machineName').value = 'New Name'; form.querySelector('#machineWorkAreaWidth').value = '500'; form.querySelector('#machineWorkAreaHeight').value = '400'; submit(form); return JSON.stringify(state.grids) === before && state.machineIdentity.name === 'New Name'; })());
-        // First-run interaction
-        add('machineIdentity does not suppress first-run onboarding eligibility', isFirstRunWorkspaceEmpty({ ...freshState(), machineIdentity: normalizeMachineIdentity({ name: 'Laser', workAreaWidthMm: 400, workAreaHeightMm: 300 }) }));
-        (() => { Object.assign(state, freshState()); state.machineIdentity = normalizeMachineIdentity({ name: 'Laser', workAreaWidthMm: 400, workAreaHeightMm: 300 }); firstRunOnboardingDismissed = false; state.activeTab = 'log'; render(); const panelPresent = !!document.getElementById('firstRunOnboarding'); document.getElementById('firstRunOpenReference')?.click(); add('First-run panel shows with machineIdentity populated but no records, and Open Reference still navigates', panelPresent && state.activeTab === 'reference'); })();
-        // Backup and import
-        add('backupObject includes normalized machineIdentity', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Backup Laser', workAreaWidthMm: 420, workAreaHeightMm: 310 }); const b = backupObject().machineIdentity; return b && b.name === 'Backup Laser' && b.workAreaWidthMm === 420 && b.workAreaHeightMm === 310; })());
-        add('A backup round trip preserves machineIdentity', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Round Trip', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const roundTrip = normalizeMachineIdentity(JSON.parse(JSON.stringify(backupObject())).machineIdentity); return roundTrip.name === 'Round Trip' && roundTrip.workAreaWidthMm === 400 && roundTrip.workAreaHeightMm === 300; })());
-        add('Current backup metadata remains unchanged and additive', (() => { const b = backupObject(); return b.app === APP_ID && b.appVersion === APP_VERSION && b.backupFormat === BACKUP_FORMAT && b.schemaVersion === SCHEMA_VERSION; })());
-        add('Replace import restores the backup machineIdentity through the real seam', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Local' }); const incoming = { ...backupObject(), machineIdentity: { name: 'Imported', workAreaWidthMm: 500, workAreaHeightMm: 350 } }; const result = applyBackupImport(incoming, 'replace'); return result.accepted && state.machineIdentity.name === 'Imported' && state.machineIdentity.workAreaWidthMm === 500 && state.machineIdentity.workAreaHeightMm === 350; })());
-        add('Replace of a legacy backup without machineIdentity yields the empty default', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Local', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const legacy = { schemaVersion: 1, entries: [] }; const result = applyBackupImport(legacy, 'replace'); return result.accepted && state.machineIdentity.name === '' && state.machineIdentity.workAreaWidthMm === null && state.machineIdentity.workAreaHeightMm === null; })());
-        add('Merge import preserves the current local machineIdentity', (() => { state.machines = [normalizeOwnedMachine({ id:'fixture-local', name:'Local Only', type:'diode', workAreaWidthMm:410, workAreaHeightMm:320 })]; state.activeMachineId = 'fixture-local'; synchronizeMachineIdentity(); const incoming = { ...backupObject(), machineIdentity: { name: 'Should Not Apply', workAreaWidthMm: 999, workAreaHeightMm: 888 }, entries: [{ id: 'merge-entry', material: 'X' }] }; const result = applyBackupImport(incoming, 'merge'); return result.accepted && state.machineIdentity.name === 'Local Only' && state.machineIdentity.workAreaWidthMm === 410 && state.entries.some(entry => entry.id === 'merge-entry'); })());
-        add('A legacy backup without machineIdentity remains accepted', validateBackupImport({ schemaVersion: 1, entries: [] }).accepted && validateBackupImport({ entries: [] }).accepted);
-        add('Rejected imports do not mutate machineIdentity, and future/app/format guards are unchanged', (() => { state.machines = [normalizeOwnedMachine({ id:'fixture-protected', name:'Protected', type:'diode', workAreaWidthMm:400, workAreaHeightMm:300 })]; state.activeMachineId = 'fixture-protected'; synchronizeMachineIdentity(); const before = JSON.stringify(state.machineIdentity); const future = applyBackupImport({ ...backupObject(), schemaVersion: SCHEMA_VERSION + 1 }, 'replace'); const foreignApp = applyBackupImport({ ...backupObject(), app: 'other-app' }, 'replace'); const foreignFormat = applyBackupImport({ ...backupObject(), backupFormat: 'other-format' }, 'replace'); return !future.accepted && !foreignApp.accepted && !foreignFormat.accepted && JSON.stringify(state.machineIdentity) === before; })());
-        // Constants and storage integrity
-        add('STORAGE_KEY and SCHEMA_VERSION remain unchanged', STORAGE_KEY === 'genmitsu-l8-tracker-v1' && SCHEMA_VERSION === 2);
-        add('APP_VERSION and BUILD_DATE remain unchanged', APP_VERSION === '0.9.0' && BUILD_DATE === '2026-07-19');
-        add('Machine root fields persist under the existing storage key without a second key', (() => { state.machines = [normalizeOwnedMachine({ id:'fixture-persist', name:'Persist', type:'diode', workAreaWidthMm:400, workAreaHeightMm:300 })]; state.activeMachineId = 'fixture-persist'; const keysBefore = Object.keys(localStorage).length; persist(); const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); return Object.keys(localStorage).length === keysBefore && stored.machineIdentity?.name === 'Persist' && stored.machines?.[0]?.id === 'fixture-persist' && stored.activeMachineId === 'fixture-persist' && localStorage.getItem(STORAGE_KEY + '-machine') === null; })());
-        // Reference UI and attribution
-        (() => { const html = (state.activeTab = 'reference', renderReference()); add('Reference renders the current-machine setup panel with labeled inputs', /id="machineSetupForm"/.test(html) && /Current workshop machine/.test(html) && /id="machineName"/.test(html) && /id="machineWorkAreaWidth"/.test(html) && /id="machineWorkAreaHeight"/.test(html) && /id="saveMachineSetup"/.test(html)); add('Reference labels the 20W/40W selection as a Genmitsu L8 Reference profile', /Genmitsu L8 Reference profile/.test(html) && /Genmitsu L8 20W/.test(html) && /Genmitsu L8 40W/.test(html) && /bundled Genmitsu L8 manufacturer starting points/.test(html)); add('Reference states manufacturer values are starting points', /starting points/i.test(html) && /Official values are starting points/.test(html)); add('Work-area text states advisory-only behavior and millimeter storage', /advisory only/i.test(html) && /does not resize designs, perform nesting, guarantee bed fit, control the machine/.test(html) && /stored in millimeters/i.test(html)); add('Reference machine setup introduces no external dependency or network URL', !/https?:\/\//i.test(html.match(/<form[^>]*id="machineSetupForm"[\s\S]*?<\/form>/)?.[0] || '')); })();
-        // Help
-        (() => { openHelp(); const dialog = modalDialog(document.getElementById('helpModal')), text = dialog?.textContent || ''; add('Help explains the custom machine and work-area advisory limits', /Current workshop machine/i.test(text) && /advisory only/i.test(text) && /does not resize SVGs, perform nesting, guarantee bed fit, control the machine, or change Reference settings/i.test(text) && /specifically Genmitsu L8 starting points/i.test(text)); add('Help modal remains an accessible dialog', dialog?.getAttribute('role') === 'dialog' && dialog.getAttribute('aria-modal') === 'true' && document.getElementById('helpModal').getAttribute('aria-hidden') === 'false'); closeModal('helpModal'); })();
-        // Duplicate IDs and Designs neutrality
-        (() => { state.activeTab = 'reference'; render(); const ids = [...document.querySelectorAll('[id]')].map(el => el.id); add('Reference machine setup introduces no duplicate HTML IDs', new Set(ids).size === ids.length); })();
-        add('machineIdentity does not change Designs production bytes', (() => { const draft = designDefaults(); state.machineIdentity = normalizeMachineIdentity(); const emptySvg = buildDesignResult(draft).svg; state.machineIdentity = normalizeMachineIdentity({ name: 'Laser', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const populatedSvg = buildDesignResult(draft).svg; return typeof emptySvg === 'string' && emptySvg.length > 0 && emptySvg === populatedSvg; })());
-        // Sibling groups remain green
-        add('Existing storage/import/export/recovery fixtures remain passing', runStorageRecoveryFixtures().failed === 0);
-        add('Existing first-run fixtures remain passing', runFirstRunOnboardingFixtures().failed === 0);
-        add('Existing Help/Safety fixtures remain passing', runHelpSafetyFixtures().failed === 0);
-        add('Existing modal-accessibility fixtures remain passing', runModalAccessibilityFixtures().failed === 0);
+        reset();
+        add('No-machines header is honest and provides Manage machines', document.getElementById('activeMachineControls').textContent.includes('No workshop machine configured') && document.getElementById('manageMachinesHeader')?.tagName === 'BUTTON');
+        add('No-machines manager has an actionable Add workshop machine state', document.getElementById('workshopMachines')?.textContent.includes('No workshop machines configured') && !!document.querySelector('[data-machine-action="add"]'));
+        const addStateBeforeCancel = JSON.stringify(state), addStorageBeforeCancel = localStorage.getItem(STORAGE_KEY); openMachineForm('add'); document.getElementById('machineForm').elements.name.value = 'Cancelled machine'; closeModal('machineModal');
+        add('Cancelling an Add form makes no state or storage change', JSON.stringify(state) === addStateBeforeCancel && localStorage.getItem(STORAGE_KEY) === addStorageBeforeCancel);
+        openMachineForm('add'); document.dispatchEvent(new KeyboardEvent('keydown', { key:'Escape', bubbles:true, cancelable:true }));
+        add('Escape cancels a machine form through the shared modal behavior', !document.getElementById('machineModal').classList.contains('open'));
+        document.getElementById('addWorkshopMachine').click(); let form = document.getElementById('machineForm'); form.elements.name.value = 'L8 Workshop'; form.elements.manufacturer.value = 'SainSmart'; form.elements.model.value = 'L8'; form.elements.type.value = 'diode'; form.elements.nominalPowerW.value = '20'; form.elements.workAreaWidthMm.value = '400'; form.elements.workAreaHeightMm.value = '400'; form.elements.notes.value = 'Primary machine'; submit();
+        const first = state.machines[0], firstId = first.id;
+        add('Valid Add creates a normalized first machine with a new active ID and mirror', state.machines.length === 1 && !!firstId && first.name === 'L8 Workshop' && first.archived === false && state.activeMachineId === firstId && state.machineIdentity.name === 'L8 Workshop');
+        add('Manager list shows manufacturer, model, type, power, work area, and active text', ['SainSmart','L8','Diode','20 W nominal','400 × 400 mm usable work area','Active machine'].every(text => document.getElementById('workshopMachines').textContent.includes(text)));
+        add('Header selector labels the active owned machine and does not use Reference fallback text', document.getElementById('activeMachineSelect')?.closest('label')?.textContent.includes('Active machine') && document.getElementById('activeMachineSelect').textContent.includes('L8 Workshop') && !document.getElementById('activeMachineSelect').textContent.includes('Genmitsu L8 20W'));
+        openMachineForm('add'); form = document.getElementById('machineForm'); form.elements.name.value = 'Bad area'; form.elements.workAreaWidthMm.value = '400'; submit();
+        add('Partial work area is rejected without Add mutation', state.machines.length === 1 && !document.getElementById('machineFormError').hidden); closeModal('machineModal');
+        openMachineForm('add'); form = document.getElementById('machineForm'); form.elements.name.value = 'L8 Backup Unit'; form.elements.manufacturer.value = 'SainSmart'; form.elements.model.value = 'L8'; form.elements.type.value = 'diode'; form.elements.nominalPowerW.value = '20'; form.elements.workAreaWidthMm.value = '400'; form.elements.workAreaHeightMm.value = '400'; submit();
+        const second = state.machines.find(machine => machine.id !== firstId), secondId = second.id;
+        add('Later Add receives a distinct ID and does not replace active by default', state.machines.length === 2 && secondId !== firstId && state.activeMachineId === firstId);
+        openMachineForm('add'); form = document.getElementById('machineForm'); form.elements.name.value = 'CO2 Bench'; form.elements.type.value = 'co2'; form.elements.setActive.checked = true; submit();
+        const third = state.machines.find(machine => machine.name === 'CO2 Bench');
+        add('Explicit Set active on Add switches only the owned-machine context', state.activeMachineId === third.id && state.machineIdentity.name === 'CO2 Bench' && state.machineProfile === '20W');
+        const recordsBeforeSwitch = JSON.stringify({ grids:state.grids, profiles:state.profiles, projects:state.projects }), svgBeforeSwitch = buildDesignResult(designDefaults()).svg;
+        setActiveWorkshopMachine(secondId);
+        add('Header-style switch persists the selected ID and synchronizes machineIdentity', state.activeMachineId === secondId && state.machineIdentity.name === 'L8 Backup Unit' && JSON.parse(localStorage.getItem(STORAGE_KEY)).activeMachineId === secondId);
+        add('Switching does not change the Reference profile, records, or Designs SVG bytes', state.machineProfile === '20W' && JSON.stringify({ grids:state.grids, profiles:state.profiles, projects:state.projects }) === recordsBeforeSwitch && buildDesignResult(designDefaults()).svg === svgBeforeSwitch);
+        setActiveWorkshopMachine(firstId); openMachineForm('edit', firstId); form = document.getElementById('machineForm'); form.elements.name.value = 'Unsaved name'; const blockedStorage = localStorage.getItem(STORAGE_KEY); const blockedSelect = document.getElementById('activeMachineSelect'); blockedSelect.value = secondId; blockedSelect.dispatchEvent(new Event('change', { bubbles:true }));
+        add('A dirty real header switch blocks and preserves the draft, storage, and active machine', state.activeMachineId === firstId && document.getElementById('machineModal').classList.contains('open') && document.getElementById('machineForm').elements.name.value === 'Unsaved name' && localStorage.getItem(STORAGE_KEY) === blockedStorage && document.getElementById('activeMachineSelect')?.onchange instanceof Function); closeModal('machineModal'); const reboundSelect = document.getElementById('activeMachineSelect'); reboundSelect.value = secondId; reboundSelect.dispatchEvent(new Event('change', { bubbles:true }));
+        add('The rebound header selector switches immediately after the blocked attempt and keeps the Reference profile separate', state.activeMachineId === secondId && state.machineIdentity.name === 'L8 Backup Unit' && state.machineProfile === '20W');
+        setActiveWorkshopMachine(firstId);
+        const mirrorBeforeNonActiveEdit = JSON.stringify(state.machineIdentity); second.futureCapability = 'preserved'; state.machines = state.machines.map(machine => machine.id === secondId ? second : machine); openMachineForm('edit', secondId); form = document.getElementById('machineForm'); form.elements.name.value = 'L8 Backup Edited'; form.elements.notes.value = 'Updated'; submit();
+        add('Non-active Edit preserves stable ID and additive fields without changing the active mirror', machineById(secondId).id === secondId && machineById(secondId).futureCapability === 'preserved' && JSON.stringify(state.machineIdentity) === mirrorBeforeNonActiveEdit);
+        openMachineForm('duplicate', secondId); form = document.getElementById('machineForm'); const duplicateName = form.elements.name.value; submit();
+        const duplicate = state.machines.find(machine => machine.id !== secondId && machine.name === duplicateName);
+        add('Duplicate creates a distinct non-active, unarchived record and preserves capability fields', !!duplicate && duplicate.id !== secondId && !duplicate.archived && duplicate.futureCapability === 'preserved' && state.activeMachineId === firstId);
+        openMachineForm('edit', firstId); form = document.getElementById('machineForm'); form.elements.name.value = ''; submit();
+        add('Invalid Add or Edit form does not mutate state or storage', state.machineIdentity.name === 'L8 Workshop' && !document.getElementById('machineFormError').hidden); closeModal('machineModal');
+        openMachineConfirmation('archive', secondId); document.getElementById('confirmMachineAction').click();
+        add('Non-active Archive retains the record, excludes it from ordinary header choices, and preserves profile', machineById(secondId).archived && ![...document.getElementById('activeMachineSelect').options].some(option => option.value === secondId) && state.machineProfile === '20W');
+        machineManagerShowArchived = true; render();
+        add('Show archived reveals a readable Archived status', document.getElementById('workshopMachines').textContent.includes('L8 Backup Edited') && document.getElementById('workshopMachines').textContent.includes('Archived')); machineManagerShowArchived = false; render();
+        openMachineConfirmation('archive', firstId);
+        add('Active machine Archive is blocked with no mutation', !machineById(firstId).archived && !document.getElementById('machineModal').classList.contains('open'));
+        restoreWorkshopMachine(secondId);
+        add('Restore makes a machine selectable without switching it active', !machineById(secondId).archived && state.activeMachineId === firstId && [...document.getElementById('activeMachineSelect').options].some(option => option.value === secondId));
+        openMachineConfirmation('delete', firstId);
+        add('Active delete is blocked', !!machineById(firstId) && !document.getElementById('machineModal').classList.contains('open'));
+        state.grids = [{ id:'machine-reference-grid', machineId:secondId, machine:{ key:'genmitsu-l8-20w', label:'Genmitsu L8 20W' } }];
+        add('Exact machineId reference detection ignores legacy labels but detects current optional IDs', machineReferencePaths(secondId).length === 1 && machineReferencePaths(firstId).length === 0);
+        openMachineConfirmation('delete', secondId);
+        add('Referenced non-active delete is blocked and does not cascade records', !!machineById(secondId) && state.grids.length === 1 && !document.getElementById('machineModal').classList.contains('open'));
+        state.grids = [{ id:'name-only-grid', machine:{ key:'custom', label:'L8 Backup Edited' } }]; openMachineConfirmation('delete', duplicate.id); document.getElementById('confirmMachineAction').click();
+        add('Unreferenced non-active Delete succeeds without name-based false references or cascading records', !machineById(duplicate.id) && state.grids.length === 1);
+        machineManagerSearch = 'backup edited'; machineManagerShowArchived = false; render();
+        add('Manager search finds friendly name, manufacturer, model, type, and notes without exposing IDs as labels', document.getElementById('workshopMachines').textContent.includes('L8 Backup Edited') && !document.getElementById('workshopMachines').textContent.includes(secondId));
+        state.machines = [...state.machines, ...Array.from({ length:50 }, (_, index) => normalizeOwnedMachine({ id:`bulk-${index}`, name:`Long workshop machine ${index} with a descriptive label`, type:'other', archived:index % 5 === 0, notes:'fixture machine' }))]; machineManagerSearch = ''; machineManagerShowArchived = true; render();
+        add('Manager remains operable with 50 additional synthetic machines and wrapped names', document.querySelectorAll('.machine-card').length >= 52 && document.querySelector('.machine-card')?.textContent.includes('L8 Workshop') && document.querySelector('#workshopMachines .machine-list'));
+        add('Reference profile and active-machine controls stay separate in DOM and behavior', !!document.getElementById('machineProfile') && !!document.getElementById('activeMachineSelect') && (() => { const activeBefore = state.activeMachineId; document.getElementById('machineProfile').value = '40W'; document.getElementById('machineProfile').dispatchEvent(new Event('change', { bubbles:true })); return state.machineProfile === '40W' && state.activeMachineId === activeBefore; })());
+        add('Help explains owned machines, active switching, Reference separation, history, archive, duplicate, and deferred linkage', (() => { openHelp(); const text = document.getElementById('helpModal').textContent; closeModal('helpModal'); return ['Workshop machines','active machine','Reference profile','historical','Archived','Duplicate','Merge','Replace','does not yet link'].every(fragment => text.includes(fragment)); })());
+        add('M1 root migration, Merge, Replace, mirror, and constants remain passing', runMultiMachineStorageFixtures().failed === 0 && STORAGE_KEY === 'genmitsu-l8-tracker-v1' && SCHEMA_VERSION === 2 && BACKUP_FORMAT === 'genmitsu-l8-tracker-backup-v1' && APP_ID === 'genmitsu-l8-tracker');
+        add('Manager uses native controls with no duplicate IDs and responsive header CSS', (() => { const ids = [...document.querySelectorAll('[id]')].map(element => element.id), style = document.querySelector('style')?.textContent || ''; return new Set(ids).size === ids.length && document.getElementById('activeMachineSelect')?.tagName === 'SELECT' && [...document.querySelectorAll('[data-machine-action], #addWorkshopMachine')].every(button => button.tagName === 'BUTTON') && /\.active-machine-control \{ width: 100%/.test(style); })());
+      } finally { restore(); }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Machine manager fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runMachineManagerFixtures = runMachineManagerFixtures;
+    function runMachineSetupFixtures() {
+      return runMachineSetupCompatibilityFixtures();
+    }
+    window.runMachineSetupFixtures = runMachineSetupFixtures;
+    function runMachineSetupCompatibilityFixtures() {
+      const results = [], add = (name, pass) => results.push({ name, pass:!!pass });
+      const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY), tabBefore = state.activeTab, dismissedBefore = firstRunOnboardingDismissed;
+      const modal = document.getElementById('machineModal'), modalSnapshot = { html:modal.innerHTML, open:modal.classList.contains('open'), aria:modal.getAttribute('aria-hidden') };
+      const restore = () => { Object.assign(state, JSON.parse(stateBefore)); if (storageBefore === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, storageBefore); state.activeTab = tabBefore; firstRunOnboardingDismissed = dismissedBefore; closeModal('machineModal'); modal.innerHTML = modalSnapshot.html; modal.classList.toggle('open', modalSnapshot.open); if (modalSnapshot.aria === null) modal.removeAttribute('aria-hidden'); else modal.setAttribute('aria-hidden', modalSnapshot.aria); render(); };
+      try {
+        add('machineIdentity retains the compatibility default shape', (() => { const identity = freshState().machineIdentity; return identity.name === '' && identity.workAreaWidthMm === null && identity.workAreaHeightMm === null; })());
+        add('currentMachineDisplayName retains its Genmitsu fallback', currentMachineDisplayName({ machineIdentity:{ name:'' }, machineProfile:'40W' }) === 'Genmitsu L8 40W');
+        Object.assign(state, freshState()); state.machines = [normalizeOwnedMachine({ id:'compat-active', name:'Bench Laser', manufacturer:'Maker', model:'Model', type:'diode', nominalPowerW:20, workAreaWidthMm:400, workAreaHeightMm:300, notes:'keep', futureField:'kept' })]; state.activeMachineId = 'compat-active'; synchronizeMachineIdentity(); state.activeTab = 'reference'; render();
+        add('Reference replaces the singleton editor with the Workshop machines manager', !!document.getElementById('workshopMachines') && !document.getElementById('machineSetupForm') && document.getElementById('addWorkshopMachine')?.tagName === 'BUTTON');
+        add('Manager presents the active owned machine separately from the Reference profile', document.getElementById('workshopMachines')?.textContent.includes('Bench Laser') && !!document.getElementById('machineProfile') && state.machineProfile === '20W');
+        openMachineForm('edit', 'compat-active'); const form = document.getElementById('machineForm'); form.elements.name.value = 'Edited Bench'; form.elements.workAreaWidthMm.value = '450'; form.elements.workAreaHeightMm.value = '350'; form.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
+        add('Manager edit preserves ID and additive fields while synchronizing the active mirror', state.machines[0].id === 'compat-active' && state.machines[0].manufacturer === 'Maker' && state.machines[0].futureField === 'kept' && state.machineIdentity.name === 'Edited Bench' && state.machineIdentity.workAreaWidthMm === 450);
+        openMachineForm('edit', 'compat-active'); const invalid = document.getElementById('machineForm'); invalid.elements.name.value = ''; invalid.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
+        add('Manager validation keeps state unchanged when a name is missing', state.machines[0].name === 'Edited Bench' && !document.getElementById('machineFormError').hidden); closeModal('machineModal');
+        const beforeRecords = JSON.stringify({ grids:state.grids, profiles:state.profiles, projects:state.projects }); openMachineForm('edit', 'compat-active'); const clear = document.getElementById('machineForm'); clear.elements.nominalPowerW.value = ''; clear.elements.workAreaWidthMm.value = ''; clear.elements.workAreaHeightMm.value = ''; clear.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
+        add('Editing optional fields clears only active-machine fields without rewriting records', state.machines[0].nominalPowerW === null && state.machineIdentity.workAreaWidthMm === null && JSON.stringify({ grids:state.grids, profiles:state.profiles, projects:state.projects }) === beforeRecords);
+        const backup = backupObject(); add('Backup retains M1 machine root fields and constants', backup.machines?.[0]?.id === 'compat-active' && backup.activeMachineId === 'compat-active' && backup.machineIdentity.name === 'Edited Bench' && backup.app === APP_ID && backup.backupFormat === BACKUP_FORMAT && backup.schemaVersion === SCHEMA_VERSION);
+        const svgBefore = buildDesignResult(designDefaults()).svg; state.machines[0].name = 'Another name'; synchronizeMachineIdentity(); const svgAfter = buildDesignResult(designDefaults()).svg;
+        add('Compatibility mirror changes remain neutral to Designs production bytes', svgBefore === svgAfter);
+        add('Machine root persistence stays under the existing storage key', (() => { persist(); const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); return stored.machines?.[0]?.id === 'compat-active' && stored.activeMachineId === 'compat-active' && localStorage.getItem(STORAGE_KEY + '-machine') === null; })());
+        add('M1 migration fixtures remain passing', runMultiMachineStorageFixtures().failed === 0);
+        const checks = [
+          ['Owned display uses a friendly name', ownedMachineDisplayName({ name:'  Rig  ' }) === 'Rig'],
+          ['Owned display keeps blank migrated machines honest', ownedMachineDisplayName({ name:'' }) === 'Unnamed workshop machine'],
+          ['Diode type label is readable', machineTypeLabel('diode') === 'Diode'],
+          ['CO₂ type label is readable', machineTypeLabel('co2') === 'CO₂'],
+          ['Fiber type label is readable', machineTypeLabel('fiber') === 'Fiber'],
+          ['Other type label is readable', machineTypeLabel('other') === 'Other'],
+          ['Known work area has a human-readable summary', machineWorkAreaLabel({ workAreaWidthMm:400, workAreaHeightMm:300 }).includes('400 × 300 mm')],
+          ['Incomplete work area has no fabricated summary', machineWorkAreaLabel({ workAreaWidthMm:400, workAreaHeightMm:null }) === ''],
+          ['Owned-machine lookup finds a stable ID', machineById('compat-active')?.id === 'compat-active'],
+          ['Owned-machine lookup is safe for blank IDs', machineById('') === null],
+          ['Active resolution retains a valid live machine', resolveActiveMachineId(state.machines, 'compat-active') === 'compat-active'],
+          ['Active resolution falls back safely when an ID is missing', resolveActiveMachineId(state.machines, 'missing') === 'compat-active'],
+          ['Active mirror contains the active name', machineIdentityForActiveMachine(state.machines, 'compat-active', {}).name === state.machines[0].name],
+          ['Active mirror does not copy advanced fields', !('manufacturer' in machineIdentityForActiveMachine(state.machines, 'compat-active', {}))],
+          ['Legacy root migration retains the fixed stable ID', machineRootFromData({ machineIdentity:{ name:'Legacy' } }).machines[0].id === 'legacy-workshop-machine'],
+          ['Explicit empty machine roots do not recreate legacy machines', machineRootFromData({ machines:[], machineIdentity:{ name:'Staging' } }).machines.length === 0],
+          ['Machine normalization accepts the approved laser-type allowlist', ['diode','co2','fiber','other'].every(type => normalizeOwnedMachine({ id:type, type }).type === type)],
+          ['Machine normalization bounds invalid power safely', normalizeOwnedMachine({ id:'power', nominalPowerW:'bad' }).nominalPowerW === null],
+          ['Machine normalization trims editable text fields', (() => { const item = normalizeOwnedMachine({ id:'trim', name:' Name ', manufacturer:' Maker ', model:' Model ', notes:' Note ' }); return item.name === 'Name' && item.manufacturer === 'Maker' && item.model === 'Model' && item.notes === 'Note'; })()],
+          ['Machine normalization preserves additive fields', normalizeOwnedMachine({ id:'future', futureCapability:'kept' }).futureCapability === 'kept'],
+          ['Machine normalization drops blank stable IDs', normalizeOwnedMachine({ id:' ' }) === null],
+          ['Machine collection keeps first duplicate ID', normalizeMachines([{ id:'same', name:'First' }, { id:'same', name:'Second' }])[0].name === 'First'],
+          ['Current Machine manager has no competing visible singleton editor', !document.getElementById('machineSetupForm')],
+          ['Header selector is a native select when a machine exists', document.getElementById('activeMachineSelect')?.tagName === 'SELECT'],
+          ['Header Manage machines action is a native button', document.getElementById('manageMachinesHeader')?.tagName === 'BUTTON'],
+          ['Reference selector remains a native select', document.getElementById('machineProfile')?.tagName === 'SELECT'],
+          ['Reference profile is not inferred from owned-machine type', state.machineProfile === '20W'],
+          ['No known record reference exists without an exact machineId', machineReferencePaths('compat-active').length === 0],
+          ['Name-like legacy snapshots do not create a machine reference', (() => { state.grids = [{ machine:{ label:state.machines[0].name } }]; const result = machineReferencePaths('compat-active').length === 0; state.grids = []; return result; })()],
+          ['Machines alone remain excluded from first-run eligibility', isFirstRunWorkspaceEmpty({ ...freshState(), machines:[{ id:'one' }], activeMachineId:'one' })],
+          ['Backup keeps machineProfile separate from activeMachineId', backupObject().machineProfile === state.machineProfile && backupObject().activeMachineId === state.activeMachineId],
+          ['Storage constants retain their M1 values', STORAGE_KEY === 'genmitsu-l8-tracker-v1' && SCHEMA_VERSION === 2 && BACKUP_FORMAT === 'genmitsu-l8-tracker-backup-v1'],
+          ['APP identity constants remain unchanged', APP_ID === 'genmitsu-l8-tracker' && APP_NAME === 'Genmitsu L8 Tracker' && APP_VERSION === '0.9.0' && BUILD_DATE === '2026-07-19'],
+          ['Add modal has all structured fields', (() => { openMachineForm('add'); const current = document.getElementById('machineForm'); const result = ['name','manufacturer','model','type','nominalPowerW','workAreaWidthMm','workAreaHeightMm','notes'].every(name => !!current.elements[name]); closeModal('machineModal'); return result; })()],
+          ['Add modal uses native laser-type choices', (() => { openMachineForm('add'); const choices = [...document.querySelectorAll('#machineForm [name=type] option')].map(option => option.value).join('|'); closeModal('machineModal'); return choices === 'diode|co2|fiber|other'; })()],
+          ['Edit modal preserves the archived state outside form fields', (() => { openMachineForm('edit', 'compat-active'); const result = !document.querySelector('#machineForm [name=archived]'); closeModal('machineModal'); return result; })()],
+          ['Duplicate modal proposes a distinct readable name', (() => { openMachineForm('duplicate', 'compat-active'); const value = document.getElementById('machineForm').elements.name.value; closeModal('machineModal'); return value.includes('copy'); })()],
+          ['Machine forms retain modal accessibility semantics', (() => { openMachineForm('edit', 'compat-active'); const dialog = modalDialog(document.getElementById('machineModal')); const result = dialog?.getAttribute('role') === 'dialog' && dialog.getAttribute('aria-modal') === 'true'; closeModal('machineModal'); return result; })()],
+          ['Machine manager search is intentionally session-only', !Object.keys(freshState()).some(key => /machineManagerSearch|machineManagerShowArchived/.test(key)) && !Object.keys(backupObject()).some(key => /machineManagerSearch|machineManagerShowArchived/.test(key))]
+        ];
+        checks.forEach(([name, pass]) => add(name, pass));
       } finally { restore(); }
       const passed = results.filter(result => result.pass).length, failed = results.length - passed;
       console.group('Machine setup fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
       return { passed, failed, results };
     }
-    window.runMachineSetupFixtures = runMachineSetupFixtures;
     function runModalAccessibilityFixtures() {
       const results = [], add = (name, pass) => results.push({ name, pass:!!pass });
       const modalIds = [...document.querySelectorAll('.modal')].map(modal => modal.id), snapshots = Object.fromEntries(modalIds.map(id => { const modal = document.getElementById(id); return [id, { html:modal.innerHTML, open:modal.classList.contains('open'), aria:modal.getAttribute('aria-hidden') }]; }));
@@ -1009,8 +1145,8 @@
         document.getElementById('tab-log').focus(); key(document.getElementById('tab-log'), '/');
         add('Slash still focuses the active search from a primary tab', document.activeElement === document.getElementById('search'));
         setTab('reference');
-        const machineForm = document.getElementById('machineSetupForm');
-        add('Machine setup fields keep their accessible nested labels', ['machineName', 'machineWorkAreaWidth', 'machineWorkAreaHeight'].every(id => document.getElementById(id)?.closest('label')) && !!machineForm);
+        const activeMachineControl = document.getElementById('activeMachineControls');
+        add('Active-machine selector and manager action keep accessible native controls', !!activeMachineControl && document.getElementById('manageMachinesHeader')?.tagName === 'BUTTON' && (!document.getElementById('activeMachineSelect') || document.getElementById('activeMachineSelect')?.closest('label')?.textContent.includes('Active machine')));
         add('Reference Help remains a named button', document.getElementById('openReferenceHelp')?.tagName === 'BUTTON' && /help/i.test(document.getElementById('openReferenceHelp')?.textContent || ''));
         add('First-run actions remain real buttons when the welcome panel is eligible', (() => { const prior = JSON.stringify(state); Object.assign(state, freshState()); firstRunOnboardingDismissed = false; state.activeTab = 'log'; render(); const buttons = ['firstRunLogJob', 'firstRunPlanGrid', 'firstRunOpenReference', 'firstRunDismissOnboarding'].every(id => document.getElementById(id)?.tagName === 'BUTTON'); Object.assign(state, JSON.parse(prior)); firstRunOnboardingDismissed = dismissedBefore; render(); return buttons; })());
         add('The document has no duplicate IDs after tab renders', (() => { const ids = [...document.querySelectorAll('[id]')].map(element => element.id); return new Set(ids).size === ids.length; })());
@@ -1072,9 +1208,9 @@
         openHelp(); const helpDialog = modalDialog(document.getElementById('helpModal'));
         add('Help content has no fixed width exceeding the viewport', helpDialog.getBoundingClientRect().width <= window.innerWidth && getComputedStyle(helpDialog).overflowY === 'auto');
         closeModal('helpModal'); state.activeTab = 'reference'; render();
-        const machineForm = document.getElementById('machineSetupForm');
-        add('Machine setup remains labelled', ['machineName','machineWorkAreaWidth','machineWorkAreaHeight'].every(id => document.getElementById(id)?.closest('label')) && !!machineForm);
-        add('Machine setup form follows the responsive one-column contract', !narrow || getComputedStyle(machineForm.querySelector('.formgrid')).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length === 1);
+        const machineManager = document.getElementById('workshopMachines');
+        add('Workshop machines manager remains labelled and reachable', !!machineManager && !!document.getElementById('addWorkshopMachine') && !!document.getElementById('machineManagerSearch'));
+        add('Workshop machine controls follow the responsive wrapping contract', !narrow || getComputedStyle(machineManager.querySelector('.toolbar')).flexWrap === 'wrap');
         const referenceTableRegion = document.querySelector('.tablewrap'); updateHorizontalScrollRegions();
         add('Reference tables retain a bounded local scroll region', !!referenceTableRegion && getComputedStyle(referenceTableRegion).overflowX === 'auto' && referenceTableRegion.getBoundingClientRect().width <= window.innerWidth);
         state.entries = [{ ...formDefaults('entry'), id:'responsive-entry', material:'Very long responsive fixture material name for a narrow result surface', notes:'A multi-word note that verifies cards and controls wrap without changing stored fixture data.', software:'LightBurn', settingsFile:'very-long-responsive-fixture-settings-file-name.lbrn2' }]; state.activeTab = 'log'; render();
@@ -1514,10 +1650,11 @@
       openModal('helpModal', `<div class="dialog"><div class="spread"><h2>Help &amp; Safety</h2><button type="button" data-close aria-label="Close Help and Safety">&times;</button></div>
         <section class="panel" style="margin-top:12px"><h3>About this Tracker</h3><p class="small">${esc(APP_NAME)} v${esc(APP_VERSION)} · Build ${esc(BUILD_DATE)} · Storage schema ${esc(SCHEMA_VERSION)} · Backup format ${esc(BACKUP_FORMAT)}.</p><p class="small muted">It works offline when opened directly from <code>index.html</code>. Records stay in this browser; there is no account, cloud synchronization, or remote recovery.</p></section>
         <section class="panel" style="margin-top:10px"><h3>Your data and backups</h3><p class="small">Export saves Tracker records as a JSON backup. Export regularly; it is not automatic. Import can merge a supported backup or replace the current workspace, so review Replace carefully. Backups from a newer unsupported schema are refused rather than silently downgraded.</p><p class="small muted">Browser data can be cleared, lost, or become inaccessible. Project photos use much more browser storage than text records. Use the existing storage warning and recovery tools if saved data cannot be read; Tracker backups do not include external LightBurn files, source images, or PDFs. If an original related record is unavailable, Tracker keeps any saved historical snapshot and labels the reference unavailable; importing a backup that contains the original may restore the link, but Tracker does not recreate or reassign records automatically.</p></section>
+        <section class="panel" style="margin-top:10px"><h3>Workshop machines</h3><p class="small">Workshop machines are equipment you own or use. Choose the active machine from the header and add, edit, duplicate, archive, restore, or delete unused non-active machines in Reference. Duplicate machines are separate physical units with distinct names and identities. Archived machines remain available for historical context.</p><p class="small muted">The Genmitsu L8 Reference profile only chooses bundled manufacturer starting-point tables; it is separate from the active workshop machine. Switching affects current workshop context, not saved historical records. Merge keeps local machines and active selection while adding unique imported IDs; Replace restores the backup machine list. M2 does not yet link existing Tests, settings, evidence, Projects, or Designs to owned-machine IDs.</p></section>
         <section class="panel" style="margin-top:10px"><h3>Test Grids and Material Tests</h3><ol class="small"><li>Use a <b>Test Grid</b> to compare many speed and power combinations at once.</li><li>Choose a promising result or a <b>winner</b>: the result you selected as best, not an automatic guarantee.</li><li>Use a <b>Material Test</b> to confirm, refine, or document one setting for a Library material.</li><li>The saved result becomes <b>evidence</b>: a saved result supporting why a setting is trusted.</li><li><b>Promotion</b> is a deliberate review that can make supported evidence a preferred proven production setting; it never proves physical safety or material suitability automatically.</li></ol><p class="small muted">Manufacturer and Reference values are starting points, not proof. A proven production setting remains evidence for its recorded material, machine, and conditions.</p></section>
         <section class="panel" style="margin-top:10px"><h3>Using Designs with LightBurn</h3><ol class="small"><li>Generate and preview the design here, then download its production SVG.</li><li>Import it into LightBurn and keep it at <b>100% scale</b>.</li><li>Verify units and finished dimensions, assign suitable engraving and cutting operations, then frame the job and confirm placement before running it.</li></ol><p class="small muted">The Tracker creates geometry; it does not send jobs to the laser. Rescaling changes physical dimensions and fit. Kerf, clearance, thickness, coatings, glue layers, flatness, moisture, and machine variation affect results. Previews do not guarantee fit, strength, or final appearance; use material tests and fit coupons when results matter.</p></section>
         <section class="panel" style="margin-top:10px;background:#fff8e7;border-color:#ead59f"><h3>Laser safety</h3><ul class="small"><li>Maintain active ventilation and fume extraction, keep an active fire watch, never leave the laser unattended, and keep suitable fire suppression nearby.</li><li>Confirm focus; keep material flat and secure; frame or preview the job; keep optics and the work area clean; and use controlled air assist appropriate to the operation and material.</li><li>Verify the exact material and coating composition before lasering. Do not laser PVC, vinyl, chlorinated plastics, mystery plastics, unidentified materials, or unknown coatings.</li><li>Use additional caution with fiberglass, carbon fiber, reflective surfaces, coated metals, foams, leather, adhesives, and composite materials. “Laserable” marketing does not replace composition checks and safe ventilation requirements.</li></ul></section>
-        <section class="panel" style="margin-top:10px"><h3>Starting points and physical validation</h3><p class="small">Manufacturer and Reference values are starting points, not guarantees. Material batches, color, coatings, glue, moisture, flatness, focus, lens condition, ventilation, and machine variation all affect results. Run material tests when settings are unproven, and physically validate cutting, fit, strength, and finish on the actual material. Experimental generators retain their specific warnings.</p><p class="small muted">Current workshop machine identifies your actual machine and its work area is advisory only. Genmitsu L8 Reference profile selects which bundled manufacturer starting-point table is displayed. Each Test Grid records the machine identity associated with that test. These are separate concepts. The work area does not resize SVGs, perform nesting, guarantee bed fit, control the machine, or change Reference settings. It does not change specifically Genmitsu L8 starting points.</p></section>
+        <section class="panel" style="margin-top:10px"><h3>Starting points and physical validation</h3><p class="small">Manufacturer and Reference values are starting points, not guarantees. Material batches, color, coatings, glue, moisture, flatness, focus, lens condition, ventilation, and machine variation all affect results. Run material tests when settings are unproven, and physically validate cutting, fit, strength, and finish on the actual material. Experimental generators retain their specific warnings.</p><p class="small muted">Your active workshop machine identifies current equipment context and its work area is advisory only. The Genmitsu L8 Reference profile selects which bundled manufacturer starting-point table is displayed. Existing Test Grids retain their saved machine snapshots. These are separate concepts. The work area does not resize SVGs, perform nesting, guarantee bed fit, control the machine, or change Reference settings. It does not change specifically Genmitsu L8 starting points.</p></section>
         <section class="panel" style="margin-top:10px"><h3>Documentation</h3><div class="actions"><a href="README.md" target="_blank" rel="noopener">Open README</a><a href="docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf" target="_blank" rel="noopener">Open bundled user manual</a></div></section>
         <div class="actions" style="margin-top:12px"><button type="button" data-close>Close Help</button></div></div>`);
       bindModal('helpModal');
@@ -1604,6 +1741,7 @@
     function render() {
       document.body.dataset.activeTab = state.activeTab;
       renderTabs();
+      renderHeaderMachineControls();
       document.getElementById('unitIn').className = state.unit === 'in' ? 'primary' : '';
       document.getElementById('unitMm').className = state.unit === 'mm' ? 'primary' : '';
       renderStorageRecoveryPanel();
@@ -5671,10 +5809,133 @@
       return { passed, failed, results };
     }
     window.runDesignGeometryFixtures = runDesignGeometryFixtures;
+    function filteredWorkshopMachines() {
+      const query = machineManagerSearch.trim().toLowerCase();
+      return normalizeMachines(state.machines).filter(machine => {
+        if (!machineManagerShowArchived && machine.archived) return false;
+        const haystack = [machine.name, machine.manufacturer, machine.model, machine.type, machine.notes].join(' ').toLowerCase();
+        return !query || haystack.includes(query);
+      });
+    }
+    function machineSummaryHtml(machine) {
+      const details = [];
+      if (machine.manufacturer || machine.model) details.push(`${machine.manufacturer || ''}${machine.manufacturer && machine.model ? ' ' : ''}${machine.model || ''}`);
+      details.push(machineTypeLabel(machine.type));
+      if (machine.nominalPowerW != null) details.push(`${machine.nominalPowerW} W nominal`);
+      const workArea = machineWorkAreaLabel(machine); if (workArea) details.push(workArea);
+      return details.map(detail => `<span class="small muted">${esc(detail)}</span>`).join('');
+    }
+    function renderWorkshopMachinesManager() {
+      const machines = normalizeMachines(state.machines), visible = filteredWorkshopMachines();
+      const availableCount = machines.filter(machine => !machine.archived).length, archivedCount = machines.length - availableCount;
+      const active = machineById(state.activeMachineId, machines);
+      const card = machine => {
+        const isActive = machine.id === state.activeMachineId, references = machineReferencePaths(machine.id), deleteAllowed = !isActive && references.length === 0;
+        return `<article class="panel machine-card ${isActive ? 'active-machine' : ''} ${machine.archived ? 'archived-machine' : ''}" aria-label="${esc(ownedMachineDisplayName(machine))}${isActive ? ', active machine' : ''}${machine.archived ? ', archived machine' : ''}">
+          <div class="spread"><div><b>${esc(ownedMachineDisplayName(machine))}</b><div class="machine-meta">${machineSummaryHtml(machine)}</div></div><div class="small">${isActive ? '<span class="pill">Active machine</span>' : ''}${machine.archived ? ' <span class="pill warn">Archived</span>' : ''}</div></div>
+          ${machine.notes ? `<div class="small muted" style="margin-top:7px;overflow-wrap:anywhere">${esc(machine.notes)}</div>` : ''}
+          <div class="actions" style="margin-top:10px">
+            ${!isActive && !machine.archived ? `<button type="button" data-machine-action="activate" data-machine-id="${esc(machine.id)}">Set ${esc(ownedMachineDisplayName(machine))} active</button>` : ''}
+            <button type="button" data-machine-action="edit" data-machine-id="${esc(machine.id)}">Edit ${esc(ownedMachineDisplayName(machine))}</button>
+            <button type="button" data-machine-action="duplicate" data-machine-id="${esc(machine.id)}">Duplicate ${esc(ownedMachineDisplayName(machine))}</button>
+            ${machine.archived ? `<button type="button" data-machine-action="restore" data-machine-id="${esc(machine.id)}">Restore ${esc(ownedMachineDisplayName(machine))}</button>` : `<button type="button" data-machine-action="archive" data-machine-id="${esc(machine.id)}" ${isActive ? 'disabled title="Switch to another machine before archiving this one."' : ''}>Archive ${esc(ownedMachineDisplayName(machine))}</button>`}
+            <button type="button" class="danger" data-machine-action="delete" data-machine-id="${esc(machine.id)}" ${deleteAllowed ? '' : `disabled title="${isActive ? 'Active machines cannot be deleted.' : 'Machines referenced by records are archive-only.'}"`}>Delete ${esc(ownedMachineDisplayName(machine))}</button>
+          </div>
+        </article>`;
+      };
+      return `<section class="panel" id="workshopMachines" style="margin-bottom:14px" aria-labelledby="workshopMachinesHeading">
+        <div class="toolbar"><div><h3 id="workshopMachinesHeading" style="margin:0 0 4px;font-size:16px">Workshop machines</h3><div class="small muted">Workshop machines are equipment you actually own or use. The active machine supplies current workshop context. The Genmitsu L8 Reference profile below only selects bundled manufacturer starting-point tables. Switching the active machine does not rewrite historical records; later phases may attach owned-machine IDs while preserving their original snapshots.</div></div><button type="button" class="primary" id="addWorkshopMachine">Add workshop machine</button></div>
+        <div class="toolbar" style="margin-top:12px"><div class="small"><b>${availableCount}</b> available machine${availableCount === 1 ? '' : 's'}${archivedCount ? ` · <b>${archivedCount}</b> archived` : ''}${active ? ` · Active: ${esc(ownedMachineDisplayName(active))}` : ''}</div><div class="row"><label style="display:grid;gap:2px;font-size:12px">Search machines<input id="machineManagerSearch" type="search" value="${esc(machineManagerSearch)}" placeholder="Name, model, type, notes"></label><label class="row small"><input id="machineManagerShowArchived" type="checkbox" ${machineManagerShowArchived ? 'checked' : ''} style="width:auto"> Show archived</label></div></div>
+        ${machines.length === 0 ? `<div class="empty" style="margin-top:12px"><b>No workshop machines configured</b><div class="small muted">Adding one is optional. You can still use every Tracker section and view the separate Genmitsu Reference profile.</div><div class="actions"><button type="button" class="primary" data-machine-action="add">Add workshop machine</button></div></div>` : visible.length ? `<div class="machine-list" style="margin-top:12px">${visible.map(card).join('')}</div>` : `<div class="empty" style="margin-top:12px"><b>No workshop machines match these filters</b><div class="small muted">Clear the search or show archived machines to review the rest of this workshop.</div></div>`}
+      </section>`;
+    }
+    function setActiveWorkshopMachine(machineId) {
+      if (machineModalHasUnsavedChanges()) { showInfoToast('Save or cancel the open machine form before switching machines.'); renderHeaderMachineControls(); bindHeaderMachineControls(); return false; }
+      const machine = machineById(machineId, state.machines);
+      if (!machine || machine.archived) { showInfoToast('Archived machines must be restored before they can become active.'); renderHeaderMachineControls(); bindHeaderMachineControls(); return false; }
+      if (machine.id === state.activeMachineId) return true;
+      state.activeMachineId = machine.id;
+      synchronizeMachineIdentity();
+      if (!persist()) return false;
+      render();
+      return true;
+    }
+    function openMachineForm(mode, sourceId = '') {
+      const source = sourceId ? machineById(sourceId, state.machines) : null;
+      if ((mode === 'edit' || mode === 'duplicate') && !source) return false;
+      machineModalMode = 'form'; machineModalOperation = mode; machineModalSourceId = sourceId;
+      const sourceName = ownedMachineDisplayName(source);
+      const data = mode === 'add' ? { name:'', manufacturer:'', model:'', type:'diode', nominalPowerW:null, workAreaWidthMm:null, workAreaHeightMm:null, notes:'' } : { ...source, name:mode === 'duplicate' ? `${source.name || 'Unnamed workshop machine'} copy` : source.name };
+      const isFirst = !normalizeMachines(state.machines).length;
+      const title = mode === 'edit' ? `Edit ${sourceName}` : mode === 'duplicate' ? `Duplicate ${sourceName}` : 'Add workshop machine';
+      openModal('machineModal', `<div class="dialog"><div class="spread"><div><h2>${esc(title)}</h2><div class="small muted">${mode === 'duplicate' ? 'A duplicate is a new physical machine with a new stable identity. Give it a distinct name.' : 'Names identify the physical machine you actually own or use. Two identical machines should still have distinct names.'}</div></div><button type="button" data-close aria-label="Cancel machine form">&times;</button></div><form id="machineForm" class="formgrid" style="margin-top:12px">
+        <label class="span2">Friendly name<input name="name" maxlength="120" autocomplete="off" required value="${esc(data.name || '')}" placeholder="e.g. L8 Workshop"></label>
+        <label>Manufacturer<input name="manufacturer" maxlength="120" autocomplete="off" value="${esc(data.manufacturer || '')}"></label>
+        <label>Model<input name="model" maxlength="120" autocomplete="off" value="${esc(data.model || '')}"></label>
+        <label>Laser type<select name="type" required>${[['diode','Diode'],['co2','CO₂'],['fiber','Fiber'],['other','Other']].map(([value,label]) => `<option value="${value}" ${data.type === value ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+        <label>Nominal power (W)<input name="nominalPowerW" type="number" step="any" min="0" inputmode="decimal" value="${data.nominalPowerW == null ? '' : esc(data.nominalPowerW)}"><span class="small muted">Optional; nominal power is not universal cutting capacity.</span></label>
+        <label>Usable work-area width (mm)<input name="workAreaWidthMm" type="number" step="any" min="0" inputmode="decimal" value="${data.workAreaWidthMm == null ? '' : esc(data.workAreaWidthMm)}"></label>
+        <label>Usable work-area height (mm)<input name="workAreaHeightMm" type="number" step="any" min="0" inputmode="decimal" value="${data.workAreaHeightMm == null ? '' : esc(data.workAreaHeightMm)}"></label>
+        <label class="span2">Notes<textarea name="notes" rows="3">${esc(data.notes || '')}</textarea></label>
+        ${mode !== 'edit' ? `<label class="span2 row"><input type="checkbox" name="setActive" ${isFirst ? 'checked disabled' : ''} style="width:auto"> ${isFirst ? 'This first workshop machine will become active.' : 'Set this machine as active after saving'}</label>` : ''}
+        <p id="machineFormError" class="span2" role="alert" hidden style="color:var(--red);margin:0"></p>
+        <div class="span2 modal-actions"><button type="button" data-close>Cancel</button><button class="primary">Save machine</button></div></form></div>`);
+      const form = document.getElementById('machineForm'); machineModalInitial = machineFormSnapshot(form);
+      form.oninput = form.onchange = () => {};
+      form.onsubmit = event => { event.preventDefault(); saveMachineForm(event.currentTarget); };
+      bindModal('machineModal');
+      return true;
+    }
+    function saveMachineForm(form) {
+      const error = form.querySelector('#machineFormError'), showError = message => { error.textContent = message; error.hidden = false; };
+      const name = String(form.elements.name?.value || '').trim(), manufacturer = String(form.elements.manufacturer?.value || '').trim(), model = String(form.elements.model?.value || '').trim(), notes = String(form.elements.notes?.value || '').trim(), type = String(form.elements.type?.value || '').trim();
+      const powerRaw = String(form.elements.nominalPowerW?.value || '').trim(), widthRaw = String(form.elements.workAreaWidthMm?.value || '').trim(), heightRaw = String(form.elements.workAreaHeightMm?.value || '').trim();
+      if (!name) { showError('Enter a friendly name before saving this workshop machine.'); return false; }
+      if (!['diode','co2','fiber','other'].includes(type)) { showError('Choose a supported laser type.'); return false; }
+      const power = powerRaw === '' ? null : Number(powerRaw);
+      if (powerRaw !== '' && !(Number.isFinite(power) && power > 0)) { showError('Nominal power must be a number greater than zero when supplied.'); return false; }
+      if ((widthRaw === '') !== (heightRaw === '')) { showError('Enter both usable work-area dimensions or leave both blank.'); return false; }
+      const width = widthRaw === '' ? null : Number(widthRaw), height = heightRaw === '' ? null : Number(heightRaw);
+      if (widthRaw !== '' && (!(Number.isFinite(width) && width > 0) || !(Number.isFinite(height) && height > 0))) { showError('Usable work-area width and height must each be numbers greater than zero.'); return false; }
+      const source = machineModalSourceId ? machineById(machineModalSourceId, state.machines) : null, mode = machineModalOperation;
+      if ((mode === 'edit' || mode === 'duplicate') && !source) { showError('This machine is no longer available. Close the form and try again.'); return false; }
+      const record = normalizeOwnedMachine({ ...(mode === 'add' ? {} : source), id:mode === 'edit' ? source.id : uid(), name, manufacturer, model, type, nominalPowerW:power, workAreaWidthMm:width, workAreaHeightMm:height, notes, archived:mode === 'edit' ? source.archived : false });
+      const setActive = mode !== 'edit' && (!normalizeMachines(state.machines).length || !!form.elements.setActive?.checked);
+      if (mode === 'edit') state.machines = state.machines.map(machine => machine.id === source.id ? record : machine);
+      else state.machines = [...normalizeMachines(state.machines), record];
+      if (setActive) state.activeMachineId = record.id;
+      synchronizeMachineIdentity();
+      if (!persist()) return false;
+      closeModal('machineModal'); showInfoToast(`Workshop machine ${mode === 'edit' ? 'saved' : 'added'}.`); render();
+      return true;
+    }
+    function openMachineConfirmation(action, machineId) {
+      const machine = machineById(machineId, state.machines); if (!machine) return false;
+      const references = machineReferencePaths(machine.id);
+      if (action === 'archive' && machine.id === state.activeMachineId) { showInfoToast('Switch to another active machine before archiving this one.'); return false; }
+      if (action === 'delete' && (machine.id === state.activeMachineId || references.length)) { showInfoToast(machine.id === state.activeMachineId ? 'Active machines cannot be deleted.' : 'This machine is referenced and can only be archived.'); return false; }
+      machineModalMode = `confirm-${action}`; machineModalOperation = ''; machineModalSourceId = machine.id; machineModalInitial = '';
+      const title = action === 'archive' ? `Archive ${ownedMachineDisplayName(machine)}?` : `Delete ${ownedMachineDisplayName(machine)} permanently?`;
+      const copy = action === 'archive' ? 'Archiving removes this machine from ordinary active choices but keeps its stored details. It does not change historical records.' : 'Permanent deletion cannot be undone through the normal UI. It removes only this unused, non-active machine and does not rewrite records.';
+      openModal('machineModal', `<div class="dialog"><div class="spread"><h2>${esc(title)}</h2><button type="button" data-close aria-label="Cancel ${action}">&times;</button></div><p class="small">${copy}</p><div class="modal-actions"><button type="button" data-close>Cancel</button><button type="button" class="${action === 'delete' ? 'danger' : 'primary'}" id="confirmMachineAction">${action === 'archive' ? 'Archive machine' : 'Delete machine'}</button></div></div>`);
+      document.getElementById('confirmMachineAction').onclick = () => performMachineConfirmation(action, machine.id);
+      bindModal('machineModal'); return true;
+    }
+    function performMachineConfirmation(action, machineId) {
+      const machine = machineById(machineId, state.machines); if (!machine) return false;
+      if (action === 'archive') { if (machine.id === state.activeMachineId) return false; state.machines = state.machines.map(item => item.id === machine.id ? { ...item, archived:true } : item); }
+      if (action === 'delete') { if (machine.id === state.activeMachineId || machineReferencePaths(machine.id).length) return false; state.machines = state.machines.filter(item => item.id !== machine.id); }
+      synchronizeMachineIdentity(); if (!persist()) return false;
+      closeModal('machineModal'); showInfoToast(action === 'archive' ? 'Workshop machine archived.' : 'Workshop machine deleted.'); render(); return true;
+    }
+    function restoreWorkshopMachine(machineId) {
+      const machine = machineById(machineId, state.machines); if (!machine || !machine.archived) return false;
+      state.machines = state.machines.map(item => item.id === machine.id ? { ...item, archived:false } : item);
+      if (!persist()) return false; showInfoToast('Workshop machine restored.'); render(); return true;
+    }
     function renderReference() {
       const focusText = focusSuggestion(state.focusJobType, num(state.focusMaterialMm, NaN));
       const activeRows = state.machineProfile === '40W' ? reference40w : reference20w;
-      const machineIdentity = normalizeMachineIdentity(state.machineIdentity);
       return `
         <div class="toolbar" style="margin-bottom:14px">
           <div>
@@ -5692,24 +5953,7 @@
             <a href="docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf" target="_blank" rel="noopener"><button type="button">Open Manual</button></a>
           </div>
         </div>
-        <form class="panel" id="machineSetupForm" style="margin-bottom:14px" aria-labelledby="machineSetupHeading">
-          <h3 id="machineSetupHeading" style="margin:0 0 4px;font-size:16px">Current workshop machine</h3>
-          <p class="small muted" style="margin:0 0 10px">Optional. Name the laser you actually use and the usable work area you intend to stay within. This is advisory only: it does not resize designs, perform nesting, guarantee bed fit, control the machine, or change the Genmitsu L8 Reference profile above. A custom name here does not imply your machine is a Genmitsu. Current workshop machine identifies your actual machine; the Reference profile selects a bundled starting-point table; each Test Grid records the machine associated with that test.</p>
-          <div class="formgrid">
-            <label class="span2">Machine name (optional)
-              <input type="text" id="machineName" maxlength="120" autocomplete="off" placeholder="e.g. My diode laser" value="${esc(machineIdentity.name)}">
-            </label>
-            <label>Usable work-area width (mm)
-              <input type="number" id="machineWorkAreaWidth" step="any" min="0" inputmode="decimal" placeholder="e.g. 400" value="${machineIdentity.workAreaWidthMm == null ? '' : esc(machineIdentity.workAreaWidthMm)}">
-            </label>
-            <label>Usable work-area height (mm)
-              <input type="number" id="machineWorkAreaHeight" step="any" min="0" inputmode="decimal" placeholder="e.g. 400" value="${machineIdentity.workAreaHeightMm == null ? '' : esc(machineIdentity.workAreaHeightMm)}">
-            </label>
-          </div>
-          <p class="small muted" style="margin:8px 0 0">Work area is stored in millimeters — the usable X/Y travel you intend to work within, not the machine's outside footprint — even when the app unit toggle shows inches. Enter both dimensions or leave both blank to clear the configured work area.</p>
-          <p class="small" id="machineSetupError" role="alert" hidden style="color:var(--red);margin:8px 0 0"></p>
-          <div class="actions"><button type="submit" class="primary" id="saveMachineSetup">Save machine setup</button></div>
-        </form>
+        ${renderWorkshopMachinesManager()}
         ${state.machineProfile === '20W' ? `<div class="panel" style="margin-bottom:16px">
           <div class="toolbar">
             <div>
@@ -5745,39 +5989,6 @@
         </div>
         ${referenceTable(`Genmitsu L8 ${state.machineProfile} official starting points`, activeRows, state.machineProfile)}
       `;
-    }
-    function saveMachineSetup(form) {
-      if (!form) return false;
-      const nameInput = form.querySelector('#machineName');
-      const widthInput = form.querySelector('#machineWorkAreaWidth');
-      const heightInput = form.querySelector('#machineWorkAreaHeight');
-      const errorEl = form.querySelector('#machineSetupError');
-      const showError = message => { if (errorEl) { errorEl.textContent = message; errorEl.hidden = false; } };
-      const rawWidth = (widthInput?.value || '').trim();
-      const rawHeight = (heightInput?.value || '').trim();
-      const bothBlank = rawWidth === '' && rawHeight === '';
-      const bothFilled = rawWidth !== '' && rawHeight !== '';
-      if (!bothBlank && !bothFilled) { showError('Enter both a usable work-area width and height, or leave both blank to clear them.'); return false; }
-      let width = null, height = null;
-      if (bothFilled) {
-        width = Number(rawWidth); height = Number(rawHeight);
-        if (!(Number.isFinite(width) && width > 0) || !(Number.isFinite(height) && height > 0)) { showError('Work-area width and height must each be a number greater than zero, in millimeters.'); return false; }
-      }
-      const identity = normalizeMachineIdentity({ name: (nameInput?.value || '').trim(), workAreaWidthMm: width, workAreaHeightMm: height });
-      const active = machineById(resolveActiveMachineId(state.machines, state.activeMachineId), state.machines);
-      if (active) {
-        state.machines = state.machines.map(machine => machine.id === active.id ? { ...machine, name:identity.name, workAreaWidthMm:identity.workAreaWidthMm, workAreaHeightMm:identity.workAreaHeightMm } : machine);
-        state.activeMachineId = active.id;
-      } else {
-        const machine = normalizeOwnedMachine({ id:uid(), name:identity.name, manufacturer:'', model:'', type:'diode', nominalPowerW:null, workAreaWidthMm:identity.workAreaWidthMm, workAreaHeightMm:identity.workAreaHeightMm, notes:'', archived:false });
-        state.machines = [...normalizeMachines(state.machines), machine];
-        state.activeMachineId = machine.id;
-      }
-      state.machineIdentity = machineIdentityForActiveMachine(state.machines, state.activeMachineId, identity);
-      if (!persist()) return false;
-      showInfoToast('Machine setup saved.');
-      render();
-      return true;
     }
     function filteredProjects() {
       const q = state.projectSearch.toLowerCase();
@@ -7020,7 +7231,7 @@
         Object.assign(state, freshState()); firstRunOnboardingDismissed = false; state.activeTab = 'log'; render();
         add('First-run onboarding says Tracker does not control the laser', document.getElementById('firstRunOnboarding')?.textContent.includes('does not control the laser'));
         state.activeTab = 'reference'; render();
-        add('Reference distinguishes workshop machine, Reference profile, and Test Grid snapshot', document.getElementById('app').textContent.includes('Current workshop machine identifies your actual machine') && document.getElementById('app').textContent.includes('Reference profile selects a bundled starting-point table') && document.getElementById('app').textContent.includes('Test Grid records the machine associated with that test'));
+        add('Reference distinguishes workshop machines, Reference profile, and historical snapshots', document.getElementById('app').textContent.includes('Workshop machines are equipment you actually own or use') && document.getElementById('app').textContent.includes('Reference profile below only selects bundled manufacturer starting-point tables') && document.getElementById('app').textContent.includes('does not rewrite historical records'));
         const result = buildDesignResult({ ...designDefaults(), template:'finger-box' }), svgBefore = result.svg, resultHtml = designResultsHtml(result);
         add('Design results give explicit LightBurn red-cut guidance', /LightBurn layer guidance/.test(resultHtml) && /Red paths are cut paths/.test(resultHtml));
         add('Design guidance is screen-only and leaves production SVG bytes unchanged', result.svg === svgBefore);
@@ -10299,8 +10510,22 @@
       if (focusMaterialMm) focusMaterialMm.onchange = e => { state.focusMaterialMm = e.target.value; render(); };
       const machineProfile = document.getElementById('machineProfile');
       if (machineProfile) machineProfile.onchange = e => { state.machineProfile = e.target.value; persist(); render(); };
-      const machineSetupForm = document.getElementById('machineSetupForm');
-      if (machineSetupForm) machineSetupForm.onsubmit = e => { e.preventDefault(); saveMachineSetup(e.currentTarget); };
+      bindHeaderMachineControls();
+      const addWorkshopMachine = document.getElementById('addWorkshopMachine');
+      if (addWorkshopMachine) addWorkshopMachine.onclick = () => openMachineForm('add');
+      const machineManagerSearchInput = document.getElementById('machineManagerSearch');
+      if (machineManagerSearchInput) machineManagerSearchInput.oninput = e => { machineManagerSearch = e.target.value; render(); };
+      const machineManagerShowArchivedInput = document.getElementById('machineManagerShowArchived');
+      if (machineManagerShowArchivedInput) machineManagerShowArchivedInput.onchange = e => { machineManagerShowArchived = e.target.checked; render(); };
+      document.querySelectorAll('[data-machine-action]').forEach(button => button.onclick = () => {
+        const action = button.dataset.machineAction, machineId = button.dataset.machineId || '';
+        if (action === 'add') openMachineForm('add');
+        if (action === 'edit') openMachineForm('edit', machineId);
+        if (action === 'duplicate') openMachineForm('duplicate', machineId);
+        if (action === 'activate') setActiveWorkshopMachine(machineId);
+        if (action === 'archive' || action === 'delete') openMachineConfirmation(action, machineId);
+        if (action === 'restore') restoreWorkshopMachine(machineId);
+      });
       const projectSearch = document.getElementById('projectSearch');
       if (projectSearch) projectSearch.oninput = e => { state.projectSearch = e.target.value; refreshProjectFilteredResults(); };
       const projectBrowseMode = document.getElementById('projectBrowseMode');
@@ -10489,6 +10714,7 @@
       else if (!event.shiftKey && current === last) { event.preventDefault(); first.focus(); }
     }
     function closeModal(id) {
+      if (id === 'machineModal') { machineModalMode = ''; machineModalOperation = ''; machineModalSourceId = ''; machineModalInitial = ''; }
       if (id === 'profileModal') pendingGridPromotion = null;
       if (id === 'profileModal') libraryBrowserSelectNewProfile = false;
       if (id === 'profileModal') {
@@ -12118,7 +12344,7 @@
       if (!validation.accepted) return false;
       pendingImport = { data, validation };
       importApplying = false;
-      openModal('importModeModal', `<div class="dialog"><div class="spread"><div><h2>Choose import mode</h2><div class="small muted">Review the effect before applying this backup.</div></div><button type="button" data-close aria-label="Cancel import">&times;</button></div><div class="panel" style="margin-top:12px"><b>Merge with current data</b><div class="small muted" style="margin-top:5px">Keep current compatible records and add or merge compatible records from this backup. Your current local workshop machine identity stays in place.</div></div><div class="panel" style="margin-top:10px"><b>Replace current data</b><div class="small muted" style="margin-top:5px">Replace current Tracker records with this backup. Current records not in the backup will be removed, and the backup's workshop machine identity will be restored. Export a backup first if you may need the current records.</div></div><div class="panel" style="margin-top:10px"><b>Cancel import</b><div class="small muted" style="margin-top:5px">Close without changing Tracker records or browser storage.</div></div><div class="actions" style="margin-top:14px"><button type="button" data-import-cancel>Cancel import</button><button type="button" class="primary" data-import-merge>Merge with current data</button><button type="button" class="danger" data-import-replace>Replace current data</button></div></div>`);
+      openModal('importModeModal', `<div class="dialog"><div class="spread"><div><h2>Choose import mode</h2><div class="small muted">Review the effect before applying this backup.</div></div><button type="button" data-close aria-label="Cancel import">&times;</button></div><div class="panel" style="margin-top:12px"><b>Merge with current data</b><div class="small muted" style="margin-top:5px">Keep current compatible records and add or merge compatible records from this backup. Your local workshop machines and active selection stay in place; unique imported machine IDs are added.</div></div><div class="panel" style="margin-top:10px"><b>Replace current data</b><div class="small muted" style="margin-top:5px">Replace current Tracker records with this backup. Current records not in the backup will be removed, and the backup's workshop machine list and active selection will be restored. Export a backup first if you may need the current records.</div></div><div class="panel" style="margin-top:10px"><b>Cancel import</b><div class="small muted" style="margin-top:5px">Close without changing Tracker records or browser storage.</div></div><div class="actions" style="margin-top:14px"><button type="button" data-import-cancel>Cancel import</button><button type="button" class="primary" data-import-merge>Merge with current data</button><button type="button" class="danger" data-import-replace>Replace current data</button></div></div>`);
       const modal = document.getElementById('importModeModal');
       modal.querySelector('[data-import-cancel]').onclick = () => closeModal('importModeModal');
       modal.querySelector('[data-import-merge]').onclick = () => applyPendingImport('merge');
@@ -12128,7 +12354,7 @@
     }
     function showImportReplaceConfirmation() {
       if (!pendingImport || importApplying) return false;
-      openModal('importModeModal', `<div class="dialog"><div class="spread"><div><h2>Replace current Tracker data?</h2><div class="small muted">This is the destructive import step.</div></div><button type="button" data-close aria-label="Cancel import">&times;</button></div><div class="panel softbad" style="margin-top:12px"><b>Current Tracker records will be replaced.</b><div class="small" style="margin-top:5px">Log entries, Library profiles, Test Grids, Projects, and Inventory records not contained in the selected backup will be removed. The backup's workshop machine identity will be restored. Export first if you need the current records.</div></div><div class="actions" style="margin-top:14px"><button type="button" data-import-cancel>Cancel import</button><button type="button" class="danger" data-import-confirm-replace>Replace current data</button></div></div>`);
+      openModal('importModeModal', `<div class="dialog"><div class="spread"><div><h2>Replace current Tracker data?</h2><div class="small muted">This is the destructive import step.</div></div><button type="button" data-close aria-label="Cancel import">&times;</button></div><div class="panel softbad" style="margin-top:12px"><b>Current Tracker records will be replaced.</b><div class="small" style="margin-top:5px">Log entries, Library profiles, Test Grids, Projects, and Inventory records not contained in the selected backup will be removed. The backup's workshop machine list and active selection will be restored. Export first if you need the current records.</div></div><div class="actions" style="margin-top:14px"><button type="button" data-import-cancel>Cancel import</button><button type="button" class="danger" data-import-confirm-replace>Replace current data</button></div></div>`);
       const modal = document.getElementById('importModeModal');
       modal.querySelector('[data-import-cancel]').onclick = () => closeModal('importModeModal');
       modal.querySelector('[data-import-confirm-replace]').onclick = () => applyPendingImport('replace');
@@ -12337,6 +12563,7 @@
     if (selftest === 'first-run' || selftest === 'all') runFirstRunOnboardingFixtures();
     if (selftest === 'machine' || selftest === 'all') runMachineSetupFixtures();
     if (selftest === 'machines-m1' || selftest === 'all') runMultiMachineStorageFixtures();
+    if (selftest === 'machines-m2' || selftest === 'all') runMachineManagerFixtures();
     if (selftest === 'help' || selftest === 'all') runHelpSafetyFixtures();
     if (selftest === 'modal' || selftest === 'all') runModalAccessibilityFixtures();
     if (selftest === 'accessibility' || selftest === 'all') runAccessibilityPolishFixtures();
