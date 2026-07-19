@@ -457,8 +457,26 @@
     function normalizeLibraryViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function normalizeProjectViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
     function normalizeGridViewMode(value) { return value === 'browse' ? 'browse' : 'manage'; }
+    function normalizeMachineIdentity(value) {
+      const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+      const positiveMm = raw => {
+        const n = typeof raw === 'number' ? raw : (typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      };
+      return {
+        ...source,
+        name: typeof source.name === 'string' ? source.name : (source.name == null ? '' : String(source.name)),
+        workAreaWidthMm: positiveMm(source.workAreaWidthMm),
+        workAreaHeightMm: positiveMm(source.workAreaHeightMm)
+      };
+    }
+    function currentMachineDisplayName(source = state) {
+      const name = typeof source?.machineIdentity?.name === 'string' ? source.machineIdentity.name.trim() : '';
+      if (name) return name;
+      return source?.machineProfile === '40W' ? 'Genmitsu L8 40W' : 'Genmitsu L8 20W';
+    }
     function freshState() {
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', libraryViewMode: 'manage', gridViewMode: 'manage', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', projectViewMode: 'manage', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', inventoryViewMode: 'manage', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', libraryViewMode: 'manage', gridViewMode: 'manage', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', projectViewMode: 'manage', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', inventoryViewMode: 'manage', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', machineIdentity: normalizeMachineIdentity(), pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
     }
     function loadState() {
       const decoded = decodeStoredState(localStorage.getItem(STORAGE_KEY));
@@ -490,15 +508,16 @@
         inventoryBatchSort: data.inventoryBatchSort || 'name-asc',
         inventoryViewMode: normalizeInventoryViewMode(data.inventoryViewMode),
         machineProfile: data.machineProfile || '20W',
+        machineIdentity: normalizeMachineIdentity(data.machineIdentity),
         pricing: { ...pricingDefaults(), ...(data.pricing || {}) },
         pricingPrefs: { ...pricingPreferenceDefaults(), ...(data.pricingPrefs || {}) }
       };
     }
     function persist(options = {}) {
       if (storageRecoveryIssue && !options.allowRecoveryOverwrite) return false;
-      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, gridViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs } = state;
+      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, gridViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, machineIdentity, pricing, pricingPrefs } = state;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, gridViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, pricing, pricingPrefs }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, gridViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, machineIdentity, pricing, pricingPrefs }));
         return true;
       } catch (err) {
         showStorageWarning();
@@ -616,6 +635,83 @@
       return { passed, failed, results };
     }
     window.runFirstRunOnboardingFixtures = runFirstRunOnboardingFixtures;
+    function runMachineSetupFixtures() {
+      const results = [], add = (name, pass, actual = '') => results.push({ name, pass: !!pass, actual });
+      const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY), dismissedBefore = firstRunOnboardingDismissed, tabBefore = state.activeTab;
+      const helpModal = document.getElementById('helpModal'), helpSnapshot = { html: helpModal.innerHTML, open: helpModal.classList.contains('open'), aria: helpModal.getAttribute('aria-hidden') };
+      const restore = () => {
+        Object.assign(state, JSON.parse(stateBefore));
+        if (storageBefore === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, storageBefore);
+        firstRunOnboardingDismissed = dismissedBefore; state.activeTab = tabBefore;
+        closeModal('helpModal'); helpModal.innerHTML = helpSnapshot.html; helpModal.classList.toggle('open', helpSnapshot.open);
+        if (helpSnapshot.aria === null) helpModal.removeAttribute('aria-hidden'); else helpModal.setAttribute('aria-hidden', helpSnapshot.aria);
+        render();
+      };
+      const renderReferenceForm = () => { state.activeTab = 'reference'; render(); return document.getElementById('machineSetupForm'); };
+      const submit = form => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      try {
+        // Normalization
+        add('freshState contains the default machineIdentity shape', (() => { const m = freshState().machineIdentity; return m && m.name === '' && m.workAreaWidthMm === null && m.workAreaHeightMm === null; })());
+        add('Legacy state missing machineIdentity normalizes to the default', (() => { const m = normalizeMachineIdentity(undefined); return m.name === '' && m.workAreaWidthMm === null && m.workAreaHeightMm === null; })());
+        add('normalizeMachineIdentity is side-effect free', (() => { const input = { name: 'Rig', workAreaWidthMm: '400', workAreaHeightMm: '300', extra: 'keep' }, snapshot = JSON.stringify(input); const out = normalizeMachineIdentity(input); return JSON.stringify(input) === snapshot && out !== input; })());
+        add('Repeated normalization is stable', (() => { const once = normalizeMachineIdentity({ name: ' Laser ', workAreaWidthMm: '400.5', workAreaHeightMm: 300, junk: 1 }); return JSON.stringify(normalizeMachineIdentity(once)) === JSON.stringify(once); })());
+        add('A valid custom name is preserved', normalizeMachineIdentity({ name: 'My diode laser' }).name === 'My diode laser');
+        add('Name is coerced to a safe string without HTML interpretation and preserved verbatim for later escaping', (() => { const m = normalizeMachineIdentity({ name: '<b>x</b>' }); return m.name === '<b>x</b>' && esc(m.name) === '&lt;b&gt;x&lt;/b&gt;'; })());
+        add('Valid decimal width and height are preserved as finite numbers', (() => { const m = normalizeMachineIdentity({ workAreaWidthMm: '400.5', workAreaHeightMm: 300.25 }); return m.workAreaWidthMm === 400.5 && m.workAreaHeightMm === 300.25; })());
+        add('Blank dimensions normalize to null', (() => { const m = normalizeMachineIdentity({ workAreaWidthMm: '', workAreaHeightMm: '   ' }); return m.workAreaWidthMm === null && m.workAreaHeightMm === null; })());
+        add('Zero dimensions normalize to null', (() => { const m = normalizeMachineIdentity({ workAreaWidthMm: 0, workAreaHeightMm: '0' }); return m.workAreaWidthMm === null && m.workAreaHeightMm === null; })());
+        add('Negative dimensions normalize to null', (() => { const m = normalizeMachineIdentity({ workAreaWidthMm: -5, workAreaHeightMm: '-3.2' }); return m.workAreaWidthMm === null && m.workAreaHeightMm === null; })());
+        add('NaN and Infinity normalize to null', (() => { const m = normalizeMachineIdentity({ workAreaWidthMm: NaN, workAreaHeightMm: Infinity }); return m.workAreaWidthMm === null && m.workAreaHeightMm === null; })());
+        add('Nonnumeric text, objects, and arrays normalize to null', (() => { const m = normalizeMachineIdentity({ workAreaWidthMm: '400mm', workAreaHeightMm: {} }), n = normalizeMachineIdentity({ workAreaWidthMm: [400], workAreaHeightMm: 'wide' }); return m.workAreaWidthMm === null && m.workAreaHeightMm === null && n.workAreaWidthMm === null && n.workAreaHeightMm === null; })());
+        add('Unknown additive machineIdentity fields survive normalization', normalizeMachineIdentity({ name: 'x', workAreaWidthMm: 400, workAreaHeightMm: 300, futureField: 'keep' }).futureField === 'keep');
+        add('Malformed non-object input normalizes to the default shape', (() => { const m = normalizeMachineIdentity('nonsense'), n = normalizeMachineIdentity([1, 2]); return m.name === '' && m.workAreaWidthMm === null && n.name === '' && n.workAreaHeightMm === null; })());
+        // Display helper
+        add('currentMachineDisplayName uses the custom name when present', currentMachineDisplayName({ machineIdentity: { name: '  Shop Laser  ' }, machineProfile: '20W' }) === 'Shop Laser');
+        add('currentMachineDisplayName falls back to the Genmitsu profile when the custom name is blank', currentMachineDisplayName({ machineIdentity: { name: '' }, machineProfile: '20W' }) === 'Genmitsu L8 20W' && currentMachineDisplayName({ machineIdentity: { name: '' }, machineProfile: '40W' }) === 'Genmitsu L8 40W');
+        // Real save path
+        (() => { const form = renderReferenceForm(); form.querySelector('#machineName').value = '  Bench Laser  '; form.querySelector('#machineWorkAreaWidth').value = '400.5'; form.querySelector('#machineWorkAreaHeight').value = '300'; submit(form); add('Two valid dimensions and a name save through the real Reference form with trimmed name', state.machineIdentity.name === 'Bench Laser' && state.machineIdentity.workAreaWidthMm === 400.5 && state.machineIdentity.workAreaHeightMm === 300); })();
+        (() => { const profileBefore = state.machineProfile; const form = renderReferenceForm(); form.querySelector('#machineWorkAreaWidth').value = '400'; form.querySelector('#machineWorkAreaHeight').value = '300'; submit(form); add('Saving machine setup does not change the Genmitsu Reference profile', state.machineProfile === profileBefore); })();
+        (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Keep', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const form = renderReferenceForm(); form.querySelector('#machineWorkAreaWidth').value = '400'; form.querySelector('#machineWorkAreaHeight').value = ''; const before = JSON.stringify(state.machineIdentity); submit(form); const errorEl = document.getElementById('machineSetupError'); add('Partial work-area input is rejected by the real save path without partial save', JSON.stringify(state.machineIdentity) === before && errorEl && errorEl.hidden === false); })();
+        (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Clear me', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const form = renderReferenceForm(); form.querySelector('#machineWorkAreaWidth').value = ''; form.querySelector('#machineWorkAreaHeight').value = ''; submit(form); add('Blank width and height clear the configured work area while keeping the name', state.machineIdentity.workAreaWidthMm === null && state.machineIdentity.workAreaHeightMm === null && state.machineIdentity.name === 'Clear me'); })();
+        (() => { state.machineIdentity = normalizeMachineIdentity(); const form = renderReferenceForm(); form.querySelector('#machineWorkAreaWidth').value = '-5'; form.querySelector('#machineWorkAreaHeight').value = '300'; submit(form); add('Non-positive dimensions are rejected by the real save path', state.machineIdentity.workAreaWidthMm === null && state.machineIdentity.workAreaHeightMm === null && document.getElementById('machineSetupError').hidden === false); })();
+        // machineProfile independence and record safety
+        (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Custom Laser' }); state.machineProfile = '20W'; renderReferenceForm(); const select = document.getElementById('machineProfile'); select.value = '40W'; select.dispatchEvent(new Event('change', { bubbles: true })); add('Selecting a Genmitsu Reference profile does not change machineIdentity', state.machineProfile === '40W' && state.machineIdentity.name === 'Custom Laser'); })();
+        add('Custom machine name does not leak into Genmitsu Test Grid machine identity', (() => { state.machineProfile = '20W'; state.machineIdentity = normalizeMachineIdentity({ name: 'Custom Laser' }); return activeMachineSnapshot().label === 'Genmitsu L8 20W' && currentMachineDisplayName() === 'Custom Laser'; })());
+        add('Changing machineIdentity does not rewrite existing records', (() => { state.grids = [{ id: 'g-fixture', name: 'G', material: 'Basswood', machine: { key: 'genmitsu-l8-20w', label: 'Genmitsu L8 20W' } }]; const before = JSON.stringify(state.grids); const form = renderReferenceForm(); form.querySelector('#machineName').value = 'New Name'; form.querySelector('#machineWorkAreaWidth').value = '500'; form.querySelector('#machineWorkAreaHeight').value = '400'; submit(form); return JSON.stringify(state.grids) === before && state.machineIdentity.name === 'New Name'; })());
+        // First-run interaction
+        add('machineIdentity does not suppress first-run onboarding eligibility', isFirstRunWorkspaceEmpty({ ...freshState(), machineIdentity: normalizeMachineIdentity({ name: 'Laser', workAreaWidthMm: 400, workAreaHeightMm: 300 }) }));
+        (() => { Object.assign(state, freshState()); state.machineIdentity = normalizeMachineIdentity({ name: 'Laser', workAreaWidthMm: 400, workAreaHeightMm: 300 }); firstRunOnboardingDismissed = false; state.activeTab = 'log'; render(); const panelPresent = !!document.getElementById('firstRunOnboarding'); document.getElementById('firstRunOpenReference')?.click(); add('First-run panel shows with machineIdentity populated but no records, and Open Reference still navigates', panelPresent && state.activeTab === 'reference'); })();
+        // Backup and import
+        add('backupObject includes normalized machineIdentity', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Backup Laser', workAreaWidthMm: 420, workAreaHeightMm: 310 }); const b = backupObject().machineIdentity; return b && b.name === 'Backup Laser' && b.workAreaWidthMm === 420 && b.workAreaHeightMm === 310; })());
+        add('A backup round trip preserves machineIdentity', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Round Trip', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const roundTrip = normalizeMachineIdentity(JSON.parse(JSON.stringify(backupObject())).machineIdentity); return roundTrip.name === 'Round Trip' && roundTrip.workAreaWidthMm === 400 && roundTrip.workAreaHeightMm === 300; })());
+        add('Current backup metadata remains unchanged and additive', (() => { const b = backupObject(); return b.app === APP_ID && b.appVersion === APP_VERSION && b.backupFormat === BACKUP_FORMAT && b.schemaVersion === SCHEMA_VERSION; })());
+        add('Replace import restores the backup machineIdentity through the real seam', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Local' }); const incoming = { ...backupObject(), machineIdentity: { name: 'Imported', workAreaWidthMm: 500, workAreaHeightMm: 350 } }; const result = applyBackupImport(incoming, 'replace'); return result.accepted && state.machineIdentity.name === 'Imported' && state.machineIdentity.workAreaWidthMm === 500 && state.machineIdentity.workAreaHeightMm === 350; })());
+        add('Replace of a legacy backup without machineIdentity yields the empty default', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Local', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const legacy = { schemaVersion: 1, entries: [] }; const result = applyBackupImport(legacy, 'replace'); return result.accepted && state.machineIdentity.name === '' && state.machineIdentity.workAreaWidthMm === null && state.machineIdentity.workAreaHeightMm === null; })());
+        add('Merge import preserves the current local machineIdentity', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Local Only', workAreaWidthMm: 410, workAreaHeightMm: 320 }); const incoming = { ...backupObject(), machineIdentity: { name: 'Should Not Apply', workAreaWidthMm: 999, workAreaHeightMm: 888 }, entries: [{ id: 'merge-entry', material: 'X' }] }; const result = applyBackupImport(incoming, 'merge'); return result.accepted && state.machineIdentity.name === 'Local Only' && state.machineIdentity.workAreaWidthMm === 410 && state.entries.some(entry => entry.id === 'merge-entry'); })());
+        add('A legacy backup without machineIdentity remains accepted', validateBackupImport({ schemaVersion: 1, entries: [] }).accepted && validateBackupImport({ entries: [] }).accepted);
+        add('Rejected imports do not mutate machineIdentity, and future/app/format guards are unchanged', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Protected', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const before = JSON.stringify(state.machineIdentity); const future = applyBackupImport({ ...backupObject(), schemaVersion: SCHEMA_VERSION + 1 }, 'replace'); const foreignApp = applyBackupImport({ ...backupObject(), app: 'other-app' }, 'replace'); const foreignFormat = applyBackupImport({ ...backupObject(), backupFormat: 'other-format' }, 'replace'); return !future.accepted && !foreignApp.accepted && !foreignFormat.accepted && JSON.stringify(state.machineIdentity) === before; })());
+        // Constants and storage integrity
+        add('STORAGE_KEY and SCHEMA_VERSION remain unchanged', STORAGE_KEY === 'genmitsu-l8-tracker-v1' && SCHEMA_VERSION === 2);
+        add('APP_VERSION and BUILD_DATE remain unchanged', APP_VERSION === '0.9.0' && BUILD_DATE === '2026-07-19');
+        add('machineIdentity is the only new persisted key and no second storage key is created', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Persist', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const keysBefore = Object.keys(localStorage).length; persist(); const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); return Object.keys(localStorage).length === keysBefore && stored.machineIdentity && stored.machineIdentity.name === 'Persist' && localStorage.getItem(STORAGE_KEY + '-machine') === null; })());
+        // Reference UI and attribution
+        (() => { const html = (state.activeTab = 'reference', renderReference()); add('Reference renders the current-machine setup panel with labeled inputs', /id="machineSetupForm"/.test(html) && /Current workshop machine/.test(html) && /id="machineName"/.test(html) && /id="machineWorkAreaWidth"/.test(html) && /id="machineWorkAreaHeight"/.test(html) && /id="saveMachineSetup"/.test(html)); add('Reference labels the 20W/40W selection as a Genmitsu L8 Reference profile', /Genmitsu L8 Reference profile/.test(html) && /Genmitsu L8 20W/.test(html) && /Genmitsu L8 40W/.test(html) && /bundled Genmitsu L8 manufacturer starting points/.test(html)); add('Reference states manufacturer values are starting points', /starting points/i.test(html) && /Official values are starting points/.test(html)); add('Work-area text states advisory-only behavior and millimeter storage', /advisory only/i.test(html) && /does not resize designs, perform nesting, guarantee bed fit, control the machine/.test(html) && /stored in millimeters/i.test(html)); add('Reference machine setup introduces no external dependency or network URL', !/https?:\/\//i.test(html.match(/<form[^>]*id="machineSetupForm"[\s\S]*?<\/form>/)?.[0] || '')); })();
+        // Help
+        (() => { openHelp(); const dialog = modalDialog(document.getElementById('helpModal')), text = dialog?.textContent || ''; add('Help explains the custom machine and work-area advisory limits', /Current workshop machine/i.test(text) && /advisory only/i.test(text) && /do not resize SVGs, perform nesting, guarantee bed fit, control the machine, or change Reference settings/i.test(text) && /specifically Genmitsu L8 starting points/i.test(text)); add('Help modal remains an accessible dialog', dialog?.getAttribute('role') === 'dialog' && dialog.getAttribute('aria-modal') === 'true' && document.getElementById('helpModal').getAttribute('aria-hidden') === 'false'); closeModal('helpModal'); })();
+        // Duplicate IDs and Designs neutrality
+        (() => { state.activeTab = 'reference'; render(); const ids = [...document.querySelectorAll('[id]')].map(el => el.id); add('Reference machine setup introduces no duplicate HTML IDs', new Set(ids).size === ids.length); })();
+        add('machineIdentity does not change Designs production bytes', (() => { const draft = designDefaults(); state.machineIdentity = normalizeMachineIdentity(); const emptySvg = buildDesignResult(draft).svg; state.machineIdentity = normalizeMachineIdentity({ name: 'Laser', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const populatedSvg = buildDesignResult(draft).svg; return typeof emptySvg === 'string' && emptySvg.length > 0 && emptySvg === populatedSvg; })());
+        // Sibling groups remain green
+        add('Existing storage/import/export/recovery fixtures remain passing', runStorageRecoveryFixtures().failed === 0);
+        add('Existing first-run fixtures remain passing', runFirstRunOnboardingFixtures().failed === 0);
+        add('Existing Help/Safety fixtures remain passing', runHelpSafetyFixtures().failed === 0);
+        add('Existing modal-accessibility fixtures remain passing', runModalAccessibilityFixtures().failed === 0);
+      } finally { restore(); }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Machine setup fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runMachineSetupFixtures = runMachineSetupFixtures;
     function runModalAccessibilityFixtures() {
       const results = [], add = (name, pass) => results.push({ name, pass:!!pass });
       const modalIds = [...document.querySelectorAll('.modal')].map(modal => modal.id), snapshots = Object.fromEntries(modalIds.map(id => { const modal = document.getElementById(id); return [id, { html:modal.innerHTML, open:modal.classList.contains('open'), aria:modal.getAttribute('aria-hidden') }]; }));
@@ -736,6 +832,7 @@
         libraryMatchThickness: state.libraryMatchThickness,
         libraryMatchUnit: state.libraryMatchUnit,
         machineProfile: state.machineProfile,
+        machineIdentity: normalizeMachineIdentity(state.machineIdentity),
         pricing: state.pricing,
         pricingPrefs: state.pricingPrefs
       };
@@ -1099,7 +1196,7 @@
         <section class="panel" style="margin-top:10px"><h3>Your data and backups</h3><p class="small">Export saves Tracker records as a JSON backup. Export regularly; it is not automatic. Import can merge a supported backup or replace the current workspace, so review Replace carefully. Backups from a newer unsupported schema are refused rather than silently downgraded.</p><p class="small muted">Browser data can be cleared, lost, or become inaccessible. Project photos use much more browser storage than text records. Use the existing storage warning and recovery tools if saved data cannot be read; Tracker backups do not include external LightBurn files, source images, or PDFs.</p></section>
         <section class="panel" style="margin-top:10px"><h3>Using Designs with LightBurn</h3><ol class="small"><li>Generate and preview the design here, then download its production SVG.</li><li>Import it into LightBurn and keep it at <b>100% scale</b>.</li><li>Verify units and finished dimensions, assign suitable engraving and cutting operations, then frame the job and confirm placement before running it.</li></ol><p class="small muted">The Tracker creates geometry; it does not send jobs to the laser. Rescaling changes physical dimensions and fit. Kerf, clearance, thickness, coatings, glue layers, flatness, moisture, and machine variation affect results. Previews do not guarantee fit, strength, or final appearance; use material tests and fit coupons when results matter.</p></section>
         <section class="panel" style="margin-top:10px;background:#fff8e7;border-color:#ead59f"><h3>Laser safety</h3><ul class="small"><li>Maintain active ventilation and fume extraction, keep an active fire watch, never leave the laser unattended, and keep suitable fire suppression nearby.</li><li>Confirm focus; keep material flat and secure; frame or preview the job; keep optics and the work area clean; and use controlled air assist appropriate to the operation and material.</li><li>Verify the exact material and coating composition before lasering. Do not laser PVC, vinyl, chlorinated plastics, mystery plastics, unidentified materials, or unknown coatings.</li><li>Use additional caution with fiberglass, carbon fiber, reflective surfaces, coated metals, foams, leather, adhesives, and composite materials. “Laserable” marketing does not replace composition checks and safe ventilation requirements.</li></ul></section>
-        <section class="panel" style="margin-top:10px"><h3>Starting points and physical validation</h3><p class="small">Manufacturer and Reference values are starting points, not guarantees. Material batches, color, coatings, glue, moisture, flatness, focus, lens condition, ventilation, and machine variation all affect results. Run material tests when settings are unproven, and physically validate cutting, fit, strength, and finish on the actual material. Experimental generators retain their specific warnings.</p></section>
+        <section class="panel" style="margin-top:10px"><h3>Starting points and physical validation</h3><p class="small">Manufacturer and Reference values are starting points, not guarantees. Material batches, color, coatings, glue, moisture, flatness, focus, lens condition, ventilation, and machine variation all affect results. Run material tests when settings are unproven, and physically validate cutting, fit, strength, and finish on the actual material. Experimental generators retain their specific warnings.</p><p class="small muted">The optional Current workshop machine name and usable work area on the Reference tab are advisory only: they do not resize SVGs, perform nesting, guarantee bed fit, control the machine, or change Reference settings. The 20W and 40W Reference tables are specifically Genmitsu L8 starting points, not universal settings for another machine.</p></section>
         <section class="panel" style="margin-top:10px"><h3>Documentation</h3><div class="actions"><a href="README.md" target="_blank" rel="noopener">Open README</a><a href="docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf" target="_blank" rel="noopener">Open bundled user manual</a></div></section>
         <div class="actions" style="margin-top:12px"><button type="button" data-close>Close Help</button></div></div>`);
       bindModal('helpModal');
@@ -1255,7 +1352,7 @@
         <ul>
           <li>Log your first laser job.</li>
           <li>Plan a Test Grid for a new material.</li>
-          <li>Open Reference for official starting guidance.</li>
+          <li>Open Reference for Genmitsu L8 starting points and optional current-machine setup.</li>
         </ul>
         <div class="actions">
           <button type="button" class="primary" id="firstRunLogJob">Log your first job</button>
@@ -5211,21 +5308,42 @@
     function renderReference() {
       const focusText = focusSuggestion(state.focusJobType, num(state.focusMaterialMm, NaN));
       const activeRows = state.machineProfile === '40W' ? reference40w : reference20w;
+      const machineIdentity = normalizeMachineIdentity(state.machineIdentity);
       return `
         <div class="toolbar" style="margin-bottom:14px">
           <div>
             <b>Reference tools</b>
-            <div class="small muted">${state.machineProfile === '20W' ? 'Machine-specific starting points, manual link, and 20W fixed-focus helper.' : 'Machine-specific starting points. The 20W fixed-focus helper is hidden for the 40W profile.'}</div>
+            <div class="small muted">The 20W/40W tables below are bundled Genmitsu L8 manufacturer starting points, not universal settings for your machine. ${state.machineProfile === '20W' ? 'The 20W fixed-focus helper and 20W chart apply to the L8 20W only.' : 'The 20W fixed-focus helper is hidden for the 40W profile.'}</div>
           </div>
           <div class="row" style="justify-content:flex-end">
-            <select id="machineProfile" style="width:150px">
-              <option value="20W" ${state.machineProfile === '20W' ? 'selected' : ''}>L8 20W</option>
-              <option value="40W" ${state.machineProfile === '40W' ? 'selected' : ''}>L8 40W</option>
-            </select>
+            <label style="display:grid;gap:2px;font-size:12px;font-weight:700;color:#424b5a">Genmitsu L8 Reference profile
+              <select id="machineProfile" style="width:170px" aria-label="Genmitsu L8 Reference profile">
+                <option value="20W" ${state.machineProfile === '20W' ? 'selected' : ''}>Genmitsu L8 20W</option>
+                <option value="40W" ${state.machineProfile === '40W' ? 'selected' : ''}>Genmitsu L8 40W</option>
+              </select>
+            </label>
             ${state.machineProfile === '20W' ? '<a href="docs/L8_Engraving_Speed_Power_Reference_Chart_20W.pdf" target="_blank" rel="noopener"><button type="button">Open 20W Chart</button></a>' : ''}
             <a href="docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf" target="_blank" rel="noopener"><button type="button">Open Manual</button></a>
           </div>
         </div>
+        <form class="panel" id="machineSetupForm" style="margin-bottom:14px" aria-labelledby="machineSetupHeading">
+          <h3 id="machineSetupHeading" style="margin:0 0 4px;font-size:16px">Current workshop machine</h3>
+          <p class="small muted" style="margin:0 0 10px">Optional. Name the laser you actually use and the usable work area you intend to stay within. This is advisory only: it does not resize designs, perform nesting, guarantee bed fit, control the machine, or change the Genmitsu L8 Reference profile above. A custom name here does not imply your machine is a Genmitsu.</p>
+          <div class="formgrid">
+            <label class="span2">Machine name (optional)
+              <input type="text" id="machineName" maxlength="120" autocomplete="off" placeholder="e.g. My diode laser" value="${esc(machineIdentity.name)}">
+            </label>
+            <label>Usable work-area width (mm)
+              <input type="number" id="machineWorkAreaWidth" step="any" min="0" inputmode="decimal" placeholder="e.g. 400" value="${machineIdentity.workAreaWidthMm == null ? '' : esc(machineIdentity.workAreaWidthMm)}">
+            </label>
+            <label>Usable work-area height (mm)
+              <input type="number" id="machineWorkAreaHeight" step="any" min="0" inputmode="decimal" placeholder="e.g. 400" value="${machineIdentity.workAreaHeightMm == null ? '' : esc(machineIdentity.workAreaHeightMm)}">
+            </label>
+          </div>
+          <p class="small muted" style="margin:8px 0 0">Work area is stored in millimeters — the usable X/Y travel you intend to work within, not the machine's outside footprint — even when the app unit toggle shows inches. Enter both dimensions or leave both blank to clear the configured work area.</p>
+          <p class="small" id="machineSetupError" role="alert" hidden style="color:var(--red);margin:8px 0 0"></p>
+          <div class="actions"><button type="submit" class="primary" id="saveMachineSetup">Save machine setup</button></div>
+        </form>
         ${state.machineProfile === '20W' ? `<div class="panel" style="margin-bottom:16px">
           <div class="toolbar">
             <div>
@@ -5259,8 +5377,31 @@
           <b>Official values are starting points.</b>
           <span class="small">Material color, glue, moisture, flatness, focus, lens cleanliness, and airflow can change results. Copy promising rows into Library and tune from there.</span>
         </div>
-        ${referenceTable(`${state.machineProfile} official starting points`, activeRows, state.machineProfile)}
+        ${referenceTable(`Genmitsu L8 ${state.machineProfile} official starting points`, activeRows, state.machineProfile)}
       `;
+    }
+    function saveMachineSetup(form) {
+      if (!form) return false;
+      const nameInput = form.querySelector('#machineName');
+      const widthInput = form.querySelector('#machineWorkAreaWidth');
+      const heightInput = form.querySelector('#machineWorkAreaHeight');
+      const errorEl = form.querySelector('#machineSetupError');
+      const showError = message => { if (errorEl) { errorEl.textContent = message; errorEl.hidden = false; } };
+      const rawWidth = (widthInput?.value || '').trim();
+      const rawHeight = (heightInput?.value || '').trim();
+      const bothBlank = rawWidth === '' && rawHeight === '';
+      const bothFilled = rawWidth !== '' && rawHeight !== '';
+      if (!bothBlank && !bothFilled) { showError('Enter both a usable work-area width and height, or leave both blank to clear them.'); return false; }
+      let width = null, height = null;
+      if (bothFilled) {
+        width = Number(rawWidth); height = Number(rawHeight);
+        if (!(Number.isFinite(width) && width > 0) || !(Number.isFinite(height) && height > 0)) { showError('Work-area width and height must each be a number greater than zero, in millimeters.'); return false; }
+      }
+      state.machineIdentity = normalizeMachineIdentity({ name: (nameInput?.value || '').trim(), workAreaWidthMm: width, workAreaHeightMm: height });
+      if (!persist()) return false;
+      showInfoToast('Machine setup saved.');
+      render();
+      return true;
     }
     function filteredProjects() {
       const q = state.projectSearch.toLowerCase();
@@ -9602,6 +9743,8 @@
       if (focusMaterialMm) focusMaterialMm.onchange = e => { state.focusMaterialMm = e.target.value; render(); };
       const machineProfile = document.getElementById('machineProfile');
       if (machineProfile) machineProfile.onchange = e => { state.machineProfile = e.target.value; persist(); render(); };
+      const machineSetupForm = document.getElementById('machineSetupForm');
+      if (machineSetupForm) machineSetupForm.onsubmit = e => { e.preventDefault(); saveMachineSetup(e.currentTarget); };
       const projectSearch = document.getElementById('projectSearch');
       if (projectSearch) projectSearch.oninput = e => { state.projectSearch = e.target.value; refreshProjectFilteredResults(); };
       const projectBrowseMode = document.getElementById('projectBrowseMode');
@@ -11312,10 +11455,13 @@
       state.projects = data.projects || [];
       state.inventory = normalizeInventory(data.inventory);
       state.unit = data.unit || state.unit;
+      // Replace restores the backup's machine identity; a legacy backup without one yields the empty default.
+      state.machineIdentity = normalizeMachineIdentity(data.machineIdentity);
       resetBackupPreferences();
       applyBackupPreferences(data);
     }
     function mergeData(data) {
+      // machineIdentity is local workshop configuration, not a mergeable record collection, so Merge intentionally preserves the current local machine setup and never applies the incoming value.
       const incomingInventory = normalizeInventory(data.inventory);
       const stats = {
         log: mergeListStats(state.entries, data.entries),
@@ -11570,6 +11716,7 @@
     if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
     if (selftest === 'first-run' || selftest === 'all') runFirstRunOnboardingFixtures();
+    if (selftest === 'machine' || selftest === 'all') runMachineSetupFixtures();
     if (selftest === 'help' || selftest === 'all') runHelpSafetyFixtures();
     if (selftest === 'modal' || selftest === 'all') runModalAccessibilityFixtures();
     if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
