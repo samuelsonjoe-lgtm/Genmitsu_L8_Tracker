@@ -501,13 +501,60 @@
         workAreaHeightMm: positiveMm(source.workAreaHeightMm)
       };
     }
+    function positiveMachineNumber(value) {
+      const number = typeof value === 'number' ? value : (typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN);
+      return Number.isFinite(number) && number > 0 ? number : null;
+    }
+    function normalizeOwnedMachine(value) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+      const id = typeof value.id === 'string' ? value.id.trim() : '';
+      if (!id) return null;
+      const text = key => value[key] == null ? '' : String(value[key]).trim();
+      const rawType = String(value.type || '').trim().toLowerCase();
+      const type = ['diode', 'co2', 'fiber', 'other'].includes(rawType) ? rawType : 'other';
+      return { ...value, id, name:text('name'), manufacturer:text('manufacturer'), model:text('model'), type, nominalPowerW:positiveMachineNumber(value.nominalPowerW), workAreaWidthMm:positiveMachineNumber(value.workAreaWidthMm), workAreaHeightMm:positiveMachineNumber(value.workAreaHeightMm), notes:text('notes'), archived:!!value.archived };
+    }
+    function normalizeMachines(value) {
+      if (!Array.isArray(value)) return [];
+      const ids = new Set(), machines = [];
+      value.forEach(item => { const machine = normalizeOwnedMachine(item); if (machine && !ids.has(machine.id)) { ids.add(machine.id); machines.push(machine); } });
+      return machines;
+    }
+    function machineById(id, machines = state?.machines) {
+      const key = typeof id === 'string' ? id.trim() : '';
+      return key && Array.isArray(machines) ? machines.find(machine => machine?.id === key) || null : null;
+    }
+    function resolveActiveMachineId(machines, activeMachineId) {
+      const list = normalizeMachines(machines), requested = machineById(activeMachineId, list);
+      if (requested && !requested.archived) return requested.id;
+      const available = list.find(machine => !machine.archived);
+      return available ? available.id : (list[0]?.id || '');
+    }
+    function machineIdentityForActiveMachine(machines, activeMachineId, fallback) {
+      const active = machineById(activeMachineId, machines);
+      return active ? normalizeMachineIdentity({ name:active.name, workAreaWidthMm:active.workAreaWidthMm, workAreaHeightMm:active.workAreaHeightMm }) : normalizeMachineIdentity(fallback);
+    }
+    function machineRootFromData(data) {
+      const source = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+      const identity = normalizeMachineIdentity(source.machineIdentity);
+      const legacy = !Object.prototype.hasOwnProperty.call(source, 'machines');
+      const machines = legacy ? [normalizeOwnedMachine({ id:'legacy-workshop-machine', name:identity.name, manufacturer:'', model:'', type:'diode', nominalPowerW:null, workAreaWidthMm:identity.workAreaWidthMm, workAreaHeightMm:identity.workAreaHeightMm, notes:'', archived:false })] : normalizeMachines(source.machines);
+      const activeMachineId = legacy ? 'legacy-workshop-machine' : resolveActiveMachineId(machines, source.activeMachineId);
+      return { machines, activeMachineId, machineIdentity:machineIdentityForActiveMachine(machines, activeMachineId, identity), legacy };
+    }
+    function synchronizeMachineIdentity() {
+      state.machines = normalizeMachines(state.machines);
+      state.activeMachineId = resolveActiveMachineId(state.machines, state.activeMachineId);
+      state.machineIdentity = machineIdentityForActiveMachine(state.machines, state.activeMachineId, state.machineIdentity);
+      return state.machineIdentity;
+    }
     function currentMachineDisplayName(source = state) {
       const name = typeof source?.machineIdentity?.name === 'string' ? source.machineIdentity.name.trim() : '';
       if (name) return name;
       return source?.machineProfile === '40W' ? 'Genmitsu L8 40W' : 'Genmitsu L8 20W';
     }
     function freshState() {
-      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', libraryViewMode: 'manage', gridViewMode: 'manage', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', projectViewMode: 'manage', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', inventoryViewMode: 'manage', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', machineIdentity: normalizeMachineIdentity(), pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
+      return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', libraryViewMode: 'manage', gridViewMode: 'manage', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', projectViewMode: 'manage', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', inventoryViewMode: 'manage', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', machines: [], activeMachineId: '', machineIdentity: normalizeMachineIdentity(), pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
     }
     function loadState() {
       const decoded = decodeStoredState(localStorage.getItem(STORAGE_KEY));
@@ -516,7 +563,7 @@
         storageRecoveryIssue = { raw: decoded.raw, message: decoded.message, detectedAt: new Date().toISOString() };
         return freshState();
       }
-      const data = decoded.data;
+      const data = decoded.data, machineRoot = machineRootFromData(data);
       return {
         ...freshState(),
         schemaVersion: data.schemaVersion || 1,
@@ -539,16 +586,19 @@
         inventoryBatchSort: data.inventoryBatchSort || 'name-asc',
         inventoryViewMode: normalizeInventoryViewMode(data.inventoryViewMode),
         machineProfile: data.machineProfile || '20W',
-        machineIdentity: normalizeMachineIdentity(data.machineIdentity),
+        machines: machineRoot.machines,
+        activeMachineId: machineRoot.activeMachineId,
+        machineIdentity: machineRoot.machineIdentity,
         pricing: { ...pricingDefaults(), ...(data.pricing || {}) },
         pricingPrefs: { ...pricingPreferenceDefaults(), ...(data.pricingPrefs || {}) }
       };
     }
     function persist(options = {}) {
       if (storageRecoveryIssue && !options.allowRecoveryOverwrite) return false;
-      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, gridViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, machineIdentity, pricing, pricingPrefs } = state;
+      synchronizeMachineIdentity();
+      const { entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, gridViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, machines, activeMachineId, machineIdentity, pricing, pricingPrefs } = state;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, gridViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, machineIdentity, pricing, pricingPrefs }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, unit, entrySort, librarySort, libraryViewMode, gridViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, machines, activeMachineId, machineIdentity, pricing, pricingPrefs }));
         return true;
       } catch (err) {
         showStorageWarning();
@@ -666,6 +716,66 @@
       return { passed, failed, results };
     }
     window.runFirstRunOnboardingFixtures = runFirstRunOnboardingFixtures;
+    function runMultiMachineStorageFixtures() {
+      const results = [], add = (name, pass) => results.push({ name, pass:!!pass });
+      const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY), recoveryBefore = storageRecoveryIssue, dismissedBefore = firstRunOnboardingDismissed, draftBefore = JSON.stringify(designDraft), previewBefore = designPreviewMode, pendingBefore = pendingImport, applyingBefore = importApplying;
+      const restore = () => { Object.assign(state, JSON.parse(stateBefore)); if (storageBefore === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, storageBefore); storageRecoveryIssue = recoveryBefore; firstRunOnboardingDismissed = dismissedBefore; designDraft = JSON.parse(draftBefore); designPreviewMode = previewBefore; pendingImport = pendingBefore; importApplying = applyingBefore; render(); };
+      const machine = (id, name, extra = {}) => ({ id, name, manufacturer:'Acme', model:'M1', type:'diode', nominalPowerW:20, workAreaWidthMm:400, workAreaHeightMm:300, notes:'', archived:false, ...extra });
+      try {
+        const fresh = freshState();
+        const helperStorageBefore = localStorage.getItem(STORAGE_KEY);
+        add('Fresh state has an empty machines collection and activeMachineId', Array.isArray(fresh.machines) && fresh.machines.length === 0 && fresh.activeMachineId === '');
+        add('Fresh state retains blank machineIdentity without an owned-machine fallback name', fresh.machineIdentity.name === '' && fresh.machineProfile === '20W' && currentMachineDisplayName(fresh) === 'Genmitsu L8 20W');
+        add('Machines alone do not suppress first-run onboarding', isFirstRunWorkspaceEmpty({ ...fresh, machines:[machine('owned-a', 'Workshop')] }));
+        const legacy = machineRootFromData({ machineIdentity:{ name:'Legacy laser', workAreaWidthMm:'410', workAreaHeightMm:320 } });
+        add('Absent machines migrates one legacy workshop machine', legacy.legacy && legacy.machines.length === 1 && legacy.machines[0].id === 'legacy-workshop-machine' && legacy.activeMachineId === 'legacy-workshop-machine');
+        add('Legacy migration retains custom name and exact usable work area', legacy.machines[0].name === 'Legacy laser' && legacy.machines[0].workAreaWidthMm === 410 && legacy.machines[0].workAreaHeightMm === 320);
+        add('Blank legacy identity becomes one unnamed diode machine without a Genmitsu persisted name', (() => { const root = machineRootFromData({ machineIdentity:{} }); return root.machines.length === 1 && root.machines[0].name === '' && root.machines[0].type === 'diode' && root.machineIdentity.name === ''; })());
+        add('Legacy migration is idempotent after its machines property is present', (() => { const once = machineRootFromData({ machineIdentity:{ name:'Legacy' } }); const twice = machineRootFromData({ machines:once.machines, activeMachineId:once.activeMachineId, machineIdentity:once.machineIdentity }); return twice.machines.length === 1 && twice.machines[0].id === 'legacy-workshop-machine'; })());
+        add('New-format empty machines remains empty rather than re-migrating', (() => { const root = machineRootFromData({ machines:[], activeMachineId:'', machineIdentity:{ name:'Staging' } }); return !root.legacy && root.machines.length === 0 && root.activeMachineId === '' && root.machineIdentity.name === 'Staging'; })());
+        add('Malformed new-format machines normalizes safely without legacy migration', (() => { const root = machineRootFromData({ machines:{ bad:true }, activeMachineId:'x', machineIdentity:{ name:'Staging' } }); return !root.legacy && root.machines.length === 0 && root.activeMachineId === '' && root.machineIdentity.name === 'Staging'; })());
+        const rawMachines = [machine('one', '  One  ', { type:'CO2', nominalPowerW:'40', futureField:'kept' }), machine('one', 'Duplicate'), { id:'', name:'Missing' }, null, machine('two', 'Two', { type:'bad', nominalPowerW:0, workAreaWidthMm:-1, workAreaHeightMm:'wide', archived:1 })], rawSnapshot = JSON.stringify(rawMachines), normalized = normalizeMachines(rawMachines);
+        add('Machine normalization is input-safe, ordered, and ID-deduplicated', JSON.stringify(rawMachines) === rawSnapshot && normalized.map(item => item.id).join('|') === 'one|two');
+        add('Machine normalization trims, preserves additive fields, and bounds known fields', normalized[0].name === 'One' && normalized[0].type === 'co2' && normalized[0].nominalPowerW === 40 && normalized[0].futureField === 'kept' && normalized[1].type === 'other' && normalized[1].nominalPowerW === null && normalized[1].workAreaWidthMm === null && normalized[1].archived === true);
+        add('Machine lookup is blank-safe and non-mutating', machineById('', normalized) === null && machineById('missing', normalized) === null && machineById('two', normalized) === normalized[1]);
+        const activeList = [machine('archived', 'Archived', { archived:true }), machine('live', 'Live')];
+        add('Active resolution keeps valid non-archived, otherwise first live then first archived', resolveActiveMachineId(activeList, 'live') === 'live' && resolveActiveMachineId(activeList, 'archived') === 'live' && resolveActiveMachineId([activeList[0]], 'missing') === 'archived' && resolveActiveMachineId([], 'missing') === '');
+        add('Machine migration and normalization helpers never persist by themselves', localStorage.getItem(STORAGE_KEY) === helperStorageBefore);
+        Object.assign(state, freshState()); state.machines = [machine('active', 'Active', { manufacturer:'Keep maker', model:'Keep model', nominalPowerW:40, notes:'Keep notes', futureField:'keep' })]; state.activeMachineId = 'active'; synchronizeMachineIdentity();
+        add('Active machine mirrors only compatibility name and usable work area', state.machineIdentity.name === 'Active' && state.machineIdentity.workAreaWidthMm === 400 && !('manufacturer' in state.machineIdentity) && state.machines[0].futureField === 'keep');
+        add('MachineIdentity synchronization is idempotent', (() => { const once = JSON.stringify(state.machineIdentity); synchronizeMachineIdentity(); return JSON.stringify(state.machineIdentity) === once; })());
+        const recordSnapshots = JSON.stringify({ grids:[{ id:'g', machine:{ key:'genmitsu-l8-20w', label:'Genmitsu L8 20W' } }], profiles:[{ id:'p', tests:[{ machineKey:'custom', machineLabel:'Historical' }], productionSettings:[{ machine:{ key:'custom', label:'Historical' } }] }], projects:[{ id:'project', settings:{ machineKey:'custom', machineLabel:'Historical' } }] });
+        state.grids = JSON.parse(recordSnapshots).grids; state.profiles = JSON.parse(recordSnapshots).profiles; state.projects = JSON.parse(recordSnapshots).projects; synchronizeMachineIdentity();
+        add('Active-machine normalization does not rewrite historical record snapshots or add machineId', JSON.stringify({ grids:state.grids, profiles:state.profiles, projects:state.projects }) === recordSnapshots && !JSON.stringify({ grids:state.grids, profiles:state.profiles, projects:state.projects }).includes('"machineId"'));
+        const backup = backupObject();
+        add('Backups retain machines, activeMachineId, and machineIdentity with stable identity constants', backup.machines?.[0]?.id === 'active' && backup.activeMachineId === 'active' && backup.machineIdentity.name === 'Active' && backup.app === APP_ID && backup.backupFormat === BACKUP_FORMAT && backup.schemaVersion === SCHEMA_VERSION);
+        add('Machine root storage does not change machineProfile', state.machineProfile === '20W');
+        state.activeTab = 'reference'; render(); const form = document.getElementById('machineSetupForm'); form.querySelector('#machineName').value = 'Edited active'; form.querySelector('#machineWorkAreaWidth').value = '450'; form.querySelector('#machineWorkAreaHeight').value = '350'; form.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
+        add('Existing machine editor updates active machine while preserving advanced fields and ID', state.activeMachineId === 'active' && state.machines[0].id === 'active' && state.machines[0].name === 'Edited active' && state.machines[0].manufacturer === 'Keep maker' && state.machines[0].futureField === 'keep' && state.machineIdentity.name === 'Edited active');
+        form.querySelector('#machineName').value = ''; form.querySelector('#machineWorkAreaWidth').value = ''; form.querySelector('#machineWorkAreaHeight').value = ''; form.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
+        add('Clearing visible editor fields retains the owned machine and mirrors blanks', state.machines.length === 1 && state.machines[0].id === 'active' && state.machineIdentity.name === '' && state.machineIdentity.workAreaWidthMm === null);
+        Object.assign(state, freshState()); state.activeTab = 'reference'; render(); const newForm = document.getElementById('machineSetupForm'); newForm.querySelector('#machineName').value = 'Created'; newForm.querySelector('#machineWorkAreaWidth').value = '300'; newForm.querySelector('#machineWorkAreaHeight').value = '200'; newForm.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true }));
+        add('Editor creates one UID-based active machine only when none exists', state.machines.length === 1 && state.machines[0].id !== 'legacy-workshop-machine' && state.activeMachineId === state.machines[0].id && state.machineIdentity.name === 'Created');
+        Object.assign(state, freshState()); state.machines = [machine('local-a', 'Same'), machine('local-b', 'Local active')]; state.activeMachineId = 'local-b'; synchronizeMachineIdentity(); const localMachineSnapshot = JSON.stringify(state.machines);
+        mergeData({ ...backupObject(), machines:[machine('local-a', 'Overwrite attempt', { notes:'no' }), machine('import-a', 'Same', { archived:true, futureField:'incoming' })], activeMachineId:'import-a', machineIdentity:{ name:'Imported identity' } });
+        add('Merge retains local machines/order/same-ID winner and adds unique IDs without name deduplication', state.machines.map(item => item.id).join('|') === 'local-a|local-b|import-a' && JSON.stringify(state.machines.slice(0,2)) === localMachineSnapshot && state.machines[2].name === 'Same' && state.machines[2].archived && state.machines[2].futureField === 'incoming');
+        add('Merge ignores imported active and legacy machineIdentity while retaining valid local active', state.activeMachineId === 'local-b' && state.machineIdentity.name === 'Local active');
+        const beforeLegacyMerge = JSON.stringify(state.machines); mergeData({ entries:[], machineIdentity:{ name:'Legacy import must not create' } });
+        add('Legacy Merge does not synthesize an imported singleton machine', JSON.stringify(state.machines) === beforeLegacyMerge);
+        replaceData({ ...backupObject(), machines:[machine('replace-a', 'Replace A'), machine('replace-b', 'Replace B', { archived:true })], activeMachineId:'replace-b', machineIdentity:{ name:'Ignored mirror' }, machineProfile:'40W' });
+        add('Replace restores backup machines and resolves an archived active to a live machine', state.machines.map(item => item.id).join('|') === 'replace-a|replace-b' && state.activeMachineId === 'replace-a' && state.machineIdentity.name === 'Replace A' && state.machineProfile === '40W');
+        replaceData({ entries:[], machineIdentity:{ name:'Legacy replace', workAreaWidthMm:500, workAreaHeightMm:400 }, machineProfile:'20W' });
+        add('Legacy Replace creates exactly one active legacy workshop machine', state.machines.length === 1 && state.machines[0].id === 'legacy-workshop-machine' && state.machineIdentity.name === 'Legacy replace');
+        replaceData({ entries:[], machines:[], activeMachineId:'stale', machineIdentity:{ name:'Explicit empty' } });
+        add('Explicitly empty new-format Replace remains empty and preserves compatibility staging identity', state.machines.length === 0 && state.activeMachineId === '' && state.machineIdentity.name === 'Explicit empty');
+        replaceData({ entries:[], machines:{ bad:true }, activeMachineId:'stale', machineIdentity:{ name:'Malformed' } });
+        add('Malformed new-format Replace remains safely empty without legacy reinterpretation', state.machines.length === 0 && state.activeMachineId === '' && state.machineIdentity.name === 'Malformed');
+      } finally { restore(); }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Multi-machine M1 storage fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runMultiMachineStorageFixtures = runMultiMachineStorageFixtures;
     function runMachineSetupFixtures() {
       const results = [], add = (name, pass, actual = '') => results.push({ name, pass: !!pass, actual });
       const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY), dismissedBefore = firstRunOnboardingDismissed, tabBefore = state.activeTab;
@@ -706,7 +816,7 @@
         (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Clear me', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const form = renderReferenceForm(); form.querySelector('#machineWorkAreaWidth').value = ''; form.querySelector('#machineWorkAreaHeight').value = ''; submit(form); add('Blank width and height clear the configured work area while keeping the name', state.machineIdentity.workAreaWidthMm === null && state.machineIdentity.workAreaHeightMm === null && state.machineIdentity.name === 'Clear me'); })();
         (() => { state.machineIdentity = normalizeMachineIdentity(); const form = renderReferenceForm(); form.querySelector('#machineWorkAreaWidth').value = '-5'; form.querySelector('#machineWorkAreaHeight').value = '300'; submit(form); add('Non-positive dimensions are rejected by the real save path', state.machineIdentity.workAreaWidthMm === null && state.machineIdentity.workAreaHeightMm === null && document.getElementById('machineSetupError').hidden === false); })();
         // machineProfile independence and record safety
-        (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Custom Laser' }); state.machineProfile = '20W'; renderReferenceForm(); const select = document.getElementById('machineProfile'); select.value = '40W'; select.dispatchEvent(new Event('change', { bubbles: true })); add('Selecting a Genmitsu Reference profile does not change machineIdentity', state.machineProfile === '40W' && state.machineIdentity.name === 'Custom Laser'); })();
+        (() => { state.machines = [normalizeOwnedMachine({ id:'fixture-custom', name:'Custom Laser', type:'diode' })]; state.activeMachineId = 'fixture-custom'; synchronizeMachineIdentity(); state.machineProfile = '20W'; renderReferenceForm(); const select = document.getElementById('machineProfile'); select.value = '40W'; select.dispatchEvent(new Event('change', { bubbles: true })); add('Selecting a Genmitsu Reference profile does not change machineIdentity', state.machineProfile === '40W' && state.machineIdentity.name === 'Custom Laser' && state.machines[0].id === 'fixture-custom'); })();
         add('Custom machine name does not leak into Genmitsu Test Grid machine identity', (() => { state.machineProfile = '20W'; state.machineIdentity = normalizeMachineIdentity({ name: 'Custom Laser' }); return activeMachineSnapshot().label === 'Genmitsu L8 20W' && currentMachineDisplayName() === 'Custom Laser'; })());
         add('Changing machineIdentity does not rewrite existing records', (() => { state.grids = [{ id: 'g-fixture', name: 'G', material: 'Basswood', machine: { key: 'genmitsu-l8-20w', label: 'Genmitsu L8 20W' } }]; const before = JSON.stringify(state.grids); const form = renderReferenceForm(); form.querySelector('#machineName').value = 'New Name'; form.querySelector('#machineWorkAreaWidth').value = '500'; form.querySelector('#machineWorkAreaHeight').value = '400'; submit(form); return JSON.stringify(state.grids) === before && state.machineIdentity.name === 'New Name'; })());
         // First-run interaction
@@ -718,13 +828,13 @@
         add('Current backup metadata remains unchanged and additive', (() => { const b = backupObject(); return b.app === APP_ID && b.appVersion === APP_VERSION && b.backupFormat === BACKUP_FORMAT && b.schemaVersion === SCHEMA_VERSION; })());
         add('Replace import restores the backup machineIdentity through the real seam', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Local' }); const incoming = { ...backupObject(), machineIdentity: { name: 'Imported', workAreaWidthMm: 500, workAreaHeightMm: 350 } }; const result = applyBackupImport(incoming, 'replace'); return result.accepted && state.machineIdentity.name === 'Imported' && state.machineIdentity.workAreaWidthMm === 500 && state.machineIdentity.workAreaHeightMm === 350; })());
         add('Replace of a legacy backup without machineIdentity yields the empty default', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Local', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const legacy = { schemaVersion: 1, entries: [] }; const result = applyBackupImport(legacy, 'replace'); return result.accepted && state.machineIdentity.name === '' && state.machineIdentity.workAreaWidthMm === null && state.machineIdentity.workAreaHeightMm === null; })());
-        add('Merge import preserves the current local machineIdentity', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Local Only', workAreaWidthMm: 410, workAreaHeightMm: 320 }); const incoming = { ...backupObject(), machineIdentity: { name: 'Should Not Apply', workAreaWidthMm: 999, workAreaHeightMm: 888 }, entries: [{ id: 'merge-entry', material: 'X' }] }; const result = applyBackupImport(incoming, 'merge'); return result.accepted && state.machineIdentity.name === 'Local Only' && state.machineIdentity.workAreaWidthMm === 410 && state.entries.some(entry => entry.id === 'merge-entry'); })());
+        add('Merge import preserves the current local machineIdentity', (() => { state.machines = [normalizeOwnedMachine({ id:'fixture-local', name:'Local Only', type:'diode', workAreaWidthMm:410, workAreaHeightMm:320 })]; state.activeMachineId = 'fixture-local'; synchronizeMachineIdentity(); const incoming = { ...backupObject(), machineIdentity: { name: 'Should Not Apply', workAreaWidthMm: 999, workAreaHeightMm: 888 }, entries: [{ id: 'merge-entry', material: 'X' }] }; const result = applyBackupImport(incoming, 'merge'); return result.accepted && state.machineIdentity.name === 'Local Only' && state.machineIdentity.workAreaWidthMm === 410 && state.entries.some(entry => entry.id === 'merge-entry'); })());
         add('A legacy backup without machineIdentity remains accepted', validateBackupImport({ schemaVersion: 1, entries: [] }).accepted && validateBackupImport({ entries: [] }).accepted);
-        add('Rejected imports do not mutate machineIdentity, and future/app/format guards are unchanged', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Protected', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const before = JSON.stringify(state.machineIdentity); const future = applyBackupImport({ ...backupObject(), schemaVersion: SCHEMA_VERSION + 1 }, 'replace'); const foreignApp = applyBackupImport({ ...backupObject(), app: 'other-app' }, 'replace'); const foreignFormat = applyBackupImport({ ...backupObject(), backupFormat: 'other-format' }, 'replace'); return !future.accepted && !foreignApp.accepted && !foreignFormat.accepted && JSON.stringify(state.machineIdentity) === before; })());
+        add('Rejected imports do not mutate machineIdentity, and future/app/format guards are unchanged', (() => { state.machines = [normalizeOwnedMachine({ id:'fixture-protected', name:'Protected', type:'diode', workAreaWidthMm:400, workAreaHeightMm:300 })]; state.activeMachineId = 'fixture-protected'; synchronizeMachineIdentity(); const before = JSON.stringify(state.machineIdentity); const future = applyBackupImport({ ...backupObject(), schemaVersion: SCHEMA_VERSION + 1 }, 'replace'); const foreignApp = applyBackupImport({ ...backupObject(), app: 'other-app' }, 'replace'); const foreignFormat = applyBackupImport({ ...backupObject(), backupFormat: 'other-format' }, 'replace'); return !future.accepted && !foreignApp.accepted && !foreignFormat.accepted && JSON.stringify(state.machineIdentity) === before; })());
         // Constants and storage integrity
         add('STORAGE_KEY and SCHEMA_VERSION remain unchanged', STORAGE_KEY === 'genmitsu-l8-tracker-v1' && SCHEMA_VERSION === 2);
         add('APP_VERSION and BUILD_DATE remain unchanged', APP_VERSION === '0.9.0' && BUILD_DATE === '2026-07-19');
-        add('machineIdentity is the only new persisted key and no second storage key is created', (() => { state.machineIdentity = normalizeMachineIdentity({ name: 'Persist', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const keysBefore = Object.keys(localStorage).length; persist(); const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); return Object.keys(localStorage).length === keysBefore && stored.machineIdentity && stored.machineIdentity.name === 'Persist' && localStorage.getItem(STORAGE_KEY + '-machine') === null; })());
+        add('Machine root fields persist under the existing storage key without a second key', (() => { state.machines = [normalizeOwnedMachine({ id:'fixture-persist', name:'Persist', type:'diode', workAreaWidthMm:400, workAreaHeightMm:300 })]; state.activeMachineId = 'fixture-persist'; const keysBefore = Object.keys(localStorage).length; persist(); const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); return Object.keys(localStorage).length === keysBefore && stored.machineIdentity?.name === 'Persist' && stored.machines?.[0]?.id === 'fixture-persist' && stored.activeMachineId === 'fixture-persist' && localStorage.getItem(STORAGE_KEY + '-machine') === null; })());
         // Reference UI and attribution
         (() => { const html = (state.activeTab = 'reference', renderReference()); add('Reference renders the current-machine setup panel with labeled inputs', /id="machineSetupForm"/.test(html) && /Current workshop machine/.test(html) && /id="machineName"/.test(html) && /id="machineWorkAreaWidth"/.test(html) && /id="machineWorkAreaHeight"/.test(html) && /id="saveMachineSetup"/.test(html)); add('Reference labels the 20W/40W selection as a Genmitsu L8 Reference profile', /Genmitsu L8 Reference profile/.test(html) && /Genmitsu L8 20W/.test(html) && /Genmitsu L8 40W/.test(html) && /bundled Genmitsu L8 manufacturer starting points/.test(html)); add('Reference states manufacturer values are starting points', /starting points/i.test(html) && /Official values are starting points/.test(html)); add('Work-area text states advisory-only behavior and millimeter storage', /advisory only/i.test(html) && /does not resize designs, perform nesting, guarantee bed fit, control the machine/.test(html) && /stored in millimeters/i.test(html)); add('Reference machine setup introduces no external dependency or network URL', !/https?:\/\//i.test(html.match(/<form[^>]*id="machineSetupForm"[\s\S]*?<\/form>/)?.[0] || '')); })();
         // Help
@@ -1004,6 +1114,7 @@
     }
     window.runResponsiveTuningFixtures = runResponsiveTuningFixtures;
     function backupObject() {
+      synchronizeMachineIdentity();
       return {
         app: APP_ID,
         appVersion: APP_VERSION,
@@ -1028,6 +1139,8 @@
         libraryMatchThickness: state.libraryMatchThickness,
         libraryMatchUnit: state.libraryMatchUnit,
         machineProfile: state.machineProfile,
+        machines: normalizeMachines(state.machines),
+        activeMachineId: resolveActiveMachineId(state.machines, state.activeMachineId),
         machineIdentity: normalizeMachineIdentity(state.machineIdentity),
         pricing: state.pricing,
         pricingPrefs: state.pricingPrefs
@@ -5650,7 +5763,17 @@
         width = Number(rawWidth); height = Number(rawHeight);
         if (!(Number.isFinite(width) && width > 0) || !(Number.isFinite(height) && height > 0)) { showError('Work-area width and height must each be a number greater than zero, in millimeters.'); return false; }
       }
-      state.machineIdentity = normalizeMachineIdentity({ name: (nameInput?.value || '').trim(), workAreaWidthMm: width, workAreaHeightMm: height });
+      const identity = normalizeMachineIdentity({ name: (nameInput?.value || '').trim(), workAreaWidthMm: width, workAreaHeightMm: height });
+      const active = machineById(resolveActiveMachineId(state.machines, state.activeMachineId), state.machines);
+      if (active) {
+        state.machines = state.machines.map(machine => machine.id === active.id ? { ...machine, name:identity.name, workAreaWidthMm:identity.workAreaWidthMm, workAreaHeightMm:identity.workAreaHeightMm } : machine);
+        state.activeMachineId = active.id;
+      } else {
+        const machine = normalizeOwnedMachine({ id:uid(), name:identity.name, manufacturer:'', model:'', type:'diode', nominalPowerW:null, workAreaWidthMm:identity.workAreaWidthMm, workAreaHeightMm:identity.workAreaHeightMm, notes:'', archived:false });
+        state.machines = [...normalizeMachines(state.machines), machine];
+        state.activeMachineId = machine.id;
+      }
+      state.machineIdentity = machineIdentityForActiveMachine(state.machines, state.activeMachineId, identity);
       if (!persist()) return false;
       showInfoToast('Machine setup saved.');
       render();
@@ -11914,8 +12037,10 @@
       state.projects = data.projects || [];
       state.inventory = normalizeInventory(data.inventory);
       state.unit = data.unit || state.unit;
-      // Replace restores the backup's machine identity; a legacy backup without one yields the empty default.
-      state.machineIdentity = normalizeMachineIdentity(data.machineIdentity);
+      const machineRoot = machineRootFromData(data);
+      state.machines = machineRoot.machines;
+      state.activeMachineId = machineRoot.activeMachineId;
+      state.machineIdentity = machineRoot.machineIdentity;
       resetBackupPreferences();
       applyBackupPreferences(data);
     }
@@ -11938,6 +12063,12 @@
         rawMaterials: mergeList(inventoryList('rawMaterials'), incomingInventory.rawMaterials),
         finishedBatches: mergeList(inventoryList('finishedBatches'), incomingInventory.finishedBatches)
       };
+      const localMachines = normalizeMachines(state.machines);
+      const incomingMachines = Object.prototype.hasOwnProperty.call(data || {}, 'machines') ? normalizeMachines(data.machines) : [];
+      const localIds = new Set(localMachines.map(machine => machine.id));
+      state.machines = [...localMachines, ...incomingMachines.filter(machine => !localIds.has(machine.id))];
+      state.activeMachineId = resolveActiveMachineId(state.machines, state.activeMachineId);
+      state.machineIdentity = machineIdentityForActiveMachine(state.machines, state.activeMachineId, state.machineIdentity);
       state.unit = data.unit || state.unit;
       applyBackupPreferences(data);
       return stats;
@@ -12205,6 +12336,7 @@
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
     if (selftest === 'first-run' || selftest === 'all') runFirstRunOnboardingFixtures();
     if (selftest === 'machine' || selftest === 'all') runMachineSetupFixtures();
+    if (selftest === 'machines-m1' || selftest === 'all') runMultiMachineStorageFixtures();
     if (selftest === 'help' || selftest === 'all') runHelpSafetyFixtures();
     if (selftest === 'modal' || selftest === 'all') runModalAccessibilityFixtures();
     if (selftest === 'accessibility' || selftest === 'all') runAccessibilityPolishFixtures();
