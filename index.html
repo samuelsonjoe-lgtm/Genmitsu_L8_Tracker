@@ -295,6 +295,7 @@
   <div class="modal" id="materialTestWizardModal"></div>
   <div class="modal" id="projectWizardModal"></div>
   <div class="modal" id="helpModal"></div>
+  <div class="modal" id="importModeModal"></div>
   <div class="toast" id="undoToast"></div>
 
   <script>
@@ -441,6 +442,8 @@
     let promotionSession = promotionSessionDefaults();
     let designProductionNotice = '';
     let pricingPersistTimer = null;
+    let pendingImport = null;
+    let importApplying = false;
     const modalFocusOrigins = new Map();
     const modalOpenOrder = [];
     const PRICING_PERSIST_DELAY = 400;
@@ -725,7 +728,7 @@
         // Reference UI and attribution
         (() => { const html = (state.activeTab = 'reference', renderReference()); add('Reference renders the current-machine setup panel with labeled inputs', /id="machineSetupForm"/.test(html) && /Current workshop machine/.test(html) && /id="machineName"/.test(html) && /id="machineWorkAreaWidth"/.test(html) && /id="machineWorkAreaHeight"/.test(html) && /id="saveMachineSetup"/.test(html)); add('Reference labels the 20W/40W selection as a Genmitsu L8 Reference profile', /Genmitsu L8 Reference profile/.test(html) && /Genmitsu L8 20W/.test(html) && /Genmitsu L8 40W/.test(html) && /bundled Genmitsu L8 manufacturer starting points/.test(html)); add('Reference states manufacturer values are starting points', /starting points/i.test(html) && /Official values are starting points/.test(html)); add('Work-area text states advisory-only behavior and millimeter storage', /advisory only/i.test(html) && /does not resize designs, perform nesting, guarantee bed fit, control the machine/.test(html) && /stored in millimeters/i.test(html)); add('Reference machine setup introduces no external dependency or network URL', !/https?:\/\//i.test(html.match(/<form[^>]*id="machineSetupForm"[\s\S]*?<\/form>/)?.[0] || '')); })();
         // Help
-        (() => { openHelp(); const dialog = modalDialog(document.getElementById('helpModal')), text = dialog?.textContent || ''; add('Help explains the custom machine and work-area advisory limits', /Current workshop machine/i.test(text) && /advisory only/i.test(text) && /do not resize SVGs, perform nesting, guarantee bed fit, control the machine, or change Reference settings/i.test(text) && /specifically Genmitsu L8 starting points/i.test(text)); add('Help modal remains an accessible dialog', dialog?.getAttribute('role') === 'dialog' && dialog.getAttribute('aria-modal') === 'true' && document.getElementById('helpModal').getAttribute('aria-hidden') === 'false'); closeModal('helpModal'); })();
+        (() => { openHelp(); const dialog = modalDialog(document.getElementById('helpModal')), text = dialog?.textContent || ''; add('Help explains the custom machine and work-area advisory limits', /Current workshop machine/i.test(text) && /advisory only/i.test(text) && /does not resize SVGs, perform nesting, guarantee bed fit, control the machine, or change Reference settings/i.test(text) && /specifically Genmitsu L8 starting points/i.test(text)); add('Help modal remains an accessible dialog', dialog?.getAttribute('role') === 'dialog' && dialog.getAttribute('aria-modal') === 'true' && document.getElementById('helpModal').getAttribute('aria-hidden') === 'false'); closeModal('helpModal'); })();
         // Duplicate IDs and Designs neutrality
         (() => { state.activeTab = 'reference'; render(); const ids = [...document.querySelectorAll('[id]')].map(el => el.id); add('Reference machine setup introduces no duplicate HTML IDs', new Set(ids).size === ids.length); })();
         add('machineIdentity does not change Designs production bytes', (() => { const draft = designDefaults(); state.machineIdentity = normalizeMachineIdentity(); const emptySvg = buildDesignResult(draft).svg; state.machineIdentity = normalizeMachineIdentity({ name: 'Laser', workAreaWidthMm: 400, workAreaHeightMm: 300 }); const populatedSvg = buildDesignResult(draft).svg; return typeof emptySvg === 'string' && emptySvg.length > 0 && emptySvg === populatedSvg; })());
@@ -1398,9 +1401,10 @@
       openModal('helpModal', `<div class="dialog"><div class="spread"><h2>Help &amp; Safety</h2><button type="button" data-close aria-label="Close Help and Safety">&times;</button></div>
         <section class="panel" style="margin-top:12px"><h3>About this Tracker</h3><p class="small">${esc(APP_NAME)} v${esc(APP_VERSION)} · Build ${esc(BUILD_DATE)} · Storage schema ${esc(SCHEMA_VERSION)} · Backup format ${esc(BACKUP_FORMAT)}.</p><p class="small muted">It works offline when opened directly from <code>index.html</code>. Records stay in this browser; there is no account, cloud synchronization, or remote recovery.</p></section>
         <section class="panel" style="margin-top:10px"><h3>Your data and backups</h3><p class="small">Export saves Tracker records as a JSON backup. Export regularly; it is not automatic. Import can merge a supported backup or replace the current workspace, so review Replace carefully. Backups from a newer unsupported schema are refused rather than silently downgraded.</p><p class="small muted">Browser data can be cleared, lost, or become inaccessible. Project photos use much more browser storage than text records. Use the existing storage warning and recovery tools if saved data cannot be read; Tracker backups do not include external LightBurn files, source images, or PDFs. If an original related record is unavailable, Tracker keeps any saved historical snapshot and labels the reference unavailable; importing a backup that contains the original may restore the link, but Tracker does not recreate or reassign records automatically.</p></section>
+        <section class="panel" style="margin-top:10px"><h3>Test Grids and Material Tests</h3><ol class="small"><li>Use a <b>Test Grid</b> to compare many speed and power combinations at once.</li><li>Choose a promising result or a <b>winner</b>: the result you selected as best, not an automatic guarantee.</li><li>Use a <b>Material Test</b> to confirm, refine, or document one setting for a Library material.</li><li>The saved result becomes <b>evidence</b>: a saved result supporting why a setting is trusted.</li><li><b>Promotion</b> is a deliberate review that can make supported evidence a preferred proven production setting; it never proves physical safety or material suitability automatically.</li></ol><p class="small muted">Manufacturer and Reference values are starting points, not proof. A proven production setting remains evidence for its recorded material, machine, and conditions.</p></section>
         <section class="panel" style="margin-top:10px"><h3>Using Designs with LightBurn</h3><ol class="small"><li>Generate and preview the design here, then download its production SVG.</li><li>Import it into LightBurn and keep it at <b>100% scale</b>.</li><li>Verify units and finished dimensions, assign suitable engraving and cutting operations, then frame the job and confirm placement before running it.</li></ol><p class="small muted">The Tracker creates geometry; it does not send jobs to the laser. Rescaling changes physical dimensions and fit. Kerf, clearance, thickness, coatings, glue layers, flatness, moisture, and machine variation affect results. Previews do not guarantee fit, strength, or final appearance; use material tests and fit coupons when results matter.</p></section>
         <section class="panel" style="margin-top:10px;background:#fff8e7;border-color:#ead59f"><h3>Laser safety</h3><ul class="small"><li>Maintain active ventilation and fume extraction, keep an active fire watch, never leave the laser unattended, and keep suitable fire suppression nearby.</li><li>Confirm focus; keep material flat and secure; frame or preview the job; keep optics and the work area clean; and use controlled air assist appropriate to the operation and material.</li><li>Verify the exact material and coating composition before lasering. Do not laser PVC, vinyl, chlorinated plastics, mystery plastics, unidentified materials, or unknown coatings.</li><li>Use additional caution with fiberglass, carbon fiber, reflective surfaces, coated metals, foams, leather, adhesives, and composite materials. “Laserable” marketing does not replace composition checks and safe ventilation requirements.</li></ul></section>
-        <section class="panel" style="margin-top:10px"><h3>Starting points and physical validation</h3><p class="small">Manufacturer and Reference values are starting points, not guarantees. Material batches, color, coatings, glue, moisture, flatness, focus, lens condition, ventilation, and machine variation all affect results. Run material tests when settings are unproven, and physically validate cutting, fit, strength, and finish on the actual material. Experimental generators retain their specific warnings.</p><p class="small muted">The optional Current workshop machine name and usable work area on the Reference tab are advisory only: they do not resize SVGs, perform nesting, guarantee bed fit, control the machine, or change Reference settings. The 20W and 40W Reference tables are specifically Genmitsu L8 starting points, not universal settings for another machine.</p></section>
+        <section class="panel" style="margin-top:10px"><h3>Starting points and physical validation</h3><p class="small">Manufacturer and Reference values are starting points, not guarantees. Material batches, color, coatings, glue, moisture, flatness, focus, lens condition, ventilation, and machine variation all affect results. Run material tests when settings are unproven, and physically validate cutting, fit, strength, and finish on the actual material. Experimental generators retain their specific warnings.</p><p class="small muted">Current workshop machine identifies your actual machine and its work area is advisory only. Genmitsu L8 Reference profile selects which bundled manufacturer starting-point table is displayed. Each Test Grid records the machine identity associated with that test. These are separate concepts. The work area does not resize SVGs, perform nesting, guarantee bed fit, control the machine, or change Reference settings. It does not change specifically Genmitsu L8 starting points.</p></section>
         <section class="panel" style="margin-top:10px"><h3>Documentation</h3><div class="actions"><a href="README.md" target="_blank" rel="noopener">Open README</a><a href="docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf" target="_blank" rel="noopener">Open bundled user manual</a></div></section>
         <div class="actions" style="margin-top:12px"><button type="button" data-close>Close Help</button></div></div>`);
       bindModal('helpModal');
@@ -1585,7 +1589,7 @@
         <h2 id="firstRunOnboardingHeading">Welcome to Genmitsu L8 Tracker</h2>
         <p>This Tracker works offline. Your Log, Library, Test Grids, Projects, and Inventory are stored locally in this browser—not in the cloud.</p>
         <p>Browser data can be cleared or become unavailable, so use <b>Export</b> in the header regularly to save a JSON backup file. Restore a backup anytime with <b>Import</b>.</p>
-        <p>When you are ready, pick a starting step:</p>
+        <p><b>The Tracker does not control the laser or send jobs to the machine.</b> When you are ready, pick a starting step:</p>
         <ul>
           <li>Log your first laser job.</li>
           <li>Plan a Test Grid for a new material.</li>
@@ -1861,7 +1865,7 @@
       const { materials, tags, matches, filtered } = libraryViewData();
       return `
         <div class="toolbar" style="margin-bottom:14px">
-          <div class="muted">Curated best-known settings per material. Promote from a log entry, grid cell, or reference row.</div>
+          <div><div class="muted">Curated best-known settings per material. Promote from a log entry, grid cell, or reference row.</div><div class="small muted">Material Tests confirm, refine, or document one setting for a Library material. Test Grids are for comparing many speed and power combinations first.</div></div>
           <div class="row"><button id="printLibrary">Print Library</button><button id="openMaterialTestWizard">Material Test Wizard</button><button class="primary" id="newProfile">Add Material</button></div>
         </div>
         <div class="toolbar" style="margin-bottom:14px">
@@ -1887,7 +1891,7 @@
           </div>
         </div>
         <div class="library-screen-content">
-        <div class="panel" style="margin-bottom:14px">
+        ${state.profiles.length ? `<div class="panel" style="margin-bottom:14px">
           <div class="toolbar">
             <div>
               <b>Find closest saved setting</b>
@@ -1899,7 +1903,7 @@
             </div>
           </div>
           ${matches.length ? `<div class="grid cards" style="margin-top:12px">${matches.map(matchCard).join('')}</div>` : `<div class="small muted" style="margin-top:10px">Enter a material and optional thickness to surface nearby Library profiles.</div>`}
-        </div>
+        </div>` : ''}
         ${state.libraryViewMode === 'browse' ? `<div id="libraryBrowserResults">${libraryBrowserResultsHtml()}</div>` : `<div id="libraryResults">${libraryResultsHtml(filtered)}</div>`}
         </div>
         <div class="print-only library-print-all">${libraryResultsHtml(filtered)}</div>
@@ -2057,7 +2061,7 @@
       const filtered = gridViewData();
       return `
         <div class="toolbar" style="margin-bottom:14px">
-          <div><b>Test Grids</b><div class="small muted">Plan a power x speed test matrix for a new material, then record results per cell.</div></div>
+          <div><b>Test Grids</b><div class="small muted">Compare many speed and power combinations at once, then record results per cell. Use a Material Test later to confirm, refine, or document one setting for a Library material.</div></div>
           <button class="primary" id="newGrid">New Test Grid</button>
         </div>
         <div class="toolbar" style="margin-bottom:14px">
@@ -4078,6 +4082,14 @@
         : [[finger || dice || divider || cleat || fullCleat ? 'finished-view' : 'finished-front',finger || dice || divider || cleat || fullCleat ? 'Finished View' : 'Finished Front View']];
       return `<div class="design-preview-selector" role="group" aria-label="Design preview"><span><b>Preview:</b></span><button type="button" data-design-preview-mode="cut-layout" aria-pressed="${effectiveMode==='cut-layout'}">Cut Layout</button>${buttons.map(([mode,label])=>`<button type="button" data-design-preview-mode="${mode}" aria-pressed="${effectiveMode===mode}" ${validForView?'':'disabled'}>${label}</button>`).join('')}</div>`;
     }
+    function designOperationGuidance(result) {
+      if (!result?.valid) return '';
+      const summary = designOperationsText(result), parts = ['<b>LightBurn layer guidance:</b> Red paths are cut paths.'];
+      if (/Score|guide/i.test(summary)) parts.push('Blue paths, when present, are score or engrave guides.');
+      if (/Label/i.test(summary)) parts.push('Labels or reference marks may use a separate color; review them and assign the intended LightBurn operation.');
+      parts.push('Verify every imported LightBurn layer before running the laser.');
+      return `<div class="design-message">${parts.join(' ')}</div>`;
+    }
     function designResultsHtml(result) {
       const dimensions = result.metrics?.dimensions, patterns = result.metrics?.patterns;
       const sliding = result.metrics?.slidingLid && dimensions;
@@ -4212,6 +4224,7 @@
         : designMetric('Physical pieces', String(result.panels.length));
       const messages = result.errors.map(message => `<div class="design-message error"><b>Error:</b> ${esc(message)}</div>`).join('') + designOrderedWarnings(result.warnings).map(message => `<div class="design-message warning"><b>Warning:</b> ${esc(message)}</div>`).join('');
       const scaleSafetyNotice=result.valid?'<div class="design-message"><b>Exact-scale production SVG:</b> It uses real-world millimeters. Import at 100%; in LightBurn, move or rotate complete parts with their cut outlines, guides, score lines, engravings, and labels together, but do not resize or scale them. Zoom or pan instead; large layouts may require manual arrangement or more than one material sheet.</div>':'';
+      const operationGuidance=designOperationGuidance(result);
       const activePreviewMode=designPreviewModeForTemplate(designDraft.template), frontVisible=activePreviewMode==='finished-front'&&result.valid&&result.frontElevation, fingerVisible=activePreviewMode==='finished-view'&&result.valid&&finger, diceVisible=activePreviewMode==='finished-view'&&result.valid&&dice, dividerVisible=activePreviewMode==='finished-view'&&result.valid&&divider, cleatVisible=activePreviewMode==='finished-view'&&result.valid&&cleat, fullCleatVisible=activePreviewMode==='finished-view'&&result.valid&&fullCleat, slidingVisible=!!slidingFinishedMode&&result.valid&&sliding;
       const outputCards=result.requiresMultipleProductionOutputs&&result.valid&&!frontVisible?`<div class="design-svg-preview">${result.productionOutputs.map(output=>`<div class="panel" data-production-output="${esc(output.id)}"><b>${esc(output.label)}</b><div class="small muted">${designNumberText(output.thicknessMm)} mm stock / ${designDimensionsText(output.widthMm,output.heightMm)} sheet</div><object type="image/svg+xml" aria-label="${esc(output.label)} exact SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(output.svg)}`)}"></object><button type="button" class="primary" data-download-production-output="${esc(output.id)}">Download ${esc(output.label)} SVG</button></div>`).join('')}<div class="small muted"><b>Two production files are required.</b> Use separate stock and focus, speed, power, passes, and air-assist settings; the shell fallback is not a complete cabinet file.</div></div>`:'';
       const preview = outputCards || (frontVisible ? `<div class="design-svg-preview">${buildDrawerCabinetFrontElevationSvg(result.frontElevation)}${drawerCabinetFrontLegendHtml(result.frontElevation)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> Labels use bottom-up row numbering; red dashed marks indicate nominal running gaps.</div></div>` : fingerVisible ? `<div class="design-svg-preview">${buildFingerBoxFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> This view does not prove fit, strength, kerf accuracy, glue quality, or production success.</div></div>` : fullCleatVisible ? `<div class="design-svg-preview">${buildConcealedCleatFullBoxFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> Full-box registration prototype - dry-fit, manually square, clamp, and physically validate before production use.</div></div>` : cleatVisible ? `<div class="design-svg-preview">${buildConcealedCleatFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> Assembly and registration prototype - not a strength test; the visible butt seam, glue dependency, and manual squaring remain.</div></div>` : diceVisible ? `<div class="design-svg-preview">${buildDiceTrayFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> This open-top view uses the structured Tray model and does not prove fit, strength, kerf accuracy, glue quality, or production safety.</div></div>` : dividerVisible ? `<div class="design-svg-preview">${buildDividerTrayFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> This open-top view uses recorded Divider Tray model positions and slot relationships; it does not prove retention, fit, strength, kerf accuracy, glue quality, or production safety.</div></div>` : slidingVisible ? `<div class="design-svg-preview">${buildSlidingLidFinishedViewSvg(result,slidingFinishedMode==='finished-open'?'open':'closed')}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> This view does not prove smooth travel, fit, strength, kerf accuracy, glue quality, or production safety.</div></div>` : result.valid ? `<div class="design-svg-preview"><object type="image/svg+xml" aria-label="Exact exported SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`)}"></object></div>` : '<div class="design-svg-preview"><div class="empty"><b>Preview unavailable</b><div class="small muted">Correct the errors before previewing or downloading.</div></div></div>');
@@ -4237,7 +4250,7 @@
         : result.metrics?.assemblyLabels ? '<div class="design-message"><b>Assembly labels:</b> Marks are placed on the displayed sheet face and are intended for the inside or concealed faces. Verify Left/Right orientation, label visibility, and the marked face during the first assembly; the finger-box cut geometry is unchanged.</div>' : '';
       const operations=result.valid?designMetric('Operations',designOperationsText(result)):'';
       const promotionEntry = jointCoupon && result.valid && result.metrics?.couponType !== 'wall-base-tab' ? '<div class="actions" style="margin-top:10px"><button type="button" data-promote-joint-coupon>Promote physical winner</button></div>' : '';
-      const messageGroup=messages||scaleSafetyNotice?`<section aria-labelledby="design-messages-heading"><h4 id="design-messages-heading">Messages</h4>${messages || ''}${scaleSafetyNotice}</section>`:'',assemblyGroup=assembly?`<section aria-labelledby="design-assembly-heading"><h4 id="design-assembly-heading">Assembly</h4>${assembly}</section>`:'';
+      const messageGroup=messages||scaleSafetyNotice||operationGuidance?`<section aria-labelledby="design-messages-heading"><h4 id="design-messages-heading">Messages</h4>${messages || ''}${scaleSafetyNotice}${operationGuidance}</section>`:'',assemblyGroup=assembly?`<section aria-labelledby="design-assembly-heading"><h4 id="design-assembly-heading">Assembly</h4>${assembly}</section>`:'';
       return `${designPreviewSelectorHtml(result)}${drawerCabinetSeparateFinishedNote}<div class="design-preview-layout"><div class="panel" role="status" aria-live="polite" aria-atomic="false"><h4>Result summary</h4><div class="metrics" style="margin-top:10px">${productionSvgSize}${operations}${metrics}</div>${messageGroup || (result.valid?'<div class="design-message"><b>Ready:</b> Preview and download use the same validated SVG.</div>':'')}${assemblyGroup}${promotionEntry}</div>${preview}</div>`;
     }
     function refreshDesignPreview() {
@@ -5568,7 +5581,7 @@
         </div>
         <form class="panel" id="machineSetupForm" style="margin-bottom:14px" aria-labelledby="machineSetupHeading">
           <h3 id="machineSetupHeading" style="margin:0 0 4px;font-size:16px">Current workshop machine</h3>
-          <p class="small muted" style="margin:0 0 10px">Optional. Name the laser you actually use and the usable work area you intend to stay within. This is advisory only: it does not resize designs, perform nesting, guarantee bed fit, control the machine, or change the Genmitsu L8 Reference profile above. A custom name here does not imply your machine is a Genmitsu.</p>
+          <p class="small muted" style="margin:0 0 10px">Optional. Name the laser you actually use and the usable work area you intend to stay within. This is advisory only: it does not resize designs, perform nesting, guarantee bed fit, control the machine, or change the Genmitsu L8 Reference profile above. A custom name here does not imply your machine is a Genmitsu. Current workshop machine identifies your actual machine; the Reference profile selects a bundled starting-point table; each Test Grid records the machine associated with that test.</p>
           <div class="formgrid">
             <label class="span2">Machine name (optional)
               <input type="text" id="machineName" maxlength="120" autocomplete="off" placeholder="e.g. My diode laser" value="${esc(machineIdentity.name)}">
@@ -6710,7 +6723,7 @@
               return `<tr>
                 <td><b>${esc(ref.material)}</b></td><td>${esc(ref.jobType)}</td><td>${ref.lineInterval ?? '-'}</td>
                 <td>${ref.minPower == null ? '-' : ref.minPower + '%'}</td><td>${ref.speed == null ? '-' : ref.speed + ' mm/min'}</td><td>${ref.passes ?? '-'}</td>
-                <td>${esc(ref.note || '')}</td><td><button data-ref="${watts}:${i}">Save</button></td>
+                <td>${esc(ref.note || '')}</td><td><button data-ref="${watts}:${i}" aria-label="Copy ${esc(ref.material)} ${esc(ref.jobType)} starting point to Library">Copy to Library</button></td>
               </tr>`;
             }).join('')}</tbody>
           </table>
@@ -6835,6 +6848,66 @@
       return { passed, failed, results };
     }
     window.runEmptyStateDanglingReferenceFixtures = runEmptyStateDanglingReferenceFixtures;
+    function runBeginnerClarityFixtures() {
+      const results = [], add = (name, pass) => results.push({ name, pass:!!pass });
+      const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY), backupBefore = JSON.stringify(backupObject()), dismissedBefore = firstRunOnboardingDismissed, pendingBefore = pendingImport, applyingBefore = importApplying, draftBefore = JSON.stringify(designDraft), previewBefore = designPreviewMode, originsBefore = [...modalFocusOrigins.entries()], orderBefore = [...modalOpenOrder], focusBefore = document.activeElement;
+      const modalIds = [...document.querySelectorAll('.modal')].map(modal => modal.id), modalSnapshots = Object.fromEntries(modalIds.map(id => { const modal = document.getElementById(id); return [id, { html:modal.innerHTML, open:modal.classList.contains('open'), aria:modal.getAttribute('aria-hidden') }]; }));
+      const restore = () => {
+        Object.assign(state, JSON.parse(stateBefore));
+        if (storageBefore === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, storageBefore);
+        firstRunOnboardingDismissed = dismissedBefore; pendingImport = pendingBefore; importApplying = applyingBefore; Object.assign(designDraft, JSON.parse(draftBefore)); designPreviewMode = previewBefore;
+        modalFocusOrigins.clear(); originsBefore.forEach(([id, origin]) => modalFocusOrigins.set(id, origin)); modalOpenOrder.splice(0, modalOpenOrder.length, ...orderBefore); render();
+        modalIds.forEach(id => { const modal = document.getElementById(id), snapshot = modalSnapshots[id]; modal.innerHTML = snapshot.html; modal.classList.toggle('open', snapshot.open); if (snapshot.aria === null) modal.removeAttribute('aria-hidden'); else modal.setAttribute('aria-hidden', snapshot.aria); });
+        resetImportFileSelection(); if (focusBefore?.isConnected) try { focusBefore.focus({ preventScroll:true }); } catch (_) { focusBefore.focus(); }
+      };
+      const setWorkspace = () => {
+        Object.assign(state, freshState()); state.entries = [{ id:'beginner-current', material:'Current material' }]; state.machineIdentity = normalizeMachineIdentity({ name:'Current workshop laser', workAreaWidthMm:400, workAreaHeightMm:300 }); state.activeTab = 'log'; persist(); render();
+      };
+      const incomingBackup = () => ({ ...backupObject(), entries:[{ id:'beginner-imported', material:'Imported material' }], profiles:[{ id:'beginner-profile', material:'Imported material', tests:[], productionSettings:[] }], grids:[{ id:'beginner-grid', name:'Imported grid' }], machineProfile:'40W', machineIdentity:{ name:'Backup workshop laser', workAreaWidthMm:600, workAreaHeightMm:400 } });
+      try {
+        add('Release, storage, and backup identities remain stable', STORAGE_KEY === 'genmitsu-l8-tracker-v1' && SCHEMA_VERSION === 2 && APP_ID === 'genmitsu-l8-tracker' && BACKUP_FORMAT === 'genmitsu-l8-tracker-backup-v1');
+        setWorkspace(); const trigger = document.getElementById('importBtn'), importBefore = JSON.stringify(state), storageBeforeCancel = localStorage.getItem(STORAGE_KEY), backupBeforeCancel = JSON.stringify(backupObject()); trigger.focus();
+        add('Supported backup opens the three-choice import dialog', openImportModeDialog(incomingBackup()) && document.getElementById('importModeModal').classList.contains('open'));
+        const modeText = document.getElementById('importModeModal').textContent;
+        add('Import dialog explains Merge, Replace, and Cancel before mutation', /Merge with current data/.test(modeText) && /Replace current data/.test(modeText) && /Cancel import/.test(modeText));
+        add('Import dialog starts on a non-destructive control', document.activeElement?.matches('#importModeModal [data-close]'));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key:'Escape', bubbles:true, cancelable:true }));
+        add('Escape cancels import without changing state, storage, or backup serialization', JSON.stringify(state) === importBefore && localStorage.getItem(STORAGE_KEY) === storageBeforeCancel && JSON.stringify(backupObject()) === backupBeforeCancel);
+        add('Escape clears pending import state and file selection', pendingImport === null && !document.getElementById('importModeModal').classList.contains('open') && document.getElementById('importFile').value === '');
+        setWorkspace(); const mergeMachine = currentMachineDisplayName(); openImportModeDialog(incomingBackup()); document.querySelector('#importModeModal [data-import-merge]').click();
+        add('Merge keeps current records and adds imported records', state.entries.some(entry => entry.id === 'beginner-current') && state.entries.some(entry => entry.id === 'beginner-imported'));
+        add('Merge preserves the current workshop machine identity', currentMachineDisplayName() === mergeMachine);
+        setWorkspace(); const replaceBefore = JSON.stringify(state); openImportModeDialog(incomingBackup()); document.querySelector('#importModeModal [data-import-replace]').click();
+        add('Replace requires a second explicit confirmation before mutation', document.getElementById('importModeModal').textContent.includes('Replace current Tracker data?') && JSON.stringify(state) === replaceBefore);
+        document.querySelector('#importModeModal [data-import-cancel]').click();
+        add('Replace confirmation can be cancelled without changing data', JSON.stringify(state) === replaceBefore && pendingImport === null);
+        openImportModeDialog(incomingBackup()); document.querySelector('#importModeModal [data-import-replace]').click(); document.querySelector('#importModeModal [data-import-confirm-replace]').click();
+        add('Confirmed Replace applies only backup records and restores its machine identity', state.entries.length === 1 && state.entries[0]?.id === 'beginner-imported' && currentMachineDisplayName() === 'Backup workshop laser');
+        add('Rejected imports never open the mode dialog', !openImportModeDialog({ ...incomingBackup(), app:'foreign-app' }) && pendingImport === null);
+        const referenceHtml = referenceTable('', reference20w, '20W');
+        add('Reference rows say Copy to Library and do not expose a bare Save action', /Copy to Library/.test(referenceHtml) && !/>Save<|> Save </.test(referenceHtml));
+        setWorkspace(); state.activeTab = 'library'; state.profiles = []; render();
+        add('Empty Library shows its empty state before any match helper', !!document.querySelector('#libraryResults .empty') && !document.getElementById('libraryMatchMaterial'));
+        state.profiles = [{ id:'beginner-library', material:'Birch', tests:[], productionSettings:[] }]; render();
+        add('Library match helper returns after a Library material exists', !!document.getElementById('libraryMatchMaterial'));
+        state.activeTab = 'grids'; render();
+        add('Test Grid screen explains comparison before Material Test confirmation', document.getElementById('app').textContent.includes('Compare many speed and power combinations at once') && document.getElementById('app').textContent.includes('Material Test later to confirm, refine, or document one setting'));
+        document.getElementById('helpBtn').click(); const helpText = document.getElementById('helpModal').textContent;
+        add('Help explains Test Grid, Material Test, evidence, winner, promotion, and proven-setting limits', ['Test Grid','Material Test','evidence','winner','Promotion','proven production setting'].every(text => helpText.includes(text)) && /not an automatic guarantee/i.test(helpText) && /never proves physical safety/i.test(helpText)); closeModal('helpModal');
+        Object.assign(state, freshState()); firstRunOnboardingDismissed = false; state.activeTab = 'log'; render();
+        add('First-run onboarding says Tracker does not control the laser', document.getElementById('firstRunOnboarding')?.textContent.includes('does not control the laser'));
+        state.activeTab = 'reference'; render();
+        add('Reference distinguishes workshop machine, Reference profile, and Test Grid snapshot', document.getElementById('app').textContent.includes('Current workshop machine identifies your actual machine') && document.getElementById('app').textContent.includes('Reference profile selects a bundled starting-point table') && document.getElementById('app').textContent.includes('Test Grid records the machine associated with that test'));
+        const result = buildDesignResult({ ...designDefaults(), template:'finger-box' }), svgBefore = result.svg, resultHtml = designResultsHtml(result);
+        add('Design results give explicit LightBurn red-cut guidance', /LightBurn layer guidance/.test(resultHtml) && /Red paths are cut paths/.test(resultHtml));
+        add('Design guidance is screen-only and leaves production SVG bytes unchanged', result.svg === svgBefore);
+        add('Beginner clarity adds no persisted state or backup fields', !Object.keys(freshState()).some(key => /beginner|importMode|helpText|operationGuidance/i.test(key)) && !Object.keys(backupObject()).some(key => /beginner|importMode|helpText|operationGuidance/i.test(key)));
+      } finally { restore(); }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Beginner clarity fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runBeginnerClarityFixtures = runBeginnerClarityFixtures;
     function materialSafetyWarning(material) {
       const text = String(material || '').toLowerCase();
       if (!text.trim()) return null;
@@ -10301,6 +10374,7 @@
       }
       if (id === 'productionSettingModal') productionEvidenceDraft = [];
       if (id === 'projectWizardModal') projectWizard = null;
+      if (id === 'importModeModal') { pendingImport = null; importApplying = false; resetImportFileSelection(); }
       const modal = document.getElementById(id);
       modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); modal.innerHTML = '';
       const index = modalOpenOrder.lastIndexOf(id); if (index >= 0) modalOpenOrder.splice(index, 1);
@@ -11905,6 +11979,48 @@
       document.getElementById('undoDelete').onclick = restoreDeletedItem;
       pendingUndo.timer = setTimeout(hideUndoToast, 8000);
     }
+    function resetImportFileSelection() {
+      const input = document.getElementById('importFile');
+      if (input) input.value = '';
+    }
+    function openImportModeDialog(data, validation = validateBackupImport(data)) {
+      if (!validation.accepted) return false;
+      pendingImport = { data, validation };
+      importApplying = false;
+      openModal('importModeModal', `<div class="dialog"><div class="spread"><div><h2>Choose import mode</h2><div class="small muted">Review the effect before applying this backup.</div></div><button type="button" data-close aria-label="Cancel import">&times;</button></div><div class="panel" style="margin-top:12px"><b>Merge with current data</b><div class="small muted" style="margin-top:5px">Keep current compatible records and add or merge compatible records from this backup. Your current local workshop machine identity stays in place.</div></div><div class="panel" style="margin-top:10px"><b>Replace current data</b><div class="small muted" style="margin-top:5px">Replace current Tracker records with this backup. Current records not in the backup will be removed, and the backup's workshop machine identity will be restored. Export a backup first if you may need the current records.</div></div><div class="panel" style="margin-top:10px"><b>Cancel import</b><div class="small muted" style="margin-top:5px">Close without changing Tracker records or browser storage.</div></div><div class="actions" style="margin-top:14px"><button type="button" data-import-cancel>Cancel import</button><button type="button" class="primary" data-import-merge>Merge with current data</button><button type="button" class="danger" data-import-replace>Replace current data</button></div></div>`);
+      const modal = document.getElementById('importModeModal');
+      modal.querySelector('[data-import-cancel]').onclick = () => closeModal('importModeModal');
+      modal.querySelector('[data-import-merge]').onclick = () => applyPendingImport('merge');
+      modal.querySelector('[data-import-replace]').onclick = () => showImportReplaceConfirmation();
+      bindModal('importModeModal');
+      return true;
+    }
+    function showImportReplaceConfirmation() {
+      if (!pendingImport || importApplying) return false;
+      openModal('importModeModal', `<div class="dialog"><div class="spread"><div><h2>Replace current Tracker data?</h2><div class="small muted">This is the destructive import step.</div></div><button type="button" data-close aria-label="Cancel import">&times;</button></div><div class="panel softbad" style="margin-top:12px"><b>Current Tracker records will be replaced.</b><div class="small" style="margin-top:5px">Log entries, Library profiles, Test Grids, Projects, and Inventory records not contained in the selected backup will be removed. The backup's workshop machine identity will be restored. Export first if you need the current records.</div></div><div class="actions" style="margin-top:14px"><button type="button" data-import-cancel>Cancel import</button><button type="button" class="danger" data-import-confirm-replace>Replace current data</button></div></div>`);
+      const modal = document.getElementById('importModeModal');
+      modal.querySelector('[data-import-cancel]').onclick = () => closeModal('importModeModal');
+      modal.querySelector('[data-import-confirm-replace]').onclick = () => applyPendingImport('replace');
+      bindModal('importModeModal');
+      return true;
+    }
+    function applyPendingImport(mode) {
+      if (importApplying || !pendingImport || !['merge','replace'].includes(mode)) return false;
+      importApplying = true;
+      const { data, validation } = pendingImport;
+      const importResult = applyBackupImport(data, mode, validation);
+      const mergeStats = importResult.mergeStats;
+      if (projectWizard) closeModal('projectWizardModal');
+      const recovering = !!storageRecoveryIssue;
+      if (!persist({ allowRecoveryOverwrite: recovering })) {
+        pendingImport = null; importApplying = false; closeModal('importModeModal'); render();
+        return false;
+      }
+      if (recovering) storageRecoveryIssue = null;
+      pendingImport = null; importApplying = false; closeModal('importModeModal'); render();
+      if (mergeStats) showInfoToast(mergeSummaryText(mergeStats));
+      return true;
+    }
     function restoreDeletedItem() {
       if (!pendingUndo) return;
       const undo = pendingUndo;
@@ -12061,21 +12177,7 @@
           const data = decoded.data;
           const validation = validateBackupImport(data);
           if (!validation.accepted) { alert(validation.message); return; }
-          const merge = confirm('Import mode: OK = merge with current data, Cancel = replace everything.');
-          if (!merge) {
-            if (!confirm('Replace all current entries, library, grids, projects, and inventory?')) return;
-          }
-          const importResult = applyBackupImport(data, merge ? 'merge' : 'replace', validation);
-          const mergeStats = importResult.mergeStats;
-          if (projectWizard) closeModal('projectWizardModal');
-          const recovering = !!storageRecoveryIssue;
-          if (!persist({ allowRecoveryOverwrite: recovering })) {
-            render();
-            return;
-          }
-          if (recovering) storageRecoveryIssue = null;
-          render();
-          if (mergeStats) showInfoToast(mergeSummaryText(mergeStats));
+          openImportModeDialog(data, validation);
         } catch (_) { alert('Could not read that file. Make sure it is a valid backup JSON.'); }
       };
       reader.readAsText(file); e.target.value = '';
@@ -12108,6 +12210,7 @@
     if (selftest === 'accessibility' || selftest === 'all') runAccessibilityPolishFixtures();
     if (selftest === 'responsive' || selftest === 'all') runResponsiveTuningFixtures();
     if (selftest === 'empty-state' || selftest === 'all') runEmptyStateDanglingReferenceFixtures();
+    if (selftest === 'beginner' || selftest === 'all') runBeginnerClarityFixtures();
     if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
     if (selftest === 'design' || selftest === 'designs' || selftest === 'all') runDesignGeometryFixtures();
   })();
