@@ -411,6 +411,8 @@
     let promotionSession = promotionSessionDefaults();
     let designProductionNotice = '';
     let pricingPersistTimer = null;
+    const modalFocusOrigins = new Map();
+    const modalOpenOrder = [];
     const PRICING_PERSIST_DELAY = 400;
 
     function decodeStoredState(raw) {
@@ -612,6 +614,43 @@
       return { passed, failed, results };
     }
     window.runFirstRunOnboardingFixtures = runFirstRunOnboardingFixtures;
+    function runModalAccessibilityFixtures() {
+      const results = [], add = (name, pass) => results.push({ name, pass:!!pass });
+      const modalIds = [...document.querySelectorAll('.modal')].map(modal => modal.id), snapshots = Object.fromEntries(modalIds.map(id => { const modal = document.getElementById(id); return [id, { html:modal.innerHTML, open:modal.classList.contains('open'), aria:modal.getAttribute('aria-hidden') }]; }));
+      const originEntries = [...modalFocusOrigins.entries()], orderBefore = [...modalOpenOrder], activeBefore = document.activeElement, stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY);
+      let trigger = document.createElement('button'); trigger.type = 'button'; trigger.textContent = 'Modal fixture trigger'; document.body.appendChild(trigger);
+      const restore = () => {
+        Object.assign(state, JSON.parse(stateBefore));
+        if (storageBefore === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, storageBefore);
+        modalFocusOrigins.clear(); originEntries.forEach(([id, origin]) => modalFocusOrigins.set(id, origin)); modalOpenOrder.splice(0, modalOpenOrder.length, ...orderBefore);
+        render();
+        modalIds.forEach(id => { const modal = document.getElementById(id), snapshot = snapshots[id]; modal.innerHTML = snapshot.html; modal.classList.toggle('open', snapshot.open); if (snapshot.aria === null) modal.removeAttribute('aria-hidden'); else modal.setAttribute('aria-hidden', snapshot.aria); });
+        trigger.remove(); if (activeBefore?.isConnected) try { activeBefore.focus({ preventScroll:true }); } catch (_) { activeBefore.focus(); }
+      };
+      try {
+        trigger.focus();
+        const dialogHtml = (title, body = '<button type="button" data-close>Cancel</button>', includeClose = true) => `<div class="dialog"><div class="spread"><h2>${title}</h2>${includeClose ? '<button type="button" data-close>Close</button>' : ''}</div>${body}</div>`;
+        modalIds.forEach(id => { openModal(id, dialogHtml(`${id} fixture`)); const modal = document.getElementById(id), dialog = modalDialog(modal), heading = dialog.querySelector('h2'); add(`Dialog semantics and unique name for ${id}`, dialog?.getAttribute('role') === 'dialog' && dialog.getAttribute('aria-modal') === 'true' && dialog.getAttribute('aria-labelledby') === heading?.id && heading?.id === modalHeadingId(id) && modal.getAttribute('aria-hidden') === 'false'); closeModal(id); });
+        add('Closed modals are hidden from active dialog exposure', modalIds.every(id => document.getElementById(id).getAttribute('aria-hidden') === 'true'));
+        trigger.focus(); openModal('entryModal', dialogHtml('Autofocus fixture', '<input autofocus><button type="button" data-close>Cancel</button>')); add('Open captures trigger and prioritizes autofocus', modalFocusOrigins.get('entryModal') === trigger && document.activeElement === document.querySelector('#entryModal [autofocus]')); closeModal('entryModal');
+        trigger.focus(); openModal('entryModal', dialogHtml('First focusable fixture', '<input><button type="button" data-close>Cancel</button>', false)); add('Open uses first enabled visible control when no autofocus exists', document.activeElement === document.querySelector('#entryModal input')); closeModal('entryModal');
+        trigger.focus(); openModal('entryModal', dialogHtml('Panel fallback fixture', '', false)); add('Dialog panel receives focus when it has no focusable children', document.activeElement === modalDialog(document.getElementById('entryModal'))); closeModal('entryModal');
+        trigger.focus(); openModal('entryModal', dialogHtml('Trap fixture', '<button type="button" id="modalFixtureFirst">First</button><button type="button" id="modalFixtureLast">Last</button>', false)); const first = document.getElementById('modalFixtureFirst'), last = document.getElementById('modalFixtureLast'); last.focus(); document.dispatchEvent(new KeyboardEvent('keydown', { key:'Tab', bubbles:true, cancelable:true })); const wrapsForward = document.activeElement === first; first.focus(); document.dispatchEvent(new KeyboardEvent('keydown', { key:'Tab', shiftKey:true, bubbles:true, cancelable:true })); const wrapsBackward = document.activeElement === last; trigger.focus(); document.dispatchEvent(new KeyboardEvent('keydown', { key:'Tab', bubbles:true, cancelable:true })); add('Tab, Shift+Tab, and outside focus stay contained in the active dialog', wrapsForward && wrapsBackward && document.activeElement === first);
+        document.dispatchEvent(new KeyboardEvent('keydown', { key:'Escape', bubbles:true, cancelable:true })); add('Escape closes the active dialog and restores its trigger', !document.getElementById('entryModal').classList.contains('open') && document.activeElement === trigger);
+        trigger.focus(); openModal('entryModal', dialogHtml('Cancel fixture')); bindModal('entryModal'); document.querySelector('#entryModal [data-close]').click(); add('Cancel close restores focus to the opener', !document.getElementById('entryModal').classList.contains('open') && document.activeElement === trigger);
+        trigger.focus(); openModal('entryModal', dialogHtml('Fallback focus fixture')); trigger.remove(); closeModal('entryModal'); add('Programmatic close falls back to the active tab when its opener was removed', document.activeElement === document.querySelector('.tab.active'));
+        trigger = document.createElement('button'); trigger.type = 'button'; trigger.textContent = 'Modal fixture trigger'; document.body.appendChild(trigger); trigger.focus(); openModal('entryModal', dialogHtml('Underlying fixture', '<button type="button">Underlying</button>', false)); openModal('profileModal', dialogHtml('Topmost fixture', '<button type="button" id="modalFixtureTopmost">Topmost</button>', false)); document.getElementById('modalFixtureTopmost').focus(); document.dispatchEvent(new KeyboardEvent('keydown', { key:'Tab', bubbles:true, cancelable:true })); add('Only the topmost open dialog traps Tab focus', document.activeElement === document.getElementById('modalFixtureTopmost')); closeModal('profileModal'); closeModal('entryModal');
+        trigger.focus(); const stateBeforeValidation = JSON.stringify(state), storageBeforeValidation = localStorage.getItem(STORAGE_KEY), alertBeforeValidation = window.alert; try { window.alert = () => {}; openEntry(); document.getElementById('entryForm').dispatchEvent(new Event('submit', { bubbles:true, cancelable:true })); add('Existing modal validation blocks an invalid save without mutating storage', document.getElementById('entryModal').classList.contains('open') && JSON.stringify(state) === stateBeforeValidation && localStorage.getItem(STORAGE_KEY) === storageBeforeValidation); } finally { window.alert = alertBeforeValidation; closeModal('entryModal'); }
+        trigger.focus(); openEntry(); document.getElementById('entryForm').elements.material.value = 'Modal fixture material'; document.getElementById('entryForm').dispatchEvent(new Event('submit', { bubbles:true, cancelable:true })); add('Existing modal forms retain their normal successful save path', !document.getElementById('entryModal').classList.contains('open') && state.entries.some(entry => entry.material === 'Modal fixture material'));
+        trigger.focus(); openProjectWizard(); const wizard = document.getElementById('projectWizardModal'); add('Project Wizard retains initial focus inside an accessible dialog', wizard.classList.contains('open') && modalDialog(wizard)?.getAttribute('role') === 'dialog' && wizard.contains(document.activeElement)); cancelProjectWizard();
+        add('Release footer and storage identity remain intact', !!document.getElementById('releaseIdentity') && STORAGE_KEY === 'genmitsu-l8-tracker-v1' && SCHEMA_VERSION === 2);
+        const ids = [...document.querySelectorAll('[id]')].map(element => element.id); add('Modal lifecycle introduces no duplicate HTML IDs', new Set(ids).size === ids.length);
+      } finally { restore(); }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Modal accessibility fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runModalAccessibilityFixtures = runModalAccessibilityFixtures;
     function backupObject() {
       return {
         app: APP_ID,
@@ -994,6 +1033,7 @@
       if (!identity) return;
       identity.innerHTML = `<span><b>${esc(APP_NAME)} v${esc(APP_VERSION)}</b></span><details><summary>About</summary><div class="small muted" style="margin-top:6px">${esc(APP_NAME)} v${esc(APP_VERSION)} · Build ${esc(BUILD_DATE)} · Storage schema ${esc(SCHEMA_VERSION)} · Backup format ${esc(BACKUP_FORMAT)}. Works offline and stores records locally in this browser.</div></details>`;
     }
+    function initializeModalAccessibility() { document.querySelectorAll('.modal').forEach(modal => modal.setAttribute('aria-hidden', modal.classList.contains('open') ? 'false' : 'true')); }
     function findTreePathForRecord(nodes, recordId, path = []) {
       for (const node of nodes || []) {
         const nextPath = [...path, node.key];
@@ -9633,6 +9673,46 @@
       document.querySelectorAll('[data-cell]').forEach(c => c.onclick = () => openCell(c.dataset.cell));
       document.querySelectorAll('[data-ref]').forEach(b => b.onclick = () => saveReference(b.dataset.ref));
     }
+    function modalDialog(modal) { return modal?.querySelector('.dialog') || null; }
+    function modalHeadingId(id) { return `${id}-heading`; }
+    function modalFocusableElements(modal) {
+      const dialog = modalDialog(modal);
+      if (!dialog) return [];
+      return [...dialog.querySelectorAll('a[href],button,input,select,textarea,[tabindex]')].filter(element => {
+        if (element.disabled || element.matches('input[type="hidden"], [tabindex="-1"]') || element.closest('[hidden],[aria-hidden="true"]')) return false;
+        return element.getClientRects().length > 0;
+      });
+    }
+    function focusModalInitial(modal) {
+      const dialog = modalDialog(modal);
+      if (!dialog) return;
+      const focusable = modalFocusableElements(modal), target = focusable.find(element => element.hasAttribute('autofocus')) || focusable[0] || dialog;
+      try { target.focus({ preventScroll:true }); } catch (_) { target.focus(); }
+    }
+    function prepareModalAccessibility(id, modal) {
+      const dialog = modalDialog(modal);
+      if (!dialog) return;
+      const heading = dialog.querySelector('h1,h2,h3');
+      dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.setAttribute('tabindex', '-1');
+      if (heading) { heading.id = modalHeadingId(id); dialog.setAttribute('aria-labelledby', heading.id); dialog.removeAttribute('aria-label'); }
+      else { dialog.removeAttribute('aria-labelledby'); dialog.setAttribute('aria-label', 'Dialog'); }
+      modal.setAttribute('aria-hidden', 'false');
+    }
+    function restoreModalFocus(id) {
+      const origin = modalFocusOrigins.get(id); modalFocusOrigins.delete(id);
+      const fallback = document.querySelector('.tab.active') || document.querySelector('#tabs button');
+      const target = origin?.isConnected && origin.getClientRects().length > 0 && !origin.disabled ? origin : fallback;
+      if (target) try { target.focus({ preventScroll:true }); } catch (_) { target.focus(); }
+    }
+    function trapModalFocus(modal, event) {
+      const dialog = modalDialog(modal); if (!dialog) return;
+      const focusable = modalFocusableElements(modal);
+      if (!focusable.length) { event.preventDefault(); dialog.focus(); return; }
+      const first = focusable[0], last = focusable.at(-1), current = document.activeElement;
+      if (!dialog.contains(current)) { event.preventDefault(); (event.shiftKey ? last : first).focus(); return; }
+      if (event.shiftKey && current === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && current === last) { event.preventDefault(); first.focus(); }
+    }
     function closeModal(id) {
       if (id === 'profileModal') pendingGridPromotion = null;
       if (id === 'profileModal') libraryBrowserSelectNewProfile = false;
@@ -9642,13 +9722,23 @@
       }
       if (id === 'productionSettingModal') productionEvidenceDraft = [];
       if (id === 'projectWizardModal') projectWizard = null;
-      document.getElementById(id).classList.remove('open');
-      document.getElementById(id).innerHTML = '';
+      const modal = document.getElementById(id);
+      modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); modal.innerHTML = '';
+      const index = modalOpenOrder.lastIndexOf(id); if (index >= 0) modalOpenOrder.splice(index, 1);
+      restoreModalFocus(id);
     }
-    function openModal(id, html) { const m = document.getElementById(id); m.innerHTML = html; m.classList.add('open'); }
+    function openModal(id, html) {
+      const m = document.getElementById(id);
+      if (!m.classList.contains('open')) modalFocusOrigins.set(id, document.activeElement);
+      m.innerHTML = html; m.classList.add('open');
+      const existing = modalOpenOrder.indexOf(id); if (existing >= 0) modalOpenOrder.splice(existing, 1); modalOpenOrder.push(id);
+      prepareModalAccessibility(id, m); focusModalInitial(m);
+    }
     function activeModal() {
+      const activeId = modalOpenOrder.findLast(id => document.getElementById(id)?.classList.contains('open'));
+      if (activeId) return document.getElementById(activeId);
       const openModals = [...document.querySelectorAll('.modal.open')];
-      return openModals[openModals.length - 1] || null;
+      return openModals.at(-1) || null;
     }
     function isTypingTarget(target) {
       return target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
@@ -9674,6 +9764,7 @@
     }
     function handleShortcuts(e) {
       const modal = activeModal();
+      if (modal && e.key === 'Tab') { trapModalFocus(modal, e); return; }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && modal) {
         const form = modal.querySelector('form');
         if (form) { e.preventDefault(); form.requestSubmit(); }
@@ -11383,6 +11474,9 @@
     };
     document.addEventListener('keydown', handleShortcuts);
     window.addEventListener('beforeunload', flushPricingPersist);
+    initializeModalAccessibility();
+    renderReleaseIdentity();
+    render();
     const selftest = new URLSearchParams(window.location.search).get('selftest');
     if (selftest === 'baseline' || selftest === 'all') runBaselineResolutionFixtures();
     if (selftest === 'normalization' || selftest === 'all') runMaterialTestNormalizationFixtures();
@@ -11399,10 +11493,9 @@
     if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
     if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
     if (selftest === 'first-run' || selftest === 'all') runFirstRunOnboardingFixtures();
+    if (selftest === 'modal' || selftest === 'all') runModalAccessibilityFixtures();
     if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
     if (selftest === 'design' || selftest === 'designs' || selftest === 'all') runDesignGeometryFixtures();
-    renderReleaseIdentity();
-    render();
   })();
   </script>
 </body>
