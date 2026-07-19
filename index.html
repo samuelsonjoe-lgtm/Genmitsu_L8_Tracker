@@ -1397,7 +1397,7 @@
     function openHelp() {
       openModal('helpModal', `<div class="dialog"><div class="spread"><h2>Help &amp; Safety</h2><button type="button" data-close aria-label="Close Help and Safety">&times;</button></div>
         <section class="panel" style="margin-top:12px"><h3>About this Tracker</h3><p class="small">${esc(APP_NAME)} v${esc(APP_VERSION)} · Build ${esc(BUILD_DATE)} · Storage schema ${esc(SCHEMA_VERSION)} · Backup format ${esc(BACKUP_FORMAT)}.</p><p class="small muted">It works offline when opened directly from <code>index.html</code>. Records stay in this browser; there is no account, cloud synchronization, or remote recovery.</p></section>
-        <section class="panel" style="margin-top:10px"><h3>Your data and backups</h3><p class="small">Export saves Tracker records as a JSON backup. Export regularly; it is not automatic. Import can merge a supported backup or replace the current workspace, so review Replace carefully. Backups from a newer unsupported schema are refused rather than silently downgraded.</p><p class="small muted">Browser data can be cleared, lost, or become inaccessible. Project photos use much more browser storage than text records. Use the existing storage warning and recovery tools if saved data cannot be read; Tracker backups do not include external LightBurn files, source images, or PDFs.</p></section>
+        <section class="panel" style="margin-top:10px"><h3>Your data and backups</h3><p class="small">Export saves Tracker records as a JSON backup. Export regularly; it is not automatic. Import can merge a supported backup or replace the current workspace, so review Replace carefully. Backups from a newer unsupported schema are refused rather than silently downgraded.</p><p class="small muted">Browser data can be cleared, lost, or become inaccessible. Project photos use much more browser storage than text records. Use the existing storage warning and recovery tools if saved data cannot be read; Tracker backups do not include external LightBurn files, source images, or PDFs. If an original related record is unavailable, Tracker keeps any saved historical snapshot and labels the reference unavailable; importing a backup that contains the original may restore the link, but Tracker does not recreate or reassign records automatically.</p></section>
         <section class="panel" style="margin-top:10px"><h3>Using Designs with LightBurn</h3><ol class="small"><li>Generate and preview the design here, then download its production SVG.</li><li>Import it into LightBurn and keep it at <b>100% scale</b>.</li><li>Verify units and finished dimensions, assign suitable engraving and cutting operations, then frame the job and confirm placement before running it.</li></ol><p class="small muted">The Tracker creates geometry; it does not send jobs to the laser. Rescaling changes physical dimensions and fit. Kerf, clearance, thickness, coatings, glue layers, flatness, moisture, and machine variation affect results. Previews do not guarantee fit, strength, or final appearance; use material tests and fit coupons when results matter.</p></section>
         <section class="panel" style="margin-top:10px;background:#fff8e7;border-color:#ead59f"><h3>Laser safety</h3><ul class="small"><li>Maintain active ventilation and fume extraction, keep an active fire watch, never leave the laser unattended, and keep suitable fire suppression nearby.</li><li>Confirm focus; keep material flat and secure; frame or preview the job; keep optics and the work area clean; and use controlled air assist appropriate to the operation and material.</li><li>Verify the exact material and coating composition before lasering. Do not laser PVC, vinyl, chlorinated plastics, mystery plastics, unidentified materials, or unknown coatings.</li><li>Use additional caution with fiberglass, carbon fiber, reflective surfaces, coated metals, foams, leather, adhesives, and composite materials. “Laserable” marketing does not replace composition checks and safe ventilation requirements.</li></ul></section>
         <section class="panel" style="margin-top:10px"><h3>Starting points and physical validation</h3><p class="small">Manufacturer and Reference values are starting points, not guarantees. Material batches, color, coatings, glue, moisture, flatness, focus, lens condition, ventilation, and machine variation all affect results. Run material tests when settings are unproven, and physically validate cutting, fit, strength, and finish on the actual material. Experimental generators retain their specific warnings.</p><p class="small muted">The optional Current workshop machine name and usable work area on the Reference tab are advisory only: they do not resize SVGs, perform nesting, guarantee bed fit, control the machine, or change Reference settings. The 20W and 40W Reference tables are specifically Genmitsu L8 starting points, not universal settings for another machine.</p></section>
@@ -1613,11 +1613,12 @@
       if (state.entries.length) {
         return filtered.length
           ? `<div class="grid cards">${filtered.map(entryCard).join('')}</div>`
-          : empty('No log entries match', 'Adjust the search or material filter.');
+          : empty('No log entries match', 'Adjust the search or material filter.', [{ action: 'clear-log-filters', label: 'Clear filters' }]);
       }
-      return empty('No entries yet', 'Log your first cut or engrave to start building a repeatable settings history.') + firstRunOnboardingHtml();
+      return empty('No entries yet', 'Log your first cut or engrave to start building a repeatable settings history.', [{ action: 'new-entry', label: 'Log a job', primary: true }]) + firstRunOnboardingHtml();
     }
     function bindLogResultActions(root) {
+      bindEmptyStateActions(root);
       root.querySelectorAll('[data-edit-entry]').forEach(button => button.onclick = () => openEntry(state.entries.find(entry => entry.id === button.dataset.editEntry)));
       root.querySelectorAll('[data-duplicate-entry]').forEach(button => button.onclick = () => duplicateEntry(button.dataset.duplicateEntry));
       root.querySelectorAll('[data-delete-entry]').forEach(button => button.onclick = () => del('entries', button.dataset.deleteEntry, 'Delete this log entry?', 'Log entry'));
@@ -1814,9 +1815,10 @@
       return `<div class="nested-browser-layout">${treeHtml}${libraryBrowserDetailHtml(selection.selected, selection.hidden)}</div>`;
     }
     function libraryResultsHtml(filtered) {
-      return state.profiles.length ? (filtered.length ? `<div class="grid cards">${filtered.map(profileCard).join('')}</div>` : empty('No library matches', 'Adjust the search or material filter.')) : empty('Library is empty', 'Save tuned settings here as your go-to reference.');
+      return state.profiles.length ? (filtered.length ? `<div class="grid cards">${filtered.map(profileCard).join('')}</div>` : empty('No library matches', 'Adjust the search, material, or tag filter.', [{ action: 'clear-library-filters', label: 'Clear filters' }])) : empty('Library is empty', 'Save tuned settings here as your go-to reference.', [{ action: 'new-profile', label: 'Add a Library profile', primary: true }]);
     }
     function bindLibraryResultActions(root) {
+      bindEmptyStateActions(root);
       root.querySelectorAll('[data-edit-profile]').forEach(button => button.onclick = () => openProfile(state.profiles.find(profile => profile.id === button.dataset.editProfile)));
       root.querySelectorAll('[data-duplicate-profile]').forEach(button => button.onclick = () => duplicateProfile(button.dataset.duplicateProfile));
       root.querySelectorAll('[data-delete-profile]').forEach(button => button.onclick = () => del('profiles', button.dataset.deleteProfile, 'Remove this material from your library?', 'Library profile'));
@@ -2020,10 +2022,11 @@
       return `<div class="nested-browser-layout">${treeHtml}${gridBrowserDetailHtml(selection.selected, selection.hidden)}</div>`;
     }
     function gridManageResultsHtml(filtered = gridViewData()) {
-      return state.grids.length ? (filtered.length ? `<div class="grid cards">${filtered.map(gridCard).join('')}</div>` : empty('No test grids match', 'Adjust the search or operation filter.')) : empty('No test grids yet', 'Run a matrix to dial in settings fast.');
+      return state.grids.length ? (filtered.length ? `<div class="grid cards">${filtered.map(gridCard).join('')}</div>` : empty('No test grids match', 'Adjust the search or operation filter.', [{ action: 'clear-grid-filters', label: 'Clear filters' }])) : empty('No test grids yet', 'Run a matrix to dial in settings fast.', [{ action: 'new-grid', label: 'Plan a Test Grid', primary: true }]);
     }
     function gridResultCountText(filtered) { return `Showing ${filtered.length} of ${state.grids.length} Test Grid${state.grids.length === 1 ? '' : 's'}`; }
     function bindGridResultActions(root) {
+      bindEmptyStateActions(root);
       root.querySelectorAll('[data-open-grid]').forEach(card => card.onclick = () => { activeGridId = card.dataset.openGrid; gridBrowserSelectedId = activeGridId; render(); });
       root.querySelectorAll('[data-edit-grid]').forEach(button => button.onclick = event => { event.stopPropagation(); openGridForm(state.grids.find(item => item.id === button.dataset.editGrid)); });
       bindBrowserTreeActions(root, {
@@ -5712,8 +5715,9 @@
     function projectTreeRecordIds(nodes) {
       return (nodes || []).flatMap(node => node.recordId ? [node.recordId] : projectTreeRecordIds(node.children));
     }
-    function projectSourceProfile(project, profiles = state.profiles) { return (profiles || []).find(profile => profile.id === project?.sourceProfileId) || null; }
-    function projectSourceEntry(project, entries = state.entries) { return (entries || []).find(entry => entry.id === project?.sourceEntryId) || null; }
+    function recordById(records, id) { return Array.isArray(records) && id ? records.find(record => record?.id === id) || null : null; }
+    function projectSourceProfile(project, profiles = state.profiles) { return recordById(profiles, project?.sourceProfileId); }
+    function projectSourceEntry(project, entries = state.entries) { return recordById(entries, project?.sourceEntryId); }
     function projectInventorySuggestions(project, inventory = normalizeInventory(state.inventory).rawMaterials) { return libraryInventorySuggestions(project, inventory); }
     function projectRelatedFinishedBatches(project, batches = normalizeInventory(state.inventory).finishedBatches) {
       const byId = new Map();
@@ -5740,8 +5744,8 @@
       const accountingHtml = hasFinancial ? `${projectAccountingResultsHtml(project)}<div class="small muted" style="margin-top:8px">Quantity: ${esc(projectQuantity(project))} / Sold price: ${project.soldPrice === '' || project.soldPrice == null ? 'not recorded' : esc(money(num(project.soldPrice)))} / Material cost mode: ${esc(project.materialCostMode || 'total')} / Fixed fee mode: ${esc(project.fixedFeeMode || 'order')}</div>` : `<div class="small muted">No accounting values recorded.${project.status === 'sold' && (project.soldPrice === '' || project.soldPrice == null) ? ' Sold price not recorded.' : ''}</div>`;
       const inventoryHtml = inventory.length ? inventory.map(match => `<div class="small" style="margin-top:8px"><b>${esc(match.item.name || 'Unnamed Inventory material')}</b><br>${esc(stockUnitText(match.item.quantityOnHand, match.item.unit))} / ${esc(rawStockStatus(match.item).text)}${match.item.supplier ? `<br>Supplier: ${esc(match.item.supplier)}` : ''}<br><span class="muted">${esc(libraryInventoryMatchReason(match))}</span>${materialBrowserSafetyWarningHtml(match.item)}<div class="actions"><button type="button" data-project-inventory="${esc(match.item.id)}">Open Inventory</button></div></div>`).join('') : '<div class="small muted">No matching Inventory material found.</div>';
       const batchesHtml = batches.length ? batches.map(batch => `<div class="small" style="margin-top:8px"><b>${esc(batch.itemName || 'Unnamed batch')}</b><br>${esc(batchRemaining(batch))} remaining / ${esc(batch.status || 'made')}</div>`).join('') : '<div class="small muted">No related finished batches.</div>';
-      const sourceProfileHtml = project.sourceProfileId ? (sourceProfile ? `<div class="small"><b>${esc(sourceProfile.material || 'Unspecified material')}</b> - ${esc(libraryOperationMetadata(sourceProfile).label)}<div class="actions"><button type="button" data-project-source-profile="${esc(sourceProfile.id)}">Open Library profile</button></div></div>` : '<div class="small muted">Source Library profile is no longer available.</div>') : '<div class="small muted">No source Library profile recorded.</div>';
-      const sourceEntryHtml = project.sourceEntryId ? (sourceEntry ? `<div class="small"><b>${esc(sourceEntry.material || 'Unspecified material')}</b> - ${esc(sourceEntry.date || 'No date')}<div class="actions"><button type="button" data-project-source-entry="${esc(sourceEntry.id)}">Open Log entry</button></div></div>` : '<div class="small muted">Source Log entry is no longer available.</div>') : '<div class="small muted">No source Log entry recorded.</div>';
+      const sourceProfileHtml = project.sourceProfileId ? (sourceProfile ? `<div class="small"><b>${esc(sourceProfile.material || 'Unspecified material')}</b> - ${esc(libraryOperationMetadata(sourceProfile).label)}<div class="actions"><button type="button" data-project-source-profile="${esc(sourceProfile.id)}">Open Library profile</button></div></div>` : '<div class="small muted">Source Library profile is unavailable. This Project retains its own saved fields and settings snapshot.</div>') : '<div class="small muted">No source Library profile recorded.</div>';
+      const sourceEntryHtml = project.sourceEntryId ? (sourceEntry ? `<div class="small"><b>${esc(sourceEntry.material || 'Unspecified material')}</b> - ${esc(sourceEntry.date || 'No date')}<div class="actions"><button type="button" data-project-source-entry="${esc(sourceEntry.id)}">Open Log entry</button></div></div>` : '<div class="small muted">Source Log entry is unavailable. This Project retains its own saved fields and settings snapshot.</div>') : '<div class="small muted">No source Log entry recorded.</div>';
       return `<div class="panel nested-browser-detail"><div class="spread"><div><b>${esc(projectLeafLabel(project))}</b><div class="small muted">${esc(status.label)} / ${esc(validProjectDate(project.dateCreated) || 'No date')}${project.saleDate ? ` / sold ${esc(project.saleDate)}` : ''}</div></div><span class="pill">${esc(projectLeafBadge(project))}</span></div>${browserHiddenSelectionNotice(hidden, 'Project')}${projectBrowserPhotosHtml(project)}<div class="small" style="margin-top:8px">Rating: ${stars(project.rating)} / Quantity: ${esc(projectQuantity(project))}</div>${tags.length ? `<div class="row" style="margin-top:8px">${tags.map(tag => `<span class="pill">${esc(tag)}</span>`).join('')}</div>` : ''}<hr><b>Primary material</b><div class="small">${esc(project.material || 'Unspecified material')} / ${esc(fmt(project.thicknessValue, project.thicknessUnit))} / ${esc(project.jobType || 'Unspecified operation')}</div>${materialSafetyWarningHtml(project.material)}<hr><b>Material cost lines</b>${linesHtml}<hr><b>Settings snapshot</b>${settingsHtml}<hr><b>Accounting</b>${accountingHtml}${project.accountingNotes ? `<p class="small"><b>Accounting notes:</b> ${esc(project.accountingNotes)}</p>` : ''}${project.notes ? `<p class="small"><b>Notes:</b> ${esc(project.notes)}</p>` : ''}<div class="actions"><button type="button" data-project-browser-edit="${esc(project.id)}">Edit</button>${projectPromotionActionHtml(project, true)}<button type="button" data-project-browser-log="${esc(project.id)}">Copy to log</button><button type="button" class="danger" data-project-browser-delete="${esc(project.id)}">Delete</button></div><hr><b>Source Library profile</b>${sourceProfileHtml}<hr><b>Source Log entry</b>${sourceEntryHtml}<hr><b>Suggested Inventory</b>${inventoryHtml}<hr><b>Related finished batches</b>${batchesHtml}</div>`;
     }
     function projectBrowserResultsHtml(filtered) {
@@ -5755,14 +5759,15 @@
     }
     function projectManageResultsHtml(filtered) {
       return state.projects.length
-        ? (filtered.length ? `<div class="grid cards">${filtered.map(projectCard).join('')}</div>` : empty('No project matches', 'Adjust the search, tag, or status filter.'))
-        : empty('No projects yet', 'Save a finished piece here with its settings snapshot.');
+        ? (filtered.length ? `<div class="grid cards">${filtered.map(projectCard).join('')}</div>` : empty('No project matches', 'Adjust the search, tag, or status filter.', [{ action: 'clear-project-filters', label: 'Clear filters' }]))
+        : empty('No projects yet', 'Save a finished piece here with its settings snapshot.', [{ action: 'new-project', label: 'Add a Project', primary: true }]);
     }
     function bindProjectAccountingActions(root) {
       const copyProjectReport = root.querySelector('#copyProjectReport');
       if (copyProjectReport) copyProjectReport.onclick = copyProjectReportSummary;
     }
     function bindProjectManageResultActions(root) {
+      bindEmptyStateActions(root);
       root.querySelectorAll('[data-edit-project]').forEach(button => button.onclick = () => openProject(state.projects.find(project => project.id === button.dataset.editProject)));
       root.querySelectorAll('[data-delete-project]').forEach(button => button.onclick = () => del('projects', button.dataset.deleteProject, 'Delete this project?', 'Project'));
       root.querySelectorAll('[data-project-to-entry]').forEach(button => button.onclick = () => projectToEntry(button.dataset.projectToEntry));
@@ -5782,9 +5787,9 @@
       root.querySelectorAll('[data-promote-project]').forEach(button => button.onclick = () => openProjectPromotion(button.dataset.promoteProject));
       root.querySelectorAll('[data-project-browser-delete]').forEach(button => button.onclick = () => del('projects', button.dataset.projectBrowserDelete, 'Delete this project?', 'Project'));
       root.querySelectorAll('[data-project-browser-photo]').forEach(image => image.onclick = event => { event.stopPropagation(); openProjectPhotoViewer(image.dataset.projectBrowserPhoto, Number(image.dataset.photoIndex || 0)); });
-      root.querySelectorAll('[data-project-source-profile]').forEach(button => button.onclick = () => openProfile(state.profiles.find(profile => profile.id === button.dataset.projectSourceProfile)));
-      root.querySelectorAll('[data-project-source-entry]').forEach(button => button.onclick = () => openEntry(state.entries.find(entry => entry.id === button.dataset.projectSourceEntry)));
-      root.querySelectorAll('[data-project-inventory]').forEach(button => button.onclick = () => openRawMaterial(inventoryList('rawMaterials').find(item => item.id === button.dataset.projectInventory)));
+      root.querySelectorAll('[data-project-source-profile]').forEach(button => button.onclick = () => { const profile = recordById(state.profiles, button.dataset.projectSourceProfile); if (profile) openProfile(profile); });
+      root.querySelectorAll('[data-project-source-entry]').forEach(button => button.onclick = () => { const entry = recordById(state.entries, button.dataset.projectSourceEntry); if (entry) openEntry(entry); });
+      root.querySelectorAll('[data-project-inventory]').forEach(button => button.onclick = () => { const item = recordById(inventoryList('rawMaterials'), button.dataset.projectInventory); if (item) openRawMaterial(item); });
     }
     function bindProjectResultActions(root) {
       bindProjectAccountingActions(root);
@@ -5904,15 +5909,16 @@
     }
     function rawInventoryResultsHtml(inv, raw) {
       return inv.rawMaterials.length
-        ? (raw.length ? `<div class="grid cards" style="margin-bottom:18px">${raw.map(rawMaterialCard).join('')}</div>` : empty('No raw materials match', 'Adjust search or category filters.'))
-        : empty('No raw materials yet', 'Add sheets, slate, blanks, hardware, packaging, and other shop supplies.');
+        ? (raw.length ? `<div class="grid cards" style="margin-bottom:18px">${raw.map(rawMaterialCard).join('')}</div>` : empty('No raw materials match', 'Adjust search or category filters.', [{ action: 'clear-inventory-raw-filters', label: 'Clear filters' }]))
+        : empty('No raw materials yet', 'Add sheets, slate, blanks, hardware, packaging, and other shop supplies.', [{ action: 'new-raw-material', label: 'Add raw material', primary: true }]);
     }
     function finishedBatchResultsHtml(inv, batches) {
       return inv.finishedBatches.length
-        ? (batches.length ? `<div class="grid cards">${batches.map(finishedBatchCard).join('')}</div>` : empty('No batches match', 'Adjust search or status filter.'))
-        : empty('No finished batches yet', 'Track small batches of finished items without creating invoices or SKUs.');
+        ? (batches.length ? `<div class="grid cards">${batches.map(finishedBatchCard).join('')}</div>` : empty('No batches match', 'Adjust search or status filter.', [{ action: 'clear-inventory-batch-filters', label: 'Clear filters' }]))
+        : empty('No finished batches yet', 'Track small batches of finished items without creating invoices or SKUs.', [{ action: 'new-finished-batch', label: 'Add finished batch', primary: true }]);
     }
     function bindInventoryResultActions(root) {
+      bindEmptyStateActions(root);
       root.querySelectorAll('[data-edit-raw-material]').forEach(button => button.onclick = () => openRawMaterial(inventoryList('rawMaterials').find(item => item.id === button.dataset.editRawMaterial)));
       root.querySelectorAll('[data-delete-raw-material]').forEach(button => button.onclick = () => delInventory('rawMaterials', button.dataset.deleteRawMaterial, 'Delete this raw material?', 'Raw material'));
       root.querySelectorAll('[data-edit-finished-batch]').forEach(button => button.onclick = () => openFinishedBatch(inventoryList('finishedBatches').find(batch => batch.id === button.dataset.editFinishedBatch)));
@@ -6711,7 +6717,124 @@
         </div>`;
     }
     function stat(label, value, color) { return `<div class="card"><div class="stat-label">${label}</div><div class="stat-value" style="color:var(--${color})">${value}</div></div>`; }
-    function empty(title, body) { return `<div class="empty"><b>${esc(title)}</b><div>${esc(body)}</div></div>`; }
+    function empty(title, body, actions = []) {
+      const buttons = (Array.isArray(actions) ? actions : []).filter(action => action?.action && action?.label).map(action => `<button type="button"${action.primary ? ' class="primary"' : ''} data-empty-action="${esc(action.action)}">${esc(action.label)}</button>`).join('');
+      return `<div class="empty"><b>${esc(title)}</b><div>${esc(body)}</div>${buttons ? `<div class="actions" style="justify-content:center;margin-top:12px">${buttons}</div>` : ''}</div>`;
+    }
+    function clearEmptyStateFilters(action, shouldRender = true) {
+      if (action === 'clear-log-filters') { state.search = ''; state.materialFilter = 'all'; }
+      if (action === 'clear-library-filters') { state.librarySearch = ''; state.libraryFilter = 'all'; state.libraryTagFilter = 'all'; }
+      if (action === 'clear-grid-filters') { gridSearch = ''; gridOperationFilter = 'all'; }
+      if (action === 'clear-project-filters') { state.projectSearch = ''; state.projectTagFilter = 'all'; state.projectStatusFilter = 'all'; }
+      if (action === 'clear-inventory-raw-filters') { state.inventorySearch = ''; state.inventoryCategoryFilter = 'all'; }
+      if (action === 'clear-inventory-batch-filters') { state.inventorySearch = ''; state.inventoryBatchStatusFilter = 'all'; }
+      if (shouldRender) render();
+    }
+    function bindEmptyStateActions(root = document) {
+      root.querySelectorAll('[data-empty-action]').forEach(button => button.onclick = () => {
+        const action = button.dataset.emptyAction;
+        if (action === 'new-entry') return openEntry();
+        if (action === 'new-profile') return openProfile();
+        if (action === 'new-grid') return openGridForm();
+        if (action === 'new-project') return openProject();
+        if (action === 'new-raw-material') return openRawMaterial();
+        if (action === 'new-finished-batch') return openFinishedBatch();
+        clearEmptyStateFilters(action);
+      });
+    }
+    function runEmptyStateDanglingReferenceFixtures() {
+      const results = [], add = (name, pass) => results.push({ name, pass:!!pass });
+      const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY), backupBefore = JSON.stringify(backupObject()), dismissedBefore = firstRunOnboardingDismissed, gridBefore = activeGridId, cellBefore = activeCellKey, gridSearchBefore = gridSearch, gridOperationBefore = gridOperationFilter;
+      const restore = () => {
+        Object.assign(state, JSON.parse(stateBefore));
+        if (storageBefore === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, storageBefore);
+        firstRunOnboardingDismissed = dismissedBefore; activeGridId = gridBefore; activeCellKey = cellBefore; gridSearch = gridSearchBefore; gridOperationFilter = gridOperationBefore;
+        render();
+      };
+      try {
+        const standard = empty('Nothing yet', 'Start with a record.', [{ action:'new-entry', label:'Add record', primary:true }, { action:'clear-log-filters', label:'Clear filters' }]);
+        add('Empty state has a neutral wrapper', /class="empty"/.test(standard));
+        add('Empty state escapes title and body text', !empty('<script>', '<script>').includes('<script>'));
+        add('Empty state supports a primary action', /class="primary" data-empty-action="new-entry"/.test(standard));
+        add('Empty state supports a secondary action', /data-empty-action="clear-log-filters"/.test(standard));
+        add('Empty state omits the action row when no actions are supplied', !empty('Nothing', 'Body').includes('data-empty-action'));
+        Object.assign(state, freshState()); firstRunOnboardingDismissed = false; state.activeTab = 'log'; render();
+        add('Log first-run renderer names the empty state', document.getElementById('logResults')?.textContent.includes('No entries yet'));
+        add('Log first-run renderer offers a real next action', !!document.querySelector('#logResults [data-empty-action="new-entry"]'));
+        add('Log first-run onboarding remains alongside the ordinary empty state', !!document.getElementById('firstRunOnboarding'));
+        state.activeTab = 'library'; render();
+        add('Library empty renderer names the empty state', document.getElementById('libraryResults')?.textContent.includes('Library is empty'));
+        add('Library empty renderer offers profile creation', !!document.querySelector('#libraryResults [data-empty-action="new-profile"]'));
+        state.activeTab = 'grids'; render();
+        add('Test Grid empty renderer names the empty state', document.getElementById('gridViewResults')?.textContent.includes('No test grids yet'));
+        add('Test Grid empty renderer offers grid creation', !!document.querySelector('#gridViewResults [data-empty-action="new-grid"]'));
+        state.activeTab = 'projects'; render();
+        add('Project empty renderer names the empty state', document.getElementById('projectViewResults')?.textContent.includes('No projects yet'));
+        add('Project empty renderer offers project creation', !!document.querySelector('#projectViewResults [data-empty-action="new-project"]'));
+        state.activeTab = 'inventory'; render();
+        add('Raw inventory empty renderer names the empty state', document.getElementById('inventoryRawResults')?.textContent.includes('No raw materials yet'));
+        add('Raw inventory empty renderer offers creation', !!document.querySelector('#inventoryRawResults [data-empty-action="new-raw-material"]'));
+        add('Finished batch empty renderer names the empty state', document.getElementById('inventoryBatchResults')?.textContent.includes('No finished batches yet'));
+        add('Finished batch empty renderer offers creation', !!document.querySelector('#inventoryBatchResults [data-empty-action="new-finished-batch"]'));
+        state.entries = [{ id:'entry-a', material:'Birch', jobType:'cut' }]; state.search = 'none'; state.materialFilter = 'all';
+        add('Log filter renderer distinguishes no matches', logResultsHtml([]).includes('No log entries match'));
+        add('Log filter renderer offers clearing filters', logResultsHtml([]).includes('clear-log-filters'));
+        clearEmptyStateFilters('clear-log-filters', false); add('Log clear action resets search and material filters', state.search === '' && state.materialFilter === 'all');
+        state.profiles = [{ id:'profile-a', material:'Birch' }]; state.librarySearch = 'none'; state.libraryFilter = 'all'; state.libraryTagFilter = 'tag';
+        add('Library filter renderer distinguishes no matches', libraryResultsHtml([]).includes('No library matches'));
+        add('Library filter renderer offers clearing filters', libraryResultsHtml([]).includes('clear-library-filters'));
+        clearEmptyStateFilters('clear-library-filters', false); add('Library clear action resets search, material, and tag filters', state.librarySearch === '' && state.libraryFilter === 'all' && state.libraryTagFilter === 'all');
+        state.grids = [{ id:'grid-a', name:'Birch grid' }]; gridSearch = 'none'; gridOperationFilter = 'cut';
+        add('Grid filter renderer distinguishes no matches', gridManageResultsHtml([]).includes('No test grids match'));
+        add('Grid filter renderer offers clearing filters', gridManageResultsHtml([]).includes('clear-grid-filters'));
+        clearEmptyStateFilters('clear-grid-filters', false); add('Grid clear action resets search and operation filters', gridSearch === '' && gridOperationFilter === 'all');
+        state.projects = [{ id:'project-a', name:'Birch box' }]; state.projectSearch = 'none'; state.projectTagFilter = 'tag'; state.projectStatusFilter = 'sold';
+        add('Project filter renderer distinguishes no matches', projectManageResultsHtml([]).includes('No project matches'));
+        add('Project filter renderer offers clearing filters', projectManageResultsHtml([]).includes('clear-project-filters'));
+        clearEmptyStateFilters('clear-project-filters', false); add('Project clear action resets search, tag, and status filters', state.projectSearch === '' && state.projectTagFilter === 'all' && state.projectStatusFilter === 'all');
+        state.inventory = { rawMaterials:[{ id:'raw-a', name:'Birch' }], finishedBatches:[{ id:'batch-a', itemName:'Box' }] }; state.inventorySearch = 'none'; state.inventoryCategoryFilter = 'sheet'; state.inventoryBatchStatusFilter = 'sold';
+        const inventory = normalizeInventory(state.inventory);
+        add('Raw inventory filter renderer distinguishes no matches', rawInventoryResultsHtml(inventory, []).includes('No raw materials match'));
+        add('Raw inventory filter renderer offers clearing filters', rawInventoryResultsHtml(inventory, []).includes('clear-inventory-raw-filters'));
+        clearEmptyStateFilters('clear-inventory-raw-filters', false); add('Raw inventory clear action resets search and category filters', state.inventorySearch === '' && state.inventoryCategoryFilter === 'all');
+        state.inventorySearch = 'none'; add('Finished batch filter renderer distinguishes no matches', finishedBatchResultsHtml(inventory, []).includes('No batches match'));
+        add('Finished batch filter renderer offers clearing filters', finishedBatchResultsHtml(inventory, []).includes('clear-inventory-batch-filters'));
+        clearEmptyStateFilters('clear-inventory-batch-filters', false); add('Finished batch clear action resets search and status filters', state.inventorySearch === '' && state.inventoryBatchStatusFilter === 'all');
+        const profiles = [{ id:'profile-a', material:'Birch' }], entries = [{ id:'entry-a', material:'Birch' }], danglingProject = { id:'project-dangling', name:'Saved box', material:'Birch', sourceProfileId:'missing-profile', sourceEntryId:'missing-entry', settings:{ speed:300 } };
+        add('Record lookup returns a matching record', recordById(profiles, 'profile-a') === profiles[0]);
+        add('Record lookup returns null for a missing record', recordById(profiles, 'missing') === null);
+        add('Record lookup tolerates a malformed collection', recordById({}, 'profile-a') === null);
+        add('Dangling Project Library reference resolves safely', projectSourceProfile(danglingProject, profiles) === null);
+        add('Dangling Project Log reference resolves safely', projectSourceEntry(danglingProject, entries) === null);
+        const detail = projectBrowserDetailHtml(danglingProject, false);
+        add('Project detail labels an unavailable Library reference', detail.includes('Source Library profile is unavailable'));
+        add('Project detail explains that its saved snapshot remains', detail.includes('retains its own saved fields and settings snapshot'));
+        add('Project detail labels an unavailable Log reference', detail.includes('Source Log entry is unavailable'));
+        add('Project missing-reference presentation does not expose raw source IDs', !detail.includes('missing-profile') && !detail.includes('missing-entry'));
+        state.projects = [];
+        const unavailableOption = projectOptions('missing-project');
+        add('Finished batch editor labels a missing Project option', unavailableOption.includes('Unavailable linked Project'));
+        add('Finished batch editor preserves the selected missing Project value', unavailableOption.includes('value="missing-project" selected'));
+        add('Finished batch card labels a dangling Project as unavailable', finishedBatchCard({ id:'batch-dangling', itemName:'Box', projectId:'missing-project' }).includes('Linked Project unavailable'));
+        add('Finished batch card keeps no-link wording distinct', finishedBatchCard({ id:'batch-unlinked', itemName:'Box', projectId:'' }).includes('No linked Project'));
+        add('Finished batch filtering remains safe with a missing Project', filteredFinishedBatches.call ? Array.isArray(filteredFinishedBatches()) : false);
+        activeGridId = 'missing-grid'; activeCellKey = 'old-cell';
+        add('Stale Test Grid cell opening returns safely', openCell('20_200') === false);
+        add('Stale Test Grid cell opening clears the missing selection', activeGridId === null);
+        add('Stale Test Grid cell opening clears its transient cell key', activeCellKey === null);
+        add('Stale Test Grid cell opening does not open a cell modal', !document.getElementById('cellModal').classList.contains('open'));
+        activeGridId = 'missing-grid'; add('Stale Test Grid detail returns to the Grid list', typeof renderGridDetail() === 'string' && activeGridId === null);
+        add('Empty-state actions do not add a persisted preference', !Object.keys(freshState()).some(key => /empty|dangling|reference.*ui/i.test(key)));
+        add('Empty-state rendering leaves the storage key unchanged', STORAGE_KEY === 'genmitsu-l8-tracker-v1');
+        add('Empty-state rendering leaves the schema unchanged', SCHEMA_VERSION === 2);
+        add('Empty-state rendering leaves the backup format unchanged', backupObject().app === APP_ID && backupObject().schemaVersion === SCHEMA_VERSION);
+        add('Empty-state rendering leaves localStorage unchanged', localStorage.getItem(STORAGE_KEY) === storageBefore);
+      } finally { restore(); }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Empty state and dangling-reference fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runEmptyStateDanglingReferenceFixtures = runEmptyStateDanglingReferenceFixtures;
     function materialSafetyWarning(material) {
       const text = String(material || '').toLowerCase();
       if (!text.trim()) return null;
@@ -9820,10 +9943,10 @@
       </article>`;
     }
     function finishedBatchCard(batch) {
-      const project = batch.projectId ? state.projects.find(p => p.id === batch.projectId) : null;
+      const project = recordById(state.projects, batch.projectId);
       const tags = tagsOf(batch);
       return `<article class="card">
-        <div class="spread"><div><b>${esc(batch.itemName)}</b><div class="small muted">${project ? `Project: ${esc(project.name)}` : 'No linked Project'}</div></div><span class="pill">${esc(batch.status || 'made')}</span></div>
+        <div class="spread"><div><b>${esc(batch.itemName)}</b><div class="small muted">${project ? `Project: ${esc(project.name)}` : batch.projectId ? 'Linked Project unavailable' : 'No linked Project'}</div></div><span class="pill">${esc(batch.status || 'made')}</span></div>
         <div class="metrics">
           ${metric('Made', batch.quantityMade || 0)}
           ${metric('Sellable', batch.quantitySellable || 0)}
@@ -11219,7 +11342,8 @@
       };
     }
     function projectOptions(selectedId) {
-      return `<option value="">No linked Project</option>${state.projects.map(project => `<option value="${esc(project.id)}" ${project.id === selectedId ? 'selected' : ''}>${esc(project.name || project.material || 'Untitled Project')}</option>`).join('')}`;
+      const unavailable = selectedId && !recordById(state.projects, selectedId) ? `<option value="${esc(selectedId)}" selected>Unavailable linked Project (kept unless changed)</option>` : '';
+      return `<option value="">No linked Project</option>${unavailable}${state.projects.map(project => `<option value="${esc(project.id)}" ${project.id === selectedId ? 'selected' : ''}>${esc(project.name || project.material || 'Untitled Project')}</option>`).join('')}`;
     }
     function openFinishedBatch(batch) {
       const editingId = batch && batch.id ? batch.id : null;
@@ -11336,6 +11460,7 @@
     function openCell(key) {
       activeCellKey = key;
       const g = state.grids.find(x => x.id === activeGridId);
+      if (!g) { activeCellKey = null; activeGridId = null; render(); return false; }
       const existing = (g.cells || {})[key] || { rating: 0, notes: '', best: false };
       openModal('cellModal', `<div class="dialog" style="max-width:420px"><div class="spread"><h2>${esc(key.replace('_', '% - '))} mm/min</h2><button data-close>&times;</button></div><div class="small muted" style="margin-bottom:8px">Machine: ${esc(gridMachineLabel(g.machine))}</div>${!g.machine ? '<div class="small" style="margin-bottom:8px"><span class="pill warn">Machine not recorded</span> Edit this Grid and assign a machine before saving a Material Test or promoting machine-dependent values.</div>' : ''}<form id="cellForm" class="grid">
         <label>${labelText('Rating', 'Score this power/speed result from unusable to excellent.')}<select name="rating">${[0,1,2,3,4,5].map(n => `<option value="${n}" ${n === existing.rating ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
@@ -11982,6 +12107,7 @@
     if (selftest === 'modal' || selftest === 'all') runModalAccessibilityFixtures();
     if (selftest === 'accessibility' || selftest === 'all') runAccessibilityPolishFixtures();
     if (selftest === 'responsive' || selftest === 'all') runResponsiveTuningFixtures();
+    if (selftest === 'empty-state' || selftest === 'all') runEmptyStateDanglingReferenceFixtures();
     if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
     if (selftest === 'design' || selftest === 'designs' || selftest === 'all') runDesignGeometryFixtures();
   })();
