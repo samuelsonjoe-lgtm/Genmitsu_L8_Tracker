@@ -2,6 +2,8 @@
 
 ## 0.9.0 — 2026-07-19
 
+- Added Tabletop Accessories T2A: a session-only five-piece rectangular shell prototype using the existing open-top box geometry, interior-primary dimensions, explicit finished cavity and outer-envelope reporting, shared wall/floor clearance, compact role-grouped layout, no rotation, optional labels, and a screen-only assembled Finished View. Added separate machine-exact, tolerance-gated compatibility matching for Coupon-proven evidence with explicit Apply, editable manual override tracking, no auto-application, and prototype-only Project handoff provenance. Added focused `tabletop-rectangular-shell`, `tabletop-rectangular-shell-evidence`, and `tabletop-layout` fixtures; no storage/schema/root collection or shell-result workflow was added.
+- Corrected the remaining bounded T2A audit coverage: Project handoffs now include descriptive machine/material snapshots and evidence IDs/dates, corner/floor mating and axis assertions are failure-localized, all compatibility tolerance boundaries and provenance transitions are fixture-covered, conflict/Keep behavior is explicit, and Help explains the no-rotation rationale. The comparable suite is `2790 / 0` across 37 unique groups; the nested diagnostic is `4592 / 0` across 60 invocations and is not comparable to the earlier `2642 / 0` across 34 groups. The T2A golden remains `2181 / 2ef9606b`.
 - Added visible application version and build identity.
 - Added machine-readable app, version, and backup-format metadata to exported backups.
 - Added safeguards against future-schema and incompatible backup imports.
