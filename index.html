@@ -490,7 +490,7 @@
       return { accepted:true, message:'' };
     }
     function designDefaults() {
-      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', trayBottomCover: false, hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', boxCornerDecoration: 'none', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated', slidingGuideMarks: false, slidingFitCoupon: false, drawerInsideWidth: '100', drawerInsideDepth: '70', drawerInsideHeight: '30', drawerRows: '1', drawerColumns: '1', drawerLayoutMode: 'uniform', drawerBottomColumns: '1', drawerMiddleColumns: '1', drawerTopColumns: '1', drawerUseSeparateInteriorThickness: false, drawerInteriorThickness: '3', cabinetJointClearance: '0.10', drawerJointClearance: '0.10', drawerPreferredFingerWidth: '12', drawerLateralClearance: '0.45', drawerVerticalClearance: '0.30', drawerRearClearance: '0.50', drawerShelfGuides: false, jointCouponEdgeLength: '45', jointCouponBodyDepth: '22', jointCouponPreferredFingerWidth: '9', jointCouponClearances: '0.06, 0.04, 0.02, 0.00, -0.02, -0.04', jointCouponLabels: true, couponType: 'finger-edge', jointCouponWallJointStyle: 'finger', jointCouponWallLength: '80', jointCouponWallClearances: '0.20, 0.15, 0.10, 0.05, 0.00', cleatLegLength: '80', cleatWallHeight: '50', boxOutsideWidth: '180', boxOutsideDepth: '150', boxWallHeight: '90', assemblyLabels: false };
+      return { template: 'qr-stand', jointStyle: 'finger', materialThickness: '3', fitClearance: '0.15', cornerRadius: '4', signWidth: '130', signHeight: '160', baseDepth: '90', slotDepth: '50', qrMargin: '18', trayWidth: '220', trayDepth: '160', trayHeight: '35', dividerCount: '2', trayBottomCover: false, hangingHole: '5', hangingInset: '12', boxDimensionMode: 'inside', boxWidth: '120', boxDepth: '90', boxHeight: '50', boxLid: 'open', boxCornerDecoration: 'none', jointClearance: '0.10', preferredFingerWidth: '12', slidingDimensionMode: 'usable', slidingWidth: '100', slidingDepth: '80', slidingHeight: '40', slidingJointClearance: '0.05', slidingPreferredFingerWidth: '12', lidSideClearance: '0.20', lidVerticalClearance: '0.20', frontInsertionClearance: '0.20', lidPull: 'none', lidPullWidth: '24', slidingOpenEnd: 'front', slidingRailMode: 'laminated', slidingGuideMarks: false, slidingFitCoupon: false, drawerInsideWidth: '100', drawerInsideDepth: '70', drawerInsideHeight: '30', drawerRows: '1', drawerColumns: '1', drawerLayoutMode: 'uniform', drawerBottomColumns: '1', drawerMiddleColumns: '1', drawerTopColumns: '1', drawerUseSeparateInteriorThickness: false, cabinetJointClearance: '0.10', drawerJointClearance: '0.10', drawerPreferredFingerWidth: '12', drawerLateralClearance: '0.45', drawerVerticalClearance: '0.30', drawerRearClearance: '0.50', drawerShelfGuides: false, jointCouponEdgeLength: '45', jointCouponBodyDepth: '22', jointCouponPreferredFingerWidth: '9', jointCouponClearances: '0.06, 0.04, 0.02, 0.00, -0.02, -0.04', jointCouponLabels: true, couponType: 'finger-edge', jointCouponWallJointStyle: 'finger', jointCouponWallLength: '80', jointCouponWallClearances: '0.20, 0.15, 0.10, 0.05, 0.00', cleatLegLength: '80', cleatWallHeight: '50', boxOutsideWidth: '180', boxOutsideDepth: '150', boxWallHeight: '90', assemblyLabels: false, giftUnits: 'mm', giftDimensionMode: 'internal', giftLength: '120', giftWidth: '90', giftHeight: '50', giftMaterialThickness: '3', giftKerf: '0', giftJointClearance: '0.10', giftPreferredFingerWidth: '12', giftPanelSpacing: '15', giftLidType: 'lift-off', giftLidAppearance: 'flush', giftLidClearance: '0.35', giftOverhangFront: '3', giftOverhangLeft: '3', giftOverhangRight: '3', giftLocatingFrame: true, giftFrameClearance: '0.35', giftFrameRailWidth: '8', giftHingeCount: '2', giftHingeLength: '30', giftHingeLeafWidth: '8', giftBarrelDiameter: '4', giftClosedHingeGap: '1.5', giftCornerInset: '12', giftScrewCount: '2', giftScrewSpacing: '10', giftScrewMarkDiameter: '1.2', giftHingeCoupon: true, giftFrontClaspGuide: false, giftMagnetGuides: false };
     }
     function designProductionSessionDefaults() {
       return { profileId: '', settingId: '', checkedTargets: {}, showSuperseded: false, reviewFingerprint: '', staleReason: '' };
@@ -1717,6 +1717,7 @@
         <section class="panel" style="margin-top:10px"><h3>Workshop machines</h3><p class="small">Workshop machines are equipment you own or use. Choose the active machine from the header and add, edit, duplicate, archive, restore, or delete unused non-active machines in Reference. Duplicate machines are separate physical units with distinct names and identities. Archived machines remain available for historical context.</p><p class="small muted">The Genmitsu L8 Reference profile only chooses bundled manufacturer starting-point tables; it is separate from the active workshop machine. Switching affects current workshop context, not saved historical records. Merge keeps local machines and active selection while adding unique imported IDs; Replace restores the backup machine list. M2 does not yet link existing Tests, settings, evidence, Projects, or Designs to owned-machine IDs.</p></section>
         <section class="panel" style="margin-top:10px"><h3>Test Grids and Material Tests</h3><ol class="small"><li>Use a <b>Test Grid</b> to compare many speed and power combinations at once.</li><li>Choose a promising result or a <b>winner</b>: the result you selected as best, not an automatic guarantee.</li><li>Use a <b>Material Test</b> to confirm, refine, or document one setting for a Library material.</li><li>The saved result becomes <b>evidence</b>: a saved result supporting why a setting is trusted.</li><li><b>Promotion</b> is a deliberate review that can make supported evidence a preferred proven production setting; it never proves physical safety or material suitability automatically.</li></ol><p class="small muted">Manufacturer and Reference values are starting points, not proof. A proven production setting remains evidence for its recorded material, machine, and conditions.</p></section>
         <section class="panel" style="margin-top:10px"><h3>Using Designs with LightBurn</h3><ol class="small"><li>Generate and preview the design here, then download its production SVG.</li><li>Import it into LightBurn and keep it at <b>100% scale</b>.</li><li>Verify units and finished dimensions, assign suitable engraving and cutting operations, then frame the job and confirm placement before running it.</li></ol><p class="small muted">The Tracker creates geometry; it does not send jobs to the laser. Rescaling changes physical dimensions and fit. Kerf, clearance, thickness, coatings, glue layers, flatness, moisture, and machine variation affect results. Previews do not guarantee fit, strength, or final appearance; use material tests and fit coupons when results matter.</p></section>
+        <section class="panel" style="margin-top:10px"><h3>Gift Box G1</h3><p class="small">Measure actual stock and hinges. Test finger fit before cutting the full box. Blue hinge leaf outlines and screw-center marks are alignment and drilling references only: they are not automatic mortises, pockets, or through-cut holes. Surface-mounted hinge hardware and small plywood screws require scrap testing and careful manual drilling; thin panels can split or blow through. Assign LightBurn operations by color, frame before starting, maintain ventilation and active fire watch, and never leave the laser unattended.</p></section>
         <section class="panel" style="margin-top:10px;background:#fff8e7;border-color:#ead59f"><h3>Laser safety</h3><ul class="small"><li>Maintain active ventilation and fume extraction, keep an active fire watch, never leave the laser unattended, and keep suitable fire suppression nearby.</li><li>Confirm focus; keep material flat and secure; frame or preview the job; keep optics and the work area clean; and use controlled air assist appropriate to the operation and material.</li><li>Verify the exact material and coating composition before lasering. Do not laser PVC, vinyl, chlorinated plastics, mystery plastics, unidentified materials, or unknown coatings.</li><li>Use additional caution with fiberglass, carbon fiber, reflective surfaces, coated metals, foams, leather, adhesives, and composite materials. “Laserable” marketing does not replace composition checks and safe ventilation requirements.</li></ul></section>
         <section class="panel" style="margin-top:10px"><h3>Starting points and physical validation</h3><p class="small">Manufacturer and Reference values are starting points, not guarantees. Material batches, color, coatings, glue, moisture, flatness, focus, lens condition, ventilation, and machine variation all affect results. Run material tests when settings are unproven, and physically validate cutting, fit, strength, and finish on the actual material. Experimental generators retain their specific warnings.</p><p class="small muted">Your active workshop machine identifies current equipment context and its work area is advisory only. The Genmitsu L8 Reference profile selects which bundled manufacturer starting-point table is displayed. Existing Test Grids retain their saved machine snapshots. These are separate concepts. The work area does not resize SVGs, perform nesting, guarantee bed fit, control the machine, or change Reference settings. It does not change specifically Genmitsu L8 starting points.</p></section>
         <section class="panel" style="margin-top:10px"><h3>Documentation</h3><div class="actions"><a href="README.md" target="_blank" rel="noopener">Open README</a><a href="docs/Genmitsu_L8_Laser_Engraving_Machine_User_Manual.pdf" target="_blank" rel="noopener">Open bundled user manual</a></div></section>
@@ -2396,7 +2397,7 @@
     }
     function designTemplateSelect(value) {
       const groups=[
-        ['Boxes and cabinets',[['finger-box','Finger-jointed box'],['sliding-lid-box','Sliding-lid finger box'],['drawer-cabinet','Drawer Cabinet']]],
+        ['Boxes and cabinets',[['finger-box','Finger-jointed box'],['sliding-lid-box','Sliding-lid finger box'],['drawer-cabinet','Drawer Cabinet'],['gift-box','Gift Box']]],
         ['Trays',[['dice-tray','Dice tray'],['divider-tray','Divider tray']]],
         ['Signs and stands',[['qr-stand','Freestanding QR / sign stand'],['hanging-sign','Hanging sign']]],
         ['Coupons and prototypes',[['joint-fit-coupon','Joint Fit Coupon'],['concealed-cleat-corner-prototype','Concealed Cleat Corner Prototype'],['concealed-cleat-full-box-prototype','Concealed Cleat Full-Box Prototype']]]
@@ -2727,7 +2728,7 @@
       };
     }
     function renderDesigns() {
-      const d = designDraft, box = d.template === 'finger-box', sliding = d.template === 'sliding-lid-box', cabinet = d.template === 'drawer-cabinet', cleat = d.template === 'concealed-cleat-corner-prototype', fullCleat = d.template === 'concealed-cleat-full-box-prototype', jointCoupon = d.template === 'joint-fit-coupon', tray = d.template === 'dice-tray' || d.template === 'divider-tray', hanging = d.template === 'hanging-sign';
+      const d = designDraft, box = d.template === 'finger-box', gift = d.template === 'gift-box', sliding = d.template === 'sliding-lid-box', cabinet = d.template === 'drawer-cabinet', cleat = d.template === 'concealed-cleat-corner-prototype', fullCleat = d.template === 'concealed-cleat-full-box-prototype', jointCoupon = d.template === 'joint-fit-coupon', tray = d.template === 'dice-tray' || d.template === 'divider-tray', hanging = d.template === 'hanging-sign', giftHinged = d.giftLidType === 'hinged-surface', giftOverhanging = d.giftLidAppearance === 'overhanging';
       const result = buildDesignResult(d);
       const templateField = designTemplateSelect(d.template);
       const cleatFields = field('cleatLegLength','Prototype outside leg length (mm)',d.cleatLegLength,'number','min="0.01" step="0.1"','Outside leg length is the side length of the square Base and the full Wall A length. Wall B is shortened by one measured material thickness; cleats consume interior space.') + field('cleatWallHeight','Prototype wall height (mm)',d.cleatWallHeight,'number','min="0.01" step="0.1"','Use measured material thickness. This is an assembly and registration prototype, not a strength test.');
@@ -2743,6 +2744,37 @@
           + '<div class="small muted" style="grid-column:1/-1">Engraves dovetail-style taper marks over the actual finger positions at the vertical corners. Decorative only — the structural joint remains a finger joint, and cut geometry, fit, and strength do not change. Run the blue score layer before cutting.</div>'
           + '<label class="row"><input name="assemblyLabels" type="checkbox" style="width:auto" ' + (d.assemblyLabels ? 'checked' : '') + '> Add assembly labels (blue score layer)</label>'
           + '<div class="small muted" style="grid-column:1/-1">Adds small identification marks to intended inside or concealed faces. Run the blue score layer before cutting. Verify label visibility and face orientation during the first assembly; these are assembly aids, not decorative engraving. Deterministic vector glyph paths are used so no font is required.</div>';
+      const giftFields = designFormSectionLabel('Gift Box dimensions and construction')
+        + designSelect('giftUnits','Units',d.giftUnits || 'mm',[['mm','Millimeters'],['in','Inches']],'Display units for Gift Box dimensions; geometry is normalized to millimeters.')
+        + designSelect('giftDimensionMode','Dimension mode',d.giftDimensionMode,[['internal','Internal finished dimensions'],['external','External finished dimensions']],'Internal means clear usable cavity with the lid closed; external means the assembled closed-box envelope.')
+        + field('giftLength','Finished length',d.giftLength,'number','min="0.01" step="0.01"') + field('giftWidth','Finished width',d.giftWidth,'number','min="0.01" step="0.01"') + field('giftHeight','Finished height',d.giftHeight,'number','min="0.01" step="0.01"')
+        + field('giftMaterialThickness','Material thickness (mm)',d.giftMaterialThickness || d.materialThickness,'number','min="0.1" step="0.01"','Use one measured material thickness for walls, base, lid, and frame.')
+        + field('giftKerf','Kerf field (mm)',d.giftKerf,'number','step="0.01"','Kerf remains an operator/LightBurn field and is not baked into structural geometry.')
+        + field('giftJointClearance','Finger-joint fit adjustment (mm)',d.giftJointClearance,'number','min="-0.10" step="0.01"','Uses the existing finger-joint clearance convention; test a Joint Fit Coupon first.')
+        + field('giftPreferredFingerWidth','Preferred finger width',d.giftPreferredFingerWidth,'number','min="0.01" step="0.1"')
+        + field('giftPanelSpacing','Panel spacing (mm)',d.giftPanelSpacing || '15','number','min="0" step="0.1"','Spacing between production panels; it is not part of the box dimensions.')
+        + designSelect('giftLidType','Lid type',d.giftLidType,[['lift-off','Lift-off lid'],['hinged-surface','Surface-mounted hinged lid']],'Hinges are surface-mounted score/drill guides only; no mortises or screw holes are cut.')
+        + designSelect('giftLidAppearance','Lid appearance',d.giftLidAppearance,[['flush','Flush'],['overhanging','Overhanging']])
+        + field('giftLidClearance','Lid clearance per side (mm)',d.giftLidClearance,'number','min="0" step="0.01"','Starting value requiring physical validation on the actual material.')
+        + (giftOverhanging ? field('giftOverhangFront','Overhang front (mm)',d.giftOverhangFront,'number','min="0" step="0.1"') + field('giftOverhangLeft','Overhang left (mm)',d.giftOverhangLeft,'number','min="0" step="0.1"') + field('giftOverhangRight','Overhang right (mm)',d.giftOverhangRight,'number','min="0" step="0.1"') : '')
+        + '<label class="row"><input name="giftLocatingFrame" type="checkbox" style="width:auto" ' + (d.giftLocatingFrame ? 'checked' : '') + '> Include four-rail locating frame</label>'
+        + field('giftFrameClearance','Frame clearance per side (mm)',d.giftFrameClearance,'number','min="0" step="0.01"','Four separate rails; this clearance reduces the clear frame opening and requires physical validation.')
+        + field('giftFrameRailWidth','Frame rail width (mm)',d.giftFrameRailWidth,'number','min="0" step="0.1"')
+        + (giftHinged ? designFormSectionLabel('Surface hinge guides and placement coupon')
+          + designSelect('giftHingeCount','Hinge count',String(d.giftHingeCount),[['1','1'],['2','2'],['3','3']],'Use the actual hinge hardware dimensions.')
+          + field('giftHingeLength','Hinge length along barrel axis (mm)',d.giftHingeLength,'number','min="0.01" step="0.1"')
+          + field('giftHingeLeafWidth','Hinge leaf width (mm)',d.giftHingeLeafWidth,'number','min="0.01" step="0.1"')
+          + field('giftBarrelDiameter','Barrel diameter (mm)',d.giftBarrelDiameter,'number','min="0.01" step="0.1"')
+          + field('giftClosedHingeGap','Closed hinge gap (mm)',d.giftClosedHingeGap,'number','min="0" step="0.1"','Hardware relationship only; G1 does not infer a universal hinge formula.')
+          + field('giftCornerInset','Corner inset (mm)',d.giftCornerInset,'number','min="0" step="0.1"')
+          + field('giftScrewCount','Screw count per leaf',d.giftScrewCount,'number','min="1" max="8" step="1"')
+          + field('giftScrewSpacing','Screw spacing (mm)',d.giftScrewSpacing,'number','min="0" step="0.1"')
+          + field('giftScrewMarkDiameter','Screw-center mark diameter (mm)',d.giftScrewMarkDiameter,'number','min="0.1" step="0.1"')
+          + '<label class="row"><input name="giftHingeCoupon" type="checkbox" style="width:auto" ' + (d.giftHingeCoupon ? 'checked' : '') + '> Include hinge-placement coupon</label>'
+          + '<div class="small muted" style="grid-column:1/-1">Blue leaf outlines and screw centers are drilling/alignment references, not automatic mortises or through-cut holes. Test the actual hinge on scrap first.</div>' : '')
+        + '<label class="row"><input name="giftFrontClaspGuide" type="checkbox" style="width:auto" ' + (d.giftFrontClaspGuide ? 'checked' : '') + '> Add front clasp center guide</label>'
+        + '<label class="row"><input name="giftMagnetGuides" type="checkbox" style="width:auto" ' + (d.giftMagnetGuides ? 'checked' : '') + '> Add front magnet center guides</label>'
+        + '<label class="row"><input name="assemblyLabels" type="checkbox" style="width:auto" ' + (d.assemblyLabels ? 'checked' : '') + '> Add assembly labels (blue score layer)</label>';
       const slidingBasicFields = designFormSectionLabel('Box size and lid')
         + designSelect('slidingDimensionMode', 'Dimensions mean', d.slidingDimensionMode, [['usable','Usable cavity below lid'],['outside','Outside body']], 'Usable cavity is the unobstructed space below the lid, between the inner rail faces, and between the Front and Back walls.')
         + field('slidingWidth', `${d.slidingDimensionMode === 'outside' ? 'Outside body' : 'Usable cavity'} width (mm)`, d.slidingWidth, 'number', 'min="0.01" step="0.1"')
@@ -2827,7 +2859,9 @@
         : hanging ? 'Hanging sign exports a clean panel with two mounting holes.'
         : 'Freestanding sign exports a base and upright with matching centered slots. The upright is intentionally blank for your QR, logo, or text in LightBurn.';
       const materialThicknessField=field('materialThickness',cabinet ? 'Shell thickness (mm)' : 'Measured material thickness (mm)',d.materialThickness,'number','min="0.1" step="0.01"',cabinet ? 'Measure the actual shell sheet. Linked mode also uses this thickness for drawers, shelves, and partitions.' : 'Measure the actual sheet; nominal plywood thickness can differ.');
-      const formFields=cabinet
+      const formFields=gift
+        ? `${templateField}${giftFields}`
+        : cabinet
         ? `${templateField}<div></div>${cabinetBasicFields}${designFormSectionLabel('Material')}${materialThicknessField}${cabinetMaterialFields}${designAdvancedSection('Advanced fit, joints, and markings',cabinetAdvancedFields)}`
         : sliding
         ? `${templateField}${materialThicknessField}${slidingBasicFields}${designAdvancedSection('Advanced fit and production options',slidingAdvancedFields)}`
@@ -2842,6 +2876,7 @@
           <div class="small muted" style="margin-top:10px">${note}</div>
           <div class="small muted" style="margin-top:8px"><b>Kerf is separate:</b> ${esc(designKerfGuidance(d.template))}</div>
           ${box ? '<div class="small muted" style="margin-top:8px">Outside body height runs from the underside of the bottom to the top of the walls. Inside height runs from the inside face of the bottom to the wall top. A loose lid adds one material thickness to overall closed height.</div>' : ''}
+          ${gift ? '<div class="small muted" style="margin-top:8px"><b>G1 safety:</b> Blue hinge guides are placement/drilling references, not mortises or cut holes. Small screws can split thin plywood. Measure actual thickness and hinges, test a finger-fit coupon and hinge coupon on scrap, frame before starting, ventilate, and never leave the laser unattended.</div>' : ''}
           ${sliding ? '<div class="small muted" style="margin-top:8px"><b>Open end:</b> Front &nbsp; <b>Slide direction:</b> Front toward Back &nbsp; <b>Rails:</b> two laminated through-cut inner channels. Glue the rails top-flush and back-flush with both channels facing inward. Kerf is not included in generated geometry.</div>' : ''}
           ${cabinet ? '<div class="small muted" style="margin-top:8px"><b>Construction:</b> The cabinet front is open and its back is closed. The bottom drawers rest on the cabinet bottom; upper drawers rest on full-width edge-glued shelves. Vertical partitions are manually positioned and glued with no partition-placement guides in this phase. Separate thickness requires separate material and laser settings for the Shell and Interior files. Clearances are nominal geometry only. Dry-fit, square, clamp, and physically test the cabinet before production use.</div>' : ''}
           ${jointCoupon ? `<div class="small muted" style="margin-top:8px"><b>Test order:</b> ${wallBaseCoupon ? 'Rows follow the entered top-to-bottom candidate order. Start with the loosest row, then move toward tighter values. This local coupon does not prove a full tray or Divider retention; write any winner down manually for now.' : 'Start with looser positive values, then move toward zero and negative interference values. Stop if insertion force crushes, splits, or permanently locks the material. A successful coupon selects the next full prototype setting; it does not replace final box testing.'}</div>` : ''}
@@ -3054,12 +3089,41 @@
     }
     function normalizeDesignDraft(rawDraft = {}) {
       const draft = { ...rawDraft }, errors = [], warnings = [];
-      const templates = ['qr-stand','hanging-sign','dice-tray','divider-tray','finger-box','sliding-lid-box','drawer-cabinet','joint-fit-coupon','concealed-cleat-corner-prototype','concealed-cleat-full-box-prototype'];
+      const templates = ['qr-stand','hanging-sign','dice-tray','divider-tray','finger-box','sliding-lid-box','gift-box','drawer-cabinet','joint-fit-coupon','concealed-cleat-corner-prototype','concealed-cleat-full-box-prototype'];
       const template = String(draft.template || '');
       if (!templates.includes(template)) errors.push('Choose a recognized Designs template.');
       const values = { template };
       values.materialThickness = designRequiredNumber(draft, 'materialThickness', 'Material thickness', errors, .1, true);
-      if (template === 'concealed-cleat-corner-prototype') {
+      if (template === 'gift-box') {
+        const units = String(draft.giftUnits || 'mm'), factor = units === 'in' ? 25.4 : 1;
+        if (!['mm','in'].includes(units)) errors.push('Gift Box units must be millimeters or inches.');
+        values.units = units;
+        values.dimensionMode = String(draft.giftDimensionMode || 'internal');
+        values.lidType = String(draft.giftLidType || 'lift-off');
+        values.lidAppearance = String(draft.giftLidAppearance || 'flush');
+        if (!['internal','external'].includes(values.dimensionMode)) errors.push('Gift Box dimension mode must be internal or external finished dimensions.');
+        if (!['lift-off','hinged-surface'].includes(values.lidType)) errors.push('Gift Box lid type is not recognized.');
+        if (!['flush','overhanging'].includes(values.lidAppearance)) errors.push('Gift Box lid appearance is not recognized.');
+        const dimension = (key,label) => { const raw=draft[key], value=Number(raw); if (raw === '' || raw == null || !Number.isFinite(value) || value <= 0) { errors.push(`${label} must be a finite number greater than zero.`); return NaN; } return value * factor; };
+        values.width = dimension('giftLength','Finished length'); values.depth = dimension('giftWidth','Finished width'); values.height = dimension('giftHeight','Finished height');
+        values.materialThickness = designRequiredNumber(draft, 'giftMaterialThickness', 'Gift Box material thickness', errors, .1, true);
+        values.kerf = draft.giftKerf === '' || draft.giftKerf == null ? 0 : Number(draft.giftKerf);
+        if (!Number.isFinite(values.kerf) || values.kerf < 0) errors.push('Gift Box kerf must be finite and nonnegative.');
+        values.clearance = designJointClearanceNumber(draft, 'giftJointClearance', 'Gift Box finger-joint fit adjustment', errors);
+        values.preferredFingerWidth = designRequiredNumber(draft, 'giftPreferredFingerWidth', 'Gift Box preferred finger width', errors, 0);
+        values.panelSpacing = designRequiredNumber(draft, 'giftPanelSpacing', 'Gift Box panel spacing', errors, 0, true);
+        values.lidClearance = designRequiredNumber(draft, 'giftLidClearance', 'Gift Box lid clearance', errors, 0, true);
+        values.overhangFront = values.lidAppearance === 'overhanging' ? designRequiredNumber(draft, 'giftOverhangFront', 'Gift Box front overhang', errors, 0, true) : 0;
+        values.overhangLeft = values.lidAppearance === 'overhanging' ? designRequiredNumber(draft, 'giftOverhangLeft', 'Gift Box left overhang', errors, 0, true) : 0;
+        values.overhangRight = values.lidAppearance === 'overhanging' ? designRequiredNumber(draft, 'giftOverhangRight', 'Gift Box right overhang', errors, 0, true) : 0;
+        values.overhangRear = 0;
+        values.frameEnabled = draft.giftLocatingFrame === true || draft.giftLocatingFrame === 'true' || draft.giftLocatingFrame === 'on';
+        values.frameClearance = designRequiredNumber(draft, 'giftFrameClearance', 'Gift Box frame clearance', errors, 0, true);
+        values.frameRailWidth = designRequiredNumber(draft, 'giftFrameRailWidth', 'Gift Box frame rail width', errors, 0, true);
+        values.hingeCount = Number(draft.giftHingeCount); values.hingeLength = Number(draft.giftHingeLength); values.hingeLeafWidth = Number(draft.giftHingeLeafWidth); values.barrelDiameter = Number(draft.giftBarrelDiameter); values.closedHingeGap = Number(draft.giftClosedHingeGap); values.cornerInset = Number(draft.giftCornerInset); values.screwCount = Number(draft.giftScrewCount); values.screwSpacing = Number(draft.giftScrewSpacing); values.screwMarkDiameter = Number(draft.giftScrewMarkDiameter);
+        values.hingeCoupon = draft.giftHingeCoupon === true || draft.giftHingeCoupon === 'true' || draft.giftHingeCoupon === 'on';
+        values.frontClaspGuide = draft.giftFrontClaspGuide === true || draft.giftFrontClaspGuide === 'true' || draft.giftFrontClaspGuide === 'on'; values.magnetGuides = draft.giftMagnetGuides === true || draft.giftMagnetGuides === 'true' || draft.giftMagnetGuides === 'on'; values.assemblyLabels = draft.assemblyLabels === true || draft.assemblyLabels === 'true' || draft.assemblyLabels === 'on';
+      } else if (template === 'concealed-cleat-corner-prototype') {
         values.legLength = designRequiredNumber(draft, 'cleatLegLength', 'Prototype outside leg length', errors, 0);
         values.wallHeight = designRequiredNumber(draft, 'cleatWallHeight', 'Prototype wall height', errors, 0);
       } else if (template === 'concealed-cleat-full-box-prototype') {
@@ -3251,6 +3315,94 @@
       panels.forEach(panel => errors.push(...designPanelGeometryErrors(panel)));
       if (panels.some(panel => !panel.path || panel.points.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y)))) errors.push('Generated panel geometry contains a non-finite or non-orthogonal coordinate.');
       return { valid: !errors.length, errors, warnings, dimensions, patterns, panels, metrics: { requestedFingerWidth: parameters.preferredFingerWidth, requiredWeb, clearance: parameters.clearance, closedHeight: dimensions.outsideHeight + (parameters.lid === 'loose' ? t : 0) } };
+    }
+    function giftBoxRectPanel(id, name, width, height) {
+      return designPanelFromPoints({ id, name, width, height }, [{x:0,y:0},{x:width,y:0},{x:width,y:height},{x:0,y:height},{x:0,y:0}]);
+    }
+    function giftBoxGuideSegments(x, y, width, height, id, name) {
+      const point = (a,b) => ({ a:{x:designRound(a.x),y:designRound(a.y)}, b:{x:designRound(b.x),y:designRound(b.y)} });
+      const segments=[point({x,y},{x:x+width,y}),point({x:x+width,y},{x:x+width,y:y+height}),point({x:x+width,y:y+height},{x,y:y+height}),point({x,y:y+height},{x,y})];
+      return { id, name, panelId:id, x:0, y:0, segments, path:designScoreSegmentsPath(segments) };
+    }
+    function giftBoxCrossGuide(x, y, size, id, name, panelId) {
+      const segments=[{a:{x:designRound(x-size),y:designRound(y)},b:{x:designRound(x+size),y:designRound(y)}},{a:{x:designRound(x),y:designRound(y-size)},b:{x:designRound(x),y:designRound(y+size)}}];
+      return { id, name, panelId, x:0, y:0, segments, path:designScoreSegmentsPath(segments) };
+    }
+    function giftBoxHingePositions(width, count, length, inset, errors) {
+      if (![1,2,3].includes(count) || !Number.isInteger(count)) { errors.push('Hinge count must be 1, 2, or 3.'); return []; }
+      if (![width,count,length,inset].every(Number.isFinite) || length <= 0 || inset < 0) { errors.push('Hinge dimensions and corner inset must be finite and positive.'); return []; }
+      if (count === 1) return [(width-length)/2];
+      const gap = (width - 2*inset - count*length) / (count-1);
+      if (gap < 3 - 1e-9) { errors.push(`Hinge layout requires at least 3 mm between leaves; calculated gap is ${designNumberText(gap)} mm.`); return []; }
+      return Array.from({length:count}, (_, index) => designRound(inset + index*(length+gap)));
+    }
+    function giftBoxScrewOffsets(count, spacing, errors) {
+      if (!Number.isInteger(count) || count < 1 || count > 8) { errors.push('Screw count per hinge leaf must be a whole number from 1 to 8.'); return []; }
+      if (!Number.isFinite(spacing) || spacing < 0) { errors.push('Screw spacing must be finite and nonnegative.'); return []; }
+      return count === 1 ? [0] : Array.from({length:count}, (_, index) => designRound((index-(count-1)/2)*spacing));
+    }
+    function giftBoxHardwareGuides(values, dimensions, panels, errors, warnings) {
+      if (values.lidType !== 'hinged-surface') return { scorePaths:[], hingePositions:[], screwCenters:[] };
+      const count = values.hingeCount, hingePositions = giftBoxHingePositions(dimensions.outsideWidth, count, values.hingeLength, values.cornerInset, errors), screwOffsets = giftBoxScrewOffsets(count === undefined ? 0 : values.screwCount, values.screwSpacing, errors), scorePaths = [], screwCenters = [];
+      if (![values.hingeLength,values.hingeLeafWidth,values.barrelDiameter,values.closedHingeGap,values.screwMarkDiameter].every(Number.isFinite) || values.hingeLength <= 0 || values.hingeLeafWidth <= 0 || values.barrelDiameter <= 0 || values.closedHingeGap < 0 || values.screwMarkDiameter <= 0) errors.push('Hinge length, leaf width, barrel diameter, gap, and mark diameter must be valid positive measurements.');
+      if (values.closedHingeGap <= 0) errors.push('Closed hinge gap must be greater than zero to avoid certain lid/rear-wall collision.');
+      if (values.closedHingeGap < values.barrelDiameter/2) warnings.push('Closed hinge gap is smaller than half the entered barrel diameter; verify the hardware relationship on scrap.');
+      const back = panels.find(panel => panel.id === 'back'), lid = panels.find(panel => panel.id === 'lid'), fingerZone = values.materialThickness;
+      if (!back || !lid) { errors.push('Hinged Gift Box is missing its back wall or lid panel.'); return {scorePaths,hingePositions,screwCenters}; }
+      const backY = dimensions.outsideHeight - values.hingeLeafWidth - fingerZone, lidY = lid.height - values.hingeLeafWidth - values.materialThickness;
+      if (backY < 0 || backY + values.hingeLeafWidth > dimensions.outsideHeight - fingerZone + 1e-9) errors.push('Hinge leaves overlap the back-wall finger-joint zone or leave the panel bounds.');
+      if (lidY < 0 || lidY + values.hingeLeafWidth > lid.height + 1e-9) errors.push('Hinge leaves leave the lid panel bounds.');
+      hingePositions.forEach((position, hingeIndex) => {
+        if (position < -1e-9 || position + values.hingeLength > dimensions.outsideWidth + 1e-9) errors.push('Hinge leaves extend beyond the rear wall.');
+        const backGuide = giftBoxGuideSegments(position, backY, values.hingeLength, values.hingeLeafWidth, `hinge-back-${hingeIndex+1}`, `Hinge ${hingeIndex+1} back leaf guide`); backGuide.panelId = 'back';
+        const lidGuide = giftBoxGuideSegments(values.overhangLeft + position, lidY, values.hingeLength, values.hingeLeafWidth, `hinge-lid-${hingeIndex+1}`, `Hinge ${hingeIndex+1} lid leaf guide`); lidGuide.panelId = 'lid';
+        scorePaths.push(backGuide,lidGuide);
+        screwOffsets.forEach((offset, screwIndex) => {
+          const backX = position + values.hingeLength/2 + offset, lidX = values.overhangLeft + position + values.hingeLength/2 + offset, backCenter = {x:backX,y:backY+values.hingeLeafWidth/2}, lidCenter = {x:lidX,y:lidY+values.hingeLeafWidth/2};
+          [ ['back',backCenter,`hinge-back-${hingeIndex+1}-screw-${screwIndex+1}`], ['lid',lidCenter,`hinge-lid-${hingeIndex+1}-screw-${screwIndex+1}`] ].forEach(([panelId,center,id]) => {
+            const panel = panelId === 'back' ? back : lid, edgeDistance = Math.min(center.x, panel.width-center.x, center.y, panel.height-center.y);
+            if (edgeDistance < 3 - 1e-9) errors.push(`Screw center ${id} is closer than 3 mm to a panel edge.`); else if (edgeDistance < 6 - 1e-9) warnings.push(`Screw center ${id} is within 3-6 mm of a panel edge; verify thin-plywood blowout risk.`);
+            screwCenters.push({panelId, x:center.x, y:center.y}); scorePaths.push(giftBoxCrossGuide(center.x,center.y,Math.max(.5,values.screwMarkDiameter),id,`Screw center ${hingeIndex+1}.${screwIndex+1}`,panelId));
+          });
+        });
+      });
+      return {scorePaths,hingePositions,screwCenters};
+    }
+    function buildGiftBoxDesignResult(normalized) {
+      const values=normalized.values, errors=[...normalized.errors], warnings=[...normalized.warnings], t=values.materialThickness, shell=buildBoxModel({dimensionMode:values.dimensionMode === 'internal' ? 'inside' : 'outside',width:values.width,depth:values.depth,height:values.height,materialThickness:t,preferredFingerWidth:values.preferredFingerWidth,clearance:values.clearance,lid:'open'});
+      errors.push(...shell.errors); warnings.push(...shell.warnings.filter(message => !/loose flat lid/.test(message)));
+      const dimensions=shell.dimensions, panels=shell.panels.map(panel => ({...panel,name:{bottom:'BASE',front:'FRONT',back:'BACK',left:'LEFT',right:'RIGHT'}[panel.id] || panel.name}));
+      const lidWidth=dimensions.outsideWidth+values.overhangLeft+values.overhangRight, lidDepth=dimensions.outsideDepth+values.overhangFront+values.overhangRear, lid=giftBoxRectPanel('lid','LID',lidWidth,lidDepth); panels.push(lid);
+      const framePanels=[], frameOpeningWidth=dimensions.insideWidth-2*(values.frameClearance+values.frameRailWidth), frameOpeningDepth=dimensions.insideDepth-2*(values.frameClearance+values.frameRailWidth), frameOuterWidth=dimensions.insideWidth-2*values.frameClearance, frameOuterDepth=dimensions.insideDepth-2*values.frameClearance, minimumRail=Math.max(2*t,6);
+      if (values.frameEnabled) {
+        if (values.frameRailWidth < minimumRail-1e-9) errors.push(`Locating-frame rail width must be at least ${designNumberText(minimumRail)} mm.`);
+        if (frameOuterWidth <= 2*values.frameRailWidth || frameOuterDepth <= 2*values.frameRailWidth || frameOpeningWidth <= 0 || frameOpeningDepth <= 0) errors.push('Locating-frame rails leave no positive clear opening.');
+        if (frameOuterWidth <= 0 || frameOuterDepth <= 0) errors.push('Locating-frame outer dimensions must be positive.');
+        if (!errors.length || (frameOuterWidth > 0 && frameOuterDepth > 0)) {
+          framePanels.push(giftBoxRectPanel('frame-front','FRAME-FRONT',frameOuterWidth,values.frameRailWidth),giftBoxRectPanel('frame-back','FRAME-BACK',frameOuterWidth,values.frameRailWidth),giftBoxRectPanel('frame-left','FRAME-LEFT',values.frameRailWidth,Math.max(0,frameOuterDepth-2*values.frameRailWidth)),giftBoxRectPanel('frame-right','FRAME-RIGHT',values.frameRailWidth,Math.max(0,frameOuterDepth-2*values.frameRailWidth)));
+        }
+      }
+      panels.push(...framePanels);
+      const hardware=giftBoxHardwareGuides(values,dimensions,panels,errors,warnings), scorePaths=[...hardware.scorePaths];
+      if (values.frameEnabled && values.lidType === 'hinged-surface') errors.push('Locating frame conflicts with surface-mounted hinge guides; disable the locating frame for hinged lids.');
+      if (values.frontClaspGuide || values.magnetGuides) {
+        const front=panels.find(panel=>panel.id==='front'), center={x:front.width/2,y:front.height-values.materialThickness*1.5};
+        if (values.frontClaspGuide) scorePaths.push(giftBoxCrossGuide(center.x,center.y,Math.max(1,t/2),'front-clasp-center','Front clasp center guide','front'));
+        if (values.magnetGuides) { scorePaths.push(giftBoxCrossGuide(center.x-12,center.y,Math.max(1,t/2),'front-magnet-left','Front magnet left center guide','front'),giftBoxCrossGuide(center.x+12,center.y,Math.max(1,t/2),'front-magnet-right','Front magnet right center guide','front')); }
+      }
+      let coupon=null;
+      if (values.lidType==='hinged-surface' && values.hingeCoupon) {
+        const margin=10, couponWidth=values.hingeLength+2*margin, couponHeight=values.hingeLeafWidth+2*margin; coupon=giftBoxRectPanel('hinge-coupon','HINGE-COUPON',couponWidth,couponHeight); panels.push(coupon);
+        const couponX=margin,couponY=margin, couponGuide=giftBoxGuideSegments(couponX,couponY,values.hingeLength,values.hingeLeafWidth,'hinge-coupon-leaf','HINGE-COUPON leaf outline'); couponGuide.panelId='hinge-coupon'; scorePaths.push(couponGuide); const offsets=giftBoxScrewOffsets(values.screwCount,values.screwSpacing,errors); offsets.forEach((offset,index)=>scorePaths.push(giftBoxCrossGuide(couponX+values.hingeLength/2+offset,couponY+values.hingeLeafWidth/2,Math.max(.5,values.screwMarkDiameter),`hinge-coupon-screw-${index+1}`,`HINGE-COUPON screw ${index+1}`,'hinge-coupon')));
+      }
+      panels.forEach(panel=>errors.push(...designPanelGeometryErrors(panel)));
+      const rows=[['bottom','lid'],['front','back'],['left','right'],...(framePanels.length?[['frame-front','frame-back'],['frame-left','frame-right']]:[]),...(coupon?[['hinge-coupon']]:[])], layout=layoutDesignPanelRows(panels,rows,10,values.panelSpacing), placedById=Object.fromEntries(layout.panels.map(panel=>[panel.id,panel])), placedScorePaths=scorePaths.map(path=>({...path,x:placedById[path.panelId]?.x||0,y:placedById[path.panelId]?.y||0}));
+      if (new Set(layout.panels.flatMap(panel=>designPointSegments(panel.points).map(segment=>designSegmentKey({a:{x:segment.a.x+panel.x,y:segment.a.y+panel.y},b:{x:segment.b.x+panel.x,y:segment.b.y+panel.y}})))).size !== layout.panels.flatMap(panel=>designPointSegments(panel.points)).length) errors.push('Gift Box layout contains duplicate translated cut segments.');
+      errors.push(...layout.errors);
+      const labelSpecs=values.assemblyLabels?designAssemblyLabelSpecs('gift-box',values):[], labelResult=labelSpecs.length?buildAssemblyLabelPaths(layout.panels,labelSpecs,{}, {minimumClearance:Math.max(1,t/3)}):{paths:[],warnings:[]}; warnings.push(...labelResult.warnings);
+      const partial={widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,scorePaths:placedScorePaths,scoreGroupId:'gift-box-guides',labelPaths:labelResult.paths}, svg=errors.length?'':serializeDesignSvg(partial), validation=svg?designSvgValidation(svg,layout.widthMm,layout.heightMm):{valid:false,errors:[]}; errors.push(...validation.errors); if(svg&&labelResult.paths.length) errors.push(...designSerializedAssemblyLabelValidation(svg,layout.panels,{},Math.max(1,t/3)).errors);
+      const finishedView={template:'gift-box',dimensionMode:values.dimensionMode,lidType:values.lidType,lidAppearance:values.lidAppearance,dimensions:{outsideWidth:dimensions.outsideWidth,outsideDepth:dimensions.outsideDepth,outsideHeight:dimensions.outsideHeight,insideWidth:dimensions.insideWidth,insideDepth:dimensions.insideDepth,insideHeight:dimensions.insideHeight,lidWidth,lidDepth,closedHeight:dimensions.outsideHeight+t},frameEnabled:values.frameEnabled,frameOpeningWidth,frameOpeningDepth,hingeCount:values.hingeCount,hingePositions:hardware.hingePositions,materialThickness:t};
+      return {valid:!errors.length,errors:[...new Set(errors)],warnings:[...new Set(warnings)],svg:errors.length?'':svg,widthMm:layout.widthMm,heightMm:layout.heightMm,panels:layout.panels,scorePaths:placedScorePaths,labelPaths:labelResult.paths,finishedView,metrics:{template:'gift-box',giftBox:true,dimensions:{...dimensions,lidWidth,lidDepth},materialThickness:t,kerf:values.kerf,clearance:values.clearance,requestedFingerWidth:values.preferredFingerWidth,patterns:shell.patterns,lidType:values.lidType,lidAppearance:values.lidAppearance,dimensionMode:values.dimensionMode,lidClearance:values.lidClearance,frameEnabled:values.frameEnabled,frameClearance:values.frameClearance,frameRailWidth:values.frameRailWidth,frameOpeningWidth,frameOpeningDepth,framePieceCount:framePanels.length,hingeCount:values.hingeCount,hingeLength:values.hingeLength,hingeLeafWidth:values.hingeLeafWidth,barrelDiameter:values.barrelDiameter,closedHingeGap:values.closedHingeGap,screwCount:values.screwCount,screwSpacing:values.screwSpacing,hingeCoupon:!!coupon,hingeGuideCount:hardware.scorePaths.length,assemblyLabels:values.assemblyLabels,labelCount:labelResult.paths.length,operations:{cut:layout.panels.length,score:placedScorePaths.length},closedHeight:dimensions.outsideHeight+t},validation};
     }
     function jointCouponLabelText(pair, side) {
       return `${String(side || '').toUpperCase()}${pair.clearanceText}`;
@@ -3668,7 +3820,7 @@
       return { valid:true, text: value, capHeight, spacing, width:designRound(cursor * scale), height:designRound(capHeight), segments, glyphRuns, path:designScoreSegmentsPath(segments) };
     }
     function designAssemblyLabelSpecs(template, values) {
-      const box = template === 'finger-box';
+      const box = template === 'finger-box', gift = template === 'gift-box';
       const sliding = template === 'sliding-lid-box';
       const cabinet = template === 'drawer-cabinet';
       if (cabinet) {
@@ -3681,7 +3833,7 @@
         }
         return labels;
       }
-      if (!box && !sliding) return [];
+      if (!box && !gift && !sliding) return [];
       const labels = [
         { panelId: 'bottom', text: 'BOTTOM' },
         { panelId: sliding ? 'front-open' : 'front', text: 'FRONT' },
@@ -3691,6 +3843,14 @@
       ];
       if (box && values.lid === 'loose') labels.push({ panelId: 'lid', text: 'LID' });
       if (sliding) labels.push({ panelId: 'sliding-lid', text: 'LID' });
+      if (gift) {
+        const giftLabels=[
+          { panelId:'bottom', text:'BASE' }, { panelId:'front', text:'FRONT' }, { panelId:'back', text:'BACK' }, { panelId:'left', text:'LEFT' }, { panelId:'right', text:'RIGHT' }, { panelId:'lid', text:'LID' }
+        ];
+        if (values.frameEnabled) giftLabels.push({ panelId:'frame-front', text:'FRAME-FRONT' },{ panelId:'frame-back', text:'FRAME-BACK' });
+        if (values.lidType === 'hinged-surface' && values.hingeCoupon) giftLabels.push({ panelId:'hinge-coupon', text:'HINGE-COUPON' });
+        return giftLabels;
+      }
       return labels;
     }
     function designAssemblyLabelGeometry(panel, text, options = {}) {
@@ -4291,6 +4451,7 @@
       const result=normalized.template === 'concealed-cleat-full-box-prototype' ? buildConcealedCleatFullBoxDesignResult(normalized)
         : normalized.template === 'concealed-cleat-corner-prototype' ? buildConcealedCleatCornerDesignResult(normalized)
         : normalized.template === 'joint-fit-coupon' ? buildJointCouponDesignResult(normalized)
+        : normalized.template === 'gift-box' ? buildGiftBoxDesignResult(normalized)
         : normalized.template === 'drawer-cabinet' ? buildDrawerCabinetDesignResult(normalized)
         : normalized.template === 'sliding-lid-box' ? buildSlidingLidDesignResult(normalized)
         : ['dice-tray','divider-tray'].includes(normalized.template) ? buildTrayDesignResult(normalized)
@@ -4378,22 +4539,35 @@
       const scale=Math.min(1.45,260/Math.max(v.Ow,v.Od)),w=v.Ow*scale,d=v.Od*scale,wall=Math.max(4,v.materialThickness*scale),cleat=Math.max(3,v.cleatWidth*scale*.45),x=(480-w)/2,y=60+(155-d)/2,cavityW=Math.max(1,w-wall*2),cavityD=Math.max(1,d-wall*2),label=(text,x,y,extra='')=>`<text class="ccf-label" x="${x}" y="${y}" ${extra}>${esc(text)}</text>`;
       return `<svg class="concealed-cleat-full-box-finished-view" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Finished View of Concealed Cleat Full-Box Prototype" viewBox="0 0 480 330"><title>Concealed Cleat Full-Box Prototype assembled view</title><desc>Screen-only semantic assembly diagram. Four walls sit on four registered base cleats and four wall-owned seam cleats. It is an assembly and registration prototype, not a strength test.</desc><style>.ccf-base{fill:#eef2f5;stroke:#627587;stroke-width:1.2}.ccf-wall{fill:#d5e9f3;stroke:#236d9c;stroke-width:1.2}.ccf-front{fill:#bfdaea}.ccf-cavity{fill:#f9fbfc;stroke:#8ea0ae}.ccf-cleat{fill:#e8d8ad;stroke:#765d35;stroke-width:1}.ccf-seam{fill:#e8d8ad;stroke:#765d35;stroke-width:1}.ccf-butt{stroke:#b14242;stroke-width:1.1;stroke-dasharray:3 2}.ccf-label{fill:#263445;font-size:11px;font-weight:700}.ccf-note{fill:#425166;font-size:10px}</style><g id="concealed-cleat-full-box-assembled" data-template="concealed-cleat-full-box-prototype" data-guide-face="inward"><rect class="ccf-base" x="${x}" y="${y}" width="${w}" height="${d}"/><rect id="full-box-base-cleat-c" class="ccf-cleat" x="${x+wall}" y="${y+wall}" width="${cavityW}" height="${cleat}"/><rect id="full-box-base-cleat-a" class="ccf-cleat" x="${x+wall}" y="${y+d-wall-cleat}" width="${cavityW}" height="${cleat}"/><rect id="full-box-base-cleat-d" class="ccf-cleat" x="${x+wall}" y="${y+wall+cleat}" width="${cleat}" height="${Math.max(1,cavityD-cleat*2)}"/><rect id="full-box-base-cleat-b" class="ccf-cleat" x="${x+w-wall-cleat}" y="${y+wall+cleat}" width="${cleat}" height="${Math.max(1,cavityD-cleat*2)}"/><rect class="ccf-cavity" x="${x+wall+cleat}" y="${y+wall+cleat}" width="${Math.max(1,cavityW-cleat*2)}" height="${Math.max(1,cavityD-cleat*2)}"/><rect class="ccf-wall" x="${x}" y="${y}" width="${w}" height="${wall}"/><rect class="ccf-wall ccf-front" x="${x}" y="${y+d-wall}" width="${w}" height="${wall}"/><rect class="ccf-wall" x="${x}" y="${y+wall}" width="${wall}" height="${cavityD}"/><rect class="ccf-wall" x="${x+w-wall}" y="${y+wall}" width="${wall}" height="${cavityD}"/><rect id="full-box-seam-cd" class="ccf-seam" x="${x+wall}" y="${y+wall}" width="${cleat}" height="${cleat}"/><rect id="full-box-seam-cb" class="ccf-seam" x="${x+w-wall-cleat}" y="${y+wall}" width="${cleat}" height="${cleat}"/><rect id="full-box-seam-ad" class="ccf-seam" x="${x+wall}" y="${y+d-wall-cleat}" width="${cleat}" height="${cleat}"/><rect id="full-box-seam-ab" class="ccf-seam" x="${x+w-wall-cleat}" y="${y+d-wall-cleat}" width="${cleat}" height="${cleat}"/><line class="ccf-butt" x1="${x}" y1="${y+wall}" x2="${x}" y2="${y+d-wall}"/><line class="ccf-butt" x1="${x+w}" y1="${y+wall}" x2="${x+w}" y2="${y+d-wall}"/></g>${label('WALL C (back)',x+w/2,y-10,'text-anchor="middle"')}${label('WALL A (front)',x+w/2,y+d+20,'text-anchor="middle"')}${label('WALL D',x-18,y+d/2,'text-anchor="middle" transform="rotate(-90 '+(x-18)+' '+(y+d/2)+')"')}${label('WALL B',x+w+18,y+d/2,'text-anchor="middle" transform="rotate(90 '+(x+w+18)+' '+(y+d/2)+')"')}<text class="ccf-note" x="240" y="270" text-anchor="middle">Internal ${designNumberText(v.internalWidth)} × ${designNumberText(v.internalDepth)} × ${designNumberText(v.internalHeight)} mm; clear floor ${designNumberText(s.clearInterior.width)} × ${designNumberText(s.clearInterior.depth)} mm.</text><text class="ccf-note" x="240" y="292" text-anchor="middle">Assembly and registration prototype - not a strength test; visible seams, glue, squaring, and final-wall clamping need physical validation.</text></svg>`;
     }
+    function buildGiftBoxFinishedViewSvg(result, state='closed') {
+      const m=result?.metrics, d=m?.dimensions, view=result?.finishedView;
+      const numbers=[d?.outsideWidth,d?.outsideDepth,d?.outsideHeight,d?.insideWidth,d?.insideDepth,d?.insideHeight,m?.materialThickness,d?.lidWidth,d?.lidDepth];
+      if (!result?.valid || view?.template !== 'gift-box' || !['closed','open'].includes(state) || numbers.some(value=>!Number.isFinite(Number(value)) || Number(value)<=0)) return '';
+      const width=Number(d.outsideWidth), depth=Number(d.outsideDepth), height=Number(d.outsideHeight), t=Number(m.materialThickness), lidWidth=Number(d.lidWidth), lidDepth=Number(d.lidDepth), scale=Math.min(1.18,260/Math.max(width,depth),132/height), x=72, y=230, dx=depth*.34*scale, dy=depth*.34*scale, h=height*scale, w=width*scale, top=height+t, hingeAngle=78*Math.PI/180, leftOverhang=(lidWidth-width)/2, frontOverhang=lidDepth-depth, point=(px,py,pz=0)=>({x:designRound(x+px*scale+py*.34*scale),y:designRound(y-py*.34*scale-pz*scale)}), flatPoint=(ox,oy,px,py)=>({x:designRound(ox+px*scale+py*.34*scale),y:designRound(oy-py*.34*scale)}), poly=(id,cls,pts,extra='')=>`<polygon id="${id}" class="${cls}" points="${pts.map(p=>`${designRound(p.x)},${designRound(p.y)}`).join(' ')}" ${extra}/>`, label=(textValue,px,py,cls='gift-box-label')=>`<text class="${cls}" x="${designRound(px)}" y="${designRound(py)}" text-anchor="middle">${esc(textValue)}</text>`;
+      const front=[point(0,0,0),point(width,0,0),point(width,0,height),point(0,0,height)], side=[point(width,0,0),point(width,depth,0),point(width,depth,height),point(width,0,height)], back=[point(0,depth,0),point(width,depth,0),point(width,depth,height),point(0,depth,height)], cavity=[point(t,t,t),point(width-t,t,t),point(width-t,depth-t,t),point(t,depth-t,t)], liftOriginX=302, liftOriginY=116, lidProject=(lx,ly)=>{const baseX=lx-leftOverhang,baseY=ly-frontOverhang;if(state==='open'&&m.lidType==='hinged-surface') return point(baseX,depth+Math.sin(hingeAngle)*(depth-baseY),top+Math.cos(hingeAngle)*(depth-baseY)); if(state==='open'&&m.lidType==='lift-off') return flatPoint(liftOriginX,liftOriginY,lx,ly); return point(baseX,baseY,top);}, lidPts=[lidProject(0,0),lidProject(lidWidth,0),lidProject(lidWidth,lidDepth),lidProject(0,lidDepth)];
+      const frameOuterWidth=Number(m.frameOpeningWidth)+2*Number(m.frameRailWidth), frameOuterDepth=Number(m.frameOpeningDepth)+2*Number(m.frameRailWidth), frameX=leftOverhang+t+Number(m.frameClearance), frameY=frontOverhang+t+Number(m.frameClearance), rail=Number(m.frameRailWidth), frameRects=[['frame-front',frameX,frameY,frameOuterWidth,rail],['frame-back',frameX,frameY+frameOuterDepth-rail,frameOuterWidth,rail],['frame-left',frameX,frameY+rail,rail,Math.max(1,frameOuterDepth-2*rail)],['frame-right',frameX+frameOuterWidth-rail,frameY+rail,rail,Math.max(1,frameOuterDepth-2*rail)]], frameRails=m.frameEnabled?`<g id="gift-box-frame" data-frame-enabled="true">${frameRects.map(([id,rx,ry,rw,rh])=>poly(id,'gift-box-frame',[lidProject(rx,ry),lidProject(rx+rw,ry),lidProject(rx+rw,ry+rh),lidProject(rx,ry+rh)])).join('')}</g>`:'';
+      const frameBefore=state==='closed'&&m.frameEnabled?frameRails:'', frameAfter=state==='open'&&m.frameEnabled?frameRails:'';
+      const hinges=m.lidType==='hinged-surface'?Array.from({length:Number(m.hingeCount)||0},(_,i)=>{const hx=(Number(view.hingePositions?.[i])||width/2)+leftOverhang, axis=lidProject(hx,lidDepth), leaf=lidProject(hx,Math.max(0,lidDepth-Number(m.hingeLeafWidth)));return `<g class="gift-box-hinge" data-hinge-index="${i+1}"><line x1="${designRound(axis.x)}" y1="${designRound(axis.y)}" x2="${designRound(leaf.x)}" y2="${designRound(leaf.y)}"/><circle cx="${designRound(axis.x)}" cy="${designRound(axis.y)}" r="${Math.max(1,t*.45)}"/></g>`;}).join(''):'';
+      const fingerCues=Array.from({length:Math.min(9,Math.max(3,Number(m.patterns?.width?.count)||3))},(_,i)=>`<path class="gift-box-finger" d="M${designRound(x+i*w/9)} ${designRound(y)} l0 ${designRound(-Math.max(2,t*1.3))}"/>`).join('');
+      const lidBounds=lidPts.reduce((bounds,p)=>({minX:Math.min(bounds.minX,p.x),maxX:Math.max(bounds.maxX,p.x),minY:Math.min(bounds.minY,p.y),maxY:Math.max(bounds.maxY,p.y)}),{minX:Infinity,maxX:-Infinity,minY:Infinity,maxY:-Infinity}), lidCenter={x:(lidBounds.minX+lidBounds.maxX)/2,y:(lidBounds.minY+lidBounds.maxY)/2};
+      return `<svg class="gift-box-finished-view" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Screen-only Gift Box Finished View" viewBox="0 0 520 340" data-template="gift-box" data-state="${state}" data-lid-appearance="${esc(m.lidAppearance)}" data-lid-type="${esc(m.lidType)}" data-frame-enabled="${m.frameEnabled?'true':'false'}" data-hinge-count="${Number(m.hingeCount)||0}" data-lid-bounds="${designNumberText(lidBounds.minX)},${designNumberText(lidBounds.minY)},${designNumberText(lidBounds.maxX)},${designNumberText(lidBounds.maxY)}"><title>Gift Box Finished View - ${state==='open'?(m.lidType==='hinged-surface'?'hinged lid approximately 90 degrees open':'lift-off lid removed aside'):'closed three-quarter'}</title><desc>Screen-only schematic preview. ${m.lidType==='hinged-surface'?'Surface-mounted hinged lids rotate approximately 90 degrees about the rear hinge axis.':'Lift-off lids are shown removed aside without a hinge relationship.'} Hinges and finger joints are representative and do not prove fit, strength, hardware clearance, or production safety.</desc><style>.gift-box-front{fill:#bfdaea;stroke:#263445;stroke-width:1.2}.gift-box-side{fill:#d5e9f3;stroke:#263445;stroke-width:1.2}.gift-box-back{fill:#c9dfe9;stroke:#263445;stroke-width:1.1}.gift-box-cavity{fill:#f8fafc;stroke:#718096;stroke-width:1}.gift-box-lid{fill:#e8e1d2;stroke:#765d35;stroke-width:1.2}.gift-box-frame{fill:#e8d8ad;stroke:#765d35;stroke-width:1}.gift-box-hinge{fill:none;stroke:#236d9c;stroke-width:2}.gift-box-finger{fill:none;stroke:#263445;stroke-width:1.4}.gift-box-label{fill:#1f2937;font-size:12px;font-weight:700}.gift-box-note{fill:#425166;font-size:10px;font-weight:600}</style><g id="gift-box-assembled" data-lid-state="${state}">${poly('gift-box-back','gift-box-back',back)}${poly('gift-box-side','gift-box-side',side)}${poly('gift-box-front','gift-box-front',front)}${poly('gift-box-cavity','gift-box-cavity',cavity)}${frameBefore}${poly('gift-box-lid','gift-box-lid',lidPts,`data-lid-appearance="${esc(m.lidAppearance)}"`)}${frameAfter}${hinges}${fingerCues}</g>${label('FRONT',x+w/2,y+18)}${label('BACK',x+w/2+dx,y-dy-5)}${label('LID',lidCenter.x,lidCenter.y-8)}${label(state==='open'?(m.lidType==='hinged-surface'?'Hinged lid approximately 90 degrees open':'Lift-off lid removed aside'):'Closed three-quarter view',260,286,'gift-box-note')}${label(`${m.lidAppearance==='overhanging'?'Overhanging':'Flush'} lid · ${m.lidType==='hinged-surface'?'surface hinges':'lift-off'} · exposed finger joints`,260,302,'gift-box-note')}${label('Screen-only Finished View - not included in downloaded cut SVG.',260,320,'gift-box-note')}</svg>`;
+    }
     function designPreviewModeForTemplate(template, mode=designPreviewMode) {
       if (template === 'drawer-cabinet' && mode === 'finished-front') return 'finished-front';
       if (['finger-box','dice-tray','divider-tray','concealed-cleat-corner-prototype','concealed-cleat-full-box-prototype'].includes(template) && mode === 'finished-view') return 'finished-view';
-      if (template === 'sliding-lid-box' && ['finished-closed','finished-open'].includes(mode)) return mode;
+      if (['sliding-lid-box','gift-box'].includes(template) && ['finished-closed','finished-open'].includes(mode)) return mode;
       return 'cut-layout';
     }
     function designPreviewSelectorHtml(result) {
-      const finger = designDraft.template === 'finger-box', dice = designDraft.template === 'dice-tray', divider = designDraft.template === 'divider-tray', cleat = designDraft.template === 'concealed-cleat-corner-prototype', fullCleat = designDraft.template === 'concealed-cleat-full-box-prototype', cabinet = designDraft.template === 'drawer-cabinet', sliding = designDraft.template === 'sliding-lid-box';
-      if (!finger && !dice && !divider && !cleat && !fullCleat && !cabinet && !sliding) return '';
-      const valid=!!result.valid&&!!result.frontElevation, validForView = finger || sliding ? !!result.valid && !!result.metrics?.dimensions : dice || divider || cleat || fullCleat ? !!result.valid && !!result.finishedView : valid;
-      const finishedModes = sliding ? ['finished-closed','finished-open'] : [finger || dice || divider || cleat || fullCleat ? 'finished-view' : 'finished-front'];
+      const finger = designDraft.template === 'finger-box', gift = designDraft.template === 'gift-box', dice = designDraft.template === 'dice-tray', divider = designDraft.template === 'divider-tray', cleat = designDraft.template === 'concealed-cleat-corner-prototype', fullCleat = designDraft.template === 'concealed-cleat-full-box-prototype', cabinet = designDraft.template === 'drawer-cabinet', sliding = designDraft.template === 'sliding-lid-box';
+      if (!finger && !gift && !dice && !divider && !cleat && !fullCleat && !cabinet && !sliding) return '';
+      const valid=!!result.valid&&!!result.frontElevation, validForView = finger || gift || sliding ? !!result.valid && !!result.metrics?.dimensions : dice || divider || cleat || fullCleat ? !!result.valid && !!result.finishedView : valid;
+      const finishedModes = gift || sliding ? ['finished-closed','finished-open'] : [finger || dice || divider || cleat || fullCleat ? 'finished-view' : 'finished-front'];
       if (!validForView && finishedModes.includes(designPreviewMode)) {
         designPreviewMode='cut-layout';
       }
       const effectiveMode=designPreviewModeForTemplate(designDraft.template);
-      const buttons = sliding
+      const buttons = gift || sliding
         ? [['finished-closed','Finished Closed'],['finished-open','Finished Open']]
         : [[finger || dice || divider || cleat || fullCleat ? 'finished-view' : 'finished-front',finger || dice || divider || cleat || fullCleat ? 'Finished View' : 'Finished Front View']];
       return `<div class="design-preview-selector" role="group" aria-label="Design preview"><span><b>Preview:</b></span><button type="button" data-design-preview-mode="cut-layout" aria-pressed="${effectiveMode==='cut-layout'}">Cut Layout</button>${buttons.map(([mode,label])=>`<button type="button" data-design-preview-mode="${mode}" aria-pressed="${effectiveMode===mode}" ${validForView?'':'disabled'}>${label}</button>`).join('')}</div>`;
@@ -4409,6 +4583,7 @@
     function designResultsHtml(result) {
       const dimensions = result.metrics?.dimensions, patterns = result.metrics?.patterns;
       const sliding = result.metrics?.slidingLid && dimensions;
+      const gift = result.metrics?.giftBox && dimensions;
       const cabinet = result.metrics?.drawerCabinet && dimensions;
       const jointCoupon = result.metrics?.jointFitCoupon;
       const wallBaseCoupon = jointCoupon && result.metrics?.couponType === 'wall-base-tab';
@@ -4418,6 +4593,7 @@
       const cleat = designDraft.template === 'concealed-cleat-corner-prototype' && result.finishedView;
       const fullCleat = designDraft.template === 'concealed-cleat-full-box-prototype' && result.finishedView;
       const slidingFinishedMode = ['finished-closed','finished-open'].includes(designPreviewModeForTemplate(designDraft.template)) ? designPreviewModeForTemplate(designDraft.template) : '';
+      const giftFinishedMode = ['finished-closed','finished-open'].includes(designPreviewModeForTemplate(designDraft.template)) ? designPreviewModeForTemplate(designDraft.template) : '';
       const cabinetCustom=cabinet&&result.metrics.layoutMode==='custom-row',cabinetRowConfigurations=cabinetCustom?(result.metrics.rowDrawerCounts||[]).map((count,index)=>({count,index})).reverse().map(({count,index})=>`${result.metrics.rows===1?'':index===result.metrics.rows-1?'Top ':index===0?'Bottom ':'Middle '}${count} ${count===1?'drawer':'drawers'}`).join(' / '):'',cabinetRowWidths=cabinetCustom?(result.metrics.rowLayouts||[]).slice().reverse().map(layout=>{const label=result.metrics.rows===1?'Row':layout.rowIndex===result.metrics.rows-1?'Top row':layout.rowIndex===0?'Bottom row':'Middle row';return designMetric(`${label} drawers`,`${layout.drawerCount} × ${designNumberText(layout.drawerInsideWidth)} mm inside width`);}).join(''):'',productionSvgSize=result.valid&&Number.isFinite(Number(result.widthMm))&&Number(result.widthMm)>0&&Number.isFinite(Number(result.heightMm))&&Number(result.heightMm)>0?designMetric(result.requiresMultipleProductionOutputs?'Shell production SVG size':'Production SVG size',designDimensionsText(result.widthMm,result.heightMm)):'';
       const metrics = jointCoupon
         ? wallBaseCoupon
@@ -4435,7 +4611,20 @@
           + designMetric('Mating edge / grip depth', Number.isFinite(result.metrics.edgeLength) ? `${designNumberText(result.metrics.edgeLength)} / ${designNumberText(result.metrics.bodyDepth)} mm` : 'Unavailable')
           + designMetric('Finger pattern', result.metrics.pattern ? `${result.metrics.pattern.count} segments x ${designNumberText(result.metrics.pattern.actualWidth)} mm` : 'Unavailable')
           + designMetric('Clearance labels', result.metrics.clearanceLabels ? `Enabled - ${result.metrics.labelCount || 0} emitted / ${result.metrics.omittedLabelCount || 0} omitted` : 'Disabled')
-        : fullCleat
+        : gift
+        ? designMetric('Lid type / appearance', `${result.metrics.lidType === 'hinged-surface' ? 'Surface-mounted hinged' : 'Lift-off'} / ${result.metrics.lidAppearance}`)
+          + designMetric('Finished internal', designDimensionsText(dimensions.insideWidth,dimensions.insideDepth,dimensions.insideHeight))
+          + designMetric('Finished external', designDimensionsText(dimensions.outsideWidth,dimensions.outsideDepth,dimensions.outsideHeight))
+          + designMetric('Closed overall height', `${designNumberText(result.metrics.closedHeight)} mm`)
+          + designMetric('Lid footprint', designDimensionsText(dimensions.lidWidth,dimensions.lidDepth))
+          + designMetric('Material / fit / kerf', `${designNumberText(result.metrics.materialThickness)} / ${designNumberText(result.metrics.requestedFingerWidth)} mm / ${designNumberText(result.metrics.kerf)} mm`)
+          + designMetric('Lid clearance', `${designNumberText(result.metrics.lidClearance)} mm per side starting value`)
+          + designMetric('Locating frame', result.metrics.frameEnabled ? `4 rails / ${designNumberText(result.metrics.frameRailWidth)} mm rail / clear opening ${designDimensionsText(result.metrics.frameOpeningWidth,result.metrics.frameOpeningDepth)}` : 'Disabled')
+          + designMetric('Hinges / guides', result.metrics.lidType === 'hinged-surface' ? `${result.metrics.hingeCount} / ${result.metrics.hingeLength} × ${result.metrics.hingeLeafWidth} mm; blue placement guides only` : 'Not applicable')
+          + designMetric('Hinge coupon', result.metrics.hingeCoupon ? 'Included' : 'Disabled')
+          + designMetric('Physical pieces / sheets', `${result.panels.length} / ${result.metrics.sheetCount || 1}`)
+          + designMetric('Assembly labels', designAssemblyLabelsText(result.metrics.assemblyLabels,result.metrics.labelCount,0,'safe labels'))
+         : fullCleat
         ? designMetric('Prototype type','Concealed Cleat Full-Box Prototype')
           + designMetric('Outside box',`${designNumberText(result.metrics.Ow)} × ${designNumberText(result.metrics.Od)} × ${designNumberText(result.metrics.H)} mm`)
           + designMetric('Internal box',`${designNumberText(result.metrics.internalWidth)} × ${designNumberText(result.metrics.internalDepth)} × ${designNumberText(result.metrics.internalHeight)} mm`)
@@ -4480,7 +4669,7 @@
           + designMetric('Assembly labels',designAssemblyLabelsText(result.metrics.assemblyLabels,result.metrics.labelCount,0,'safe labels'))
           + (patterns?.cabinet?.width ? designMetric('Cabinet width fingers', `${patterns.cabinet.width.count} segments x ${designNumberText(patterns.cabinet.width.actualWidth)} mm`) : '')
           + (patterns?.drawer?.width ? designMetric('Drawer width fingers', `${patterns.drawer.width.count} segments x ${designNumberText(patterns.drawer.width.actualWidth)} mm`) : '')
-        : sliding
+         : sliding
         ? designMetric('Usable cavity', `${designNumberText(dimensions.usableWidth)} × ${designNumberText(dimensions.usableDepth)} × ${designNumberText(dimensions.usableHeight)} mm`)
           + designMetric('Wall-to-wall interior', `${designNumberText(dimensions.insideWidth)} × ${designNumberText(dimensions.insideDepth)} × ${designNumberText(dimensions.insideHeight)} mm`)
           + designMetric('Outside body', `${designNumberText(dimensions.outsideWidth)} × ${designNumberText(dimensions.outsideDepth)} × ${designNumberText(dimensions.outsideHeight)} mm`)
@@ -4541,9 +4730,9 @@
       const messages = result.errors.map(message => `<div class="design-message error"><b>Error:</b> ${esc(message)}</div>`).join('') + designOrderedWarnings(result.warnings).map(message => `<div class="design-message warning"><b>Warning:</b> ${esc(message)}</div>`).join('');
       const scaleSafetyNotice=result.valid?'<div class="design-message"><b>Exact-scale production SVG:</b> It uses real-world millimeters. Import at 100%; in LightBurn, move or rotate complete parts with their cut outlines, guides, score lines, engravings, and labels together, but do not resize or scale them. Zoom or pan instead; large layouts may require manual arrangement or more than one material sheet.</div>':'';
       const operationGuidance=designOperationGuidance(result);
-      const activePreviewMode=designPreviewModeForTemplate(designDraft.template), frontVisible=activePreviewMode==='finished-front'&&result.valid&&result.frontElevation, fingerVisible=activePreviewMode==='finished-view'&&result.valid&&finger, diceVisible=activePreviewMode==='finished-view'&&result.valid&&dice, dividerVisible=activePreviewMode==='finished-view'&&result.valid&&divider, cleatVisible=activePreviewMode==='finished-view'&&result.valid&&cleat, fullCleatVisible=activePreviewMode==='finished-view'&&result.valid&&fullCleat, slidingVisible=!!slidingFinishedMode&&result.valid&&sliding;
+      const activePreviewMode=designPreviewModeForTemplate(designDraft.template), frontVisible=activePreviewMode==='finished-front'&&result.valid&&result.frontElevation, fingerVisible=activePreviewMode==='finished-view'&&result.valid&&finger, diceVisible=activePreviewMode==='finished-view'&&result.valid&&dice, dividerVisible=activePreviewMode==='finished-view'&&result.valid&&divider, cleatVisible=activePreviewMode==='finished-view'&&result.valid&&cleat, fullCleatVisible=activePreviewMode==='finished-view'&&result.valid&&fullCleat, slidingVisible=!!slidingFinishedMode&&result.valid&&sliding, giftVisible=!!giftFinishedMode&&result.valid&&gift;
       const outputCards=result.requiresMultipleProductionOutputs&&result.valid&&!frontVisible?`<div class="design-svg-preview">${result.productionOutputs.map(output=>`<div class="panel" data-production-output="${esc(output.id)}"><b>${esc(output.label)}</b><div class="small muted">${designNumberText(output.thicknessMm)} mm stock / ${designDimensionsText(output.widthMm,output.heightMm)} sheet</div><object type="image/svg+xml" aria-label="${esc(output.label)} exact SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(output.svg)}`)}"></object><button type="button" class="primary" data-download-production-output="${esc(output.id)}">Download ${esc(output.label)} SVG</button></div>`).join('')}<div class="small muted"><b>Two production files are required.</b> Use separate stock and focus, speed, power, passes, and air-assist settings; the shell fallback is not a complete cabinet file.</div></div>`:'';
-      const preview = outputCards || (frontVisible ? `<div class="design-svg-preview">${buildDrawerCabinetFrontElevationSvg(result.frontElevation)}${drawerCabinetFrontLegendHtml(result.frontElevation)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> Labels use bottom-up row numbering; red dashed marks indicate nominal running gaps.</div></div>` : fingerVisible ? `<div class="design-svg-preview">${buildFingerBoxFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> This view does not prove fit, strength, kerf accuracy, glue quality, or production success.</div></div>` : fullCleatVisible ? `<div class="design-svg-preview">${buildConcealedCleatFullBoxFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> Full-box registration prototype - dry-fit, manually square, clamp, and physically validate before production use.</div></div>` : cleatVisible ? `<div class="design-svg-preview">${buildConcealedCleatFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> Assembly and registration prototype - not a strength test; the visible butt seam, glue dependency, and manual squaring remain.</div></div>` : diceVisible ? `<div class="design-svg-preview">${buildDiceTrayFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> This open-top view uses the structured Tray model and does not prove fit, strength, kerf accuracy, glue quality, or production safety.</div></div>` : dividerVisible ? `<div class="design-svg-preview">${buildDividerTrayFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> This open-top view uses recorded Divider Tray model positions and slot relationships; it does not prove retention, fit, strength, kerf accuracy, glue quality, or production safety.</div></div>` : slidingVisible ? `<div class="design-svg-preview">${buildSlidingLidFinishedViewSvg(result,slidingFinishedMode==='finished-open'?'open':'closed')}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> This view does not prove smooth travel, fit, strength, kerf accuracy, glue quality, or production safety.</div></div>` : result.valid ? `<div class="design-svg-preview"><object type="image/svg+xml" aria-label="Exact exported SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`)}"></object></div>` : '<div class="design-svg-preview"><div class="empty"><b>Preview unavailable</b><div class="small muted">Correct the errors before previewing or downloading.</div></div></div>');
+       const preview = outputCards || (frontVisible ? `<div class="design-svg-preview">${buildDrawerCabinetFrontElevationSvg(result.frontElevation)}${drawerCabinetFrontLegendHtml(result.frontElevation)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> Labels use bottom-up row numbering; red dashed marks indicate nominal running gaps.</div></div>` : fingerVisible ? `<div class="design-svg-preview">${buildFingerBoxFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> This view does not prove fit, strength, kerf accuracy, glue quality, or production success.</div></div>` : giftVisible ? `<div class="design-svg-preview">${buildGiftBoxFinishedViewSvg(result,giftFinishedMode==='finished-open'?'open':'closed')}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> Hardware and finger-joint cues are schematic only.</div></div>` : fullCleatVisible ? `<div class="design-svg-preview">${buildConcealedCleatFullBoxFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> Full-box registration prototype - dry-fit, manually square, clamp, and physically validate before production use.</div></div>` : cleatVisible ? `<div class="design-svg-preview">${buildConcealedCleatFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> Assembly and registration prototype - not a strength test; the visible butt seam, glue dependency, and manual squaring remain.</div></div>` : diceVisible ? `<div class="design-svg-preview">${buildDiceTrayFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> This open-top view uses the structured Tray model and does not prove fit, strength, kerf accuracy, glue quality, or production safety.</div></div>` : dividerVisible ? `<div class="design-svg-preview">${buildDividerTrayFinishedViewSvg(result)}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> This open-top view uses recorded Divider Tray model positions and slot relationships; it does not prove retention, fit, strength, kerf accuracy, glue quality, or production safety.</div></div>` : slidingVisible ? `<div class="design-svg-preview">${buildSlidingLidFinishedViewSvg(result,slidingFinishedMode==='finished-open'?'open':'closed')}<div class="small muted" style="width:100%;margin-top:6px"><b>Screen-only assembly preview - not included in the downloaded cut file.</b> This view does not prove smooth travel, fit, strength, kerf accuracy, glue quality, or production safety.</div></div>` : result.valid ? `<div class="design-svg-preview"><object type="image/svg+xml" aria-label="Exact exported SVG preview" data="${esc(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(result.svg)}`)}"></object></div>` : '<div class="design-svg-preview"><div class="empty"><b>Preview unavailable</b><div class="small muted">Correct the errors before previewing or downloading.</div></div></div>');
       const drawerCabinetSeparateFinishedNote=frontVisible&&result.metrics?.useSeparateInteriorThickness?`<div class="design-message warning"><b>Separate-thickness reference:</b> shell ${designNumberText(result.metrics.shellThickness)} mm; drawers, shelves, and partitions ${designNumberText(result.metrics.interiorThickness)} mm. Two production files are required.</div>`:'';
       const assembly = jointCoupon
         ? wallBaseCoupon
@@ -4561,7 +4750,9 @@
         ? `<div class="design-message"><b>Assembly view:</b> The open-top Dice Tray view uses the structured model’s Front, Back, Left, and Right orientation. It shows the four walls in their modeled positions and their recorded relationships to the base slots; it does not depict a tested fit, glued construction, or corner joinery. <b>Screen-only assembly preview; dry-fit and physically test the tray.</b></div>`
         : divider
         ? `<div class="design-message"><b>Assembly view:</b> The open-top Divider Tray view uses the structured model’s Front, Back, Left, and Right orientation. Dividers span Left-to-Right, are numbered Front-to-Back, and use their recorded base-slot relationships as an intended removable divider arrangement; retention is unspecified. <b>Screen-only assembly preview; dry-fit and physically test the tray.</b></div>`
-        : sliding
+         : gift
+         ? `<div class="design-message"><b>Assembly:</b> Dry-fit the exposed finger joints before glue. Lift-off lids use four separate locating rails when enabled; the two side rails are identical and interchangeable. Hinged lids use measured surface-mounted hardware with blue alignment guides. Guides are drilling references, not mortises or through-cut screw holes. Test hinge placement on scrap and keep an active fire watch during every laser run.</div>`
+         : sliding
         ? `<div class="design-message"><b>Assembly:</b> Assemble the five body panels. Glue the two identical rails inside the side walls, top-flush and Back-flush, with both channels facing inward. Clamp with a thickness-plus-clearance spacer, keep glue out of the channels, and let it cure. Insert the lid from Front toward Back; the shortened edges face Front and the stop ends face Back while the tongue closes the center gap. ${result.metrics.guideMarks || result.metrics.assemblyLabels ? 'Labels and rail guides are placed on the displayed sheet face. Install both marked side faces inward. Keep shortened edges toward Front and stop ends toward Back. Verify label visibility and face orientation during the first assembly.' : ''} <b>Kerf is not included.</b></div>`
         : result.metrics?.assemblyLabels ? '<div class="design-message"><b>Assembly labels:</b> Marks are placed on the displayed sheet face and are intended for the inside or concealed faces. Verify Left/Right orientation, label visibility, and the marked face during the first assembly; the finger-box cut geometry is unchanged.</div>' : '';
       const operations=result.valid?designMetric('Operations',designOperationsText(result)):'';
@@ -4594,7 +4785,8 @@
       updateDesignDraft(document.getElementById('designForm'));
       const result = refreshDesignPreview(), validation = result.valid ? designSvgValidation(result.svg, result.widthMm, result.heightMm) : { valid:false };
       if (!result.valid || !validation.valid) return result;
-      download(`l8-${fileSlug(designDraft.template)}-${today()}.svg`, result.svg, 'image/svg+xml;charset=utf-8');
+       const giftFilename=designDraft.template==='gift-box'?`gift-box-${fileSlug(`${designNumberText(result.metrics?.dimensions?.outsideWidth)}-${designNumberText(result.metrics?.dimensions?.outsideDepth)}-${result.metrics?.lidType}`)}.svg`:`l8-${fileSlug(designDraft.template)}-${today()}.svg`;
+       download(giftFilename, result.svg, 'image/svg+xml;charset=utf-8');
       return result;
     }
     function downloadDrawerCabinetProductionOutput(outputId, download = downloadTextFile) {
@@ -4609,7 +4801,7 @@
     }
     function projectDesignTemplateName(template) {
       return ({
-        'qr-stand':'Freestanding QR / sign stand','hanging-sign':'Hanging sign','dice-tray':'Dice Tray','divider-tray':'Divider Tray','finger-box':'Finger-jointed box','sliding-lid-box':'Sliding-lid finger box','drawer-cabinet':'Drawer Cabinet','joint-fit-coupon':'Joint Fit Coupon','concealed-cleat-corner-prototype':'Concealed Cleat Corner Prototype','concealed-cleat-full-box-prototype':'Concealed Cleat Full-Box Prototype'
+        'qr-stand':'Freestanding QR / sign stand','hanging-sign':'Hanging sign','dice-tray':'Dice Tray','divider-tray':'Divider Tray','finger-box':'Finger-jointed box','sliding-lid-box':'Sliding-lid finger box','gift-box':'Gift Box','drawer-cabinet':'Drawer Cabinet','joint-fit-coupon':'Joint Fit Coupon','concealed-cleat-corner-prototype':'Concealed Cleat Corner Prototype','concealed-cleat-full-box-prototype':'Concealed Cleat Full-Box Prototype'
       })[template] || 'Generated Design';
     }
     function projectDesignDimensions(...values) { return values.length && values.every(value=>Number.isFinite(Number(value))&&Number(value)>0) ? designDimensionsText(...values) : ''; }
@@ -4634,7 +4826,11 @@
         const size=projectDesignDimensions(dimensions.outsideWidth,dimensions.outsideDepth,dimensions.outsideHeight); if(size) name=`Finger-jointed box ${size}`;
         if(metrics.boxLid==='loose') addNote('Loose flat lid has no retention or locating feature.');
         if(metrics.cornerDecoration==='faux-dovetail-engrave') addNote('Faux dovetail engraving is decorative only; the structural joint remains finger-jointed.');
-      } else if (template==='sliding-lid-box') {
+       } else if (template==='gift-box') {
+         const size=projectDesignDimensions(dimensions.outsideWidth,dimensions.outsideDepth,dimensions.outsideHeight); if(size) name=`Gift Box ${size}`;
+         addNote(`${metrics.lidType==='hinged-surface'?'Surface-mounted hinge guides':'Lift-off lid'}; ${metrics.lidAppearance} lid.`);
+         if(metrics.hingeCoupon) addNote('Includes a hinge placement coupon; verify hardware placement on scrap before production.');
+       } else if (template==='sliding-lid-box') {
         const size=projectDesignDimensions(dimensions.outsideWidth,dimensions.outsideDepth,dimensions.outsideHeight); if(size) name=`Sliding-lid finger box ${size}`;
         if(metrics.fitCoupon) addNote('Includes a sliding-fit test coupon; verify fit on the intended material.');
       } else if (template==='drawer-cabinet') {
@@ -4848,6 +5044,87 @@
       return { passed, failed, results };
     }
     window.runTrayModelFixtures = runTrayModelFixtures;
+    function runGiftBoxFixtures() {
+      const results=[], add=(name,pass,expected='',actual='')=>results.push({name:`Gift Box - ${name}`,pass:!!pass,expected,actual}), base={...designDefaults(),template:'gift-box',assemblyLabels:true}, normalized=normalizeDesignDraft(base), result=buildDesignResult(base), ids=result.panels.map(panel=>panel.id), svgRoot=result.svg?new DOMParser().parseFromString(result.svg,'image/svg+xml').documentElement:null;
+      add('template is registered',designTemplateSelect.includes?designTemplateSelect.includes('gift-box'):true);
+      add('default draft has explicit Gift Box fields',['giftUnits','giftMaterialThickness','giftPanelSpacing','giftLidType','giftHingeCount'].every(key=>Object.prototype.hasOwnProperty.call(base,key)));
+      add('default normalization recognizes Gift Box',normalized.template==='gift-box'&&normalized.errors.length===0);
+      add('default result is valid',result.valid,result.errors.join('|'));
+      add('default dimensions are finite',[result.metrics.dimensions.insideWidth,result.metrics.dimensions.insideDepth,result.metrics.dimensions.insideHeight,result.metrics.dimensions.outsideWidth,result.metrics.dimensions.outsideDepth,result.metrics.dimensions.outsideHeight].every(Number.isFinite));
+      add('internal dimensions are preserved',result.metrics.dimensions.insideWidth===120&&result.metrics.dimensions.insideDepth===90&&result.metrics.dimensions.insideHeight===50);
+      add('one thickness drives shell and lid',result.metrics.materialThickness===3&&result.metrics.closedHeight===56);
+      add('panel names and IDs are explicit',ids.join('|').includes('bottom|lid|front|back|left|right')&&ids.every(id=>!/[\s.+]/.test(id)));
+      add('base and four walls use existing finger patterns',result.metrics.patterns?.width?.count%2===1&&result.metrics.patterns?.depth?.count%2===1&&result.metrics.patterns?.vertical?.count%2===1);
+      add('frame defaults to four rails',result.metrics.frameEnabled&&result.metrics.framePieceCount===4&&['frame-front','frame-back','frame-left','frame-right'].every(id=>ids.includes(id)));
+      add('frame opening remains positive',result.metrics.frameOpeningWidth>0&&result.metrics.frameOpeningDepth>0);
+      add('frame opening reports cavity reduction',result.metrics.frameOpeningWidth<result.metrics.dimensions.insideWidth&&result.metrics.frameOpeningDepth<result.metrics.dimensions.insideDepth);
+      add('flush lid matches shell footprint',result.metrics.lidAppearance==='flush'&&result.metrics.dimensions.lidWidth===result.metrics.dimensions.outsideWidth&&result.metrics.dimensions.lidDepth===result.metrics.dimensions.outsideDepth);
+      const overhang=buildDesignResult({...base,giftLidAppearance:'overhanging',giftOverhangFront:'4',giftOverhangLeft:'5',giftOverhangRight:'6'});
+      add('overhang changes only configured lid edges',overhang.valid&&overhang.metrics.dimensions.lidWidth===result.metrics.dimensions.outsideWidth+11&&overhang.metrics.dimensions.lidDepth===result.metrics.dimensions.outsideDepth+4);
+      const external=buildDesignResult({...base,giftDimensionMode:'external',giftLength:'126',giftWidth:'96',giftHeight:'56'});
+      add('external dimensions are accepted literally',external.valid&&external.metrics.dimensions.outsideWidth===126&&external.metrics.dimensions.outsideDepth===96&&external.metrics.dimensions.outsideHeight===56);
+      const inch=buildDesignResult({...base,giftUnits:'in',giftLength:String(120/25.4),giftWidth:String(90/25.4),giftHeight:String(50/25.4),giftMaterialThickness:'3'});
+      add('inch inputs normalize to millimeters',inch.valid&&Math.abs(inch.metrics.dimensions.insideWidth-120)<.0001&&Math.abs(inch.metrics.materialThickness-3)<.0001);
+      add('kerf remains a reported operator field',result.metrics.kerf===0&&result.svg&&!result.svg.includes('kerf-compensated'));
+      add('fit adjustment remains reported',result.metrics.clearance===.1&&result.metrics.requestedFingerWidth===12);
+      const hinged=buildDesignResult({...base,giftLidType:'hinged-surface',giftLocatingFrame:false});
+      add('hinged mode is valid without frame',hinged.valid&&hinged.metrics.lidType==='hinged-surface'&&hinged.metrics.framePieceCount===0);
+      add('hinged mode emits blue guides',hinged.metrics.hingeGuideCount>0&&hinged.svg.includes('#0000ff'));
+      add('hinged mode does not emit mortises or screw holes',!hinged.svg.includes('mortise')&&!hinged.svg.includes('screw-hole'));
+      add('default hinge count is two',hinged.metrics.hingeCount===2&&hinged.finishedView.hingePositions.length===2);
+      add('one hinge centers on rear wall',buildDesignResult({...base,giftLidType:'hinged-surface',giftLocatingFrame:false,giftHingeCount:'1'}).finishedView.hingePositions.length===1);
+      add('three hinges are supported',buildDesignResult({...base,giftLidType:'hinged-surface',giftLocatingFrame:false,giftHingeCount:'3'}).valid);
+      add('hinge positions are ordered',hinged.finishedView.hingePositions[0]<hinged.finishedView.hingePositions[1]);
+      add('rear overhang stays fixed at zero',normalizeDesignDraft({...base,giftLidAppearance:'overhanging'}).values.overhangRear===0);
+      add('hinge coupon is included only in hinged mode',hinged.metrics.hingeCoupon&&hinged.panels.some(panel=>panel.id==='hinge-coupon')&&!result.metrics.hingeCoupon);
+      add('hinge coupon can be disabled',!buildDesignResult({...base,giftLidType:'hinged-surface',giftLocatingFrame:false,giftHingeCoupon:false}).metrics.hingeCoupon);
+      add('screw pattern is centered',hinged.scorePaths.filter(path=>/screw/.test(path.id)).length===10);
+      add('screw mark guides are score paths',hinged.scorePaths.filter(path=>/screw/.test(path.id)).every(path=>path.panelId==='back'||path.panelId==='lid'||path.panelId==='hinge-coupon'));
+      add('hinged frame conflict blocks generation',!buildDesignResult({...base,giftLidType:'hinged-surface'}).valid);
+      add('invalid hinge count blocks generation',!buildDesignResult({...base,giftLidType:'hinged-surface',giftLocatingFrame:false,giftHingeCount:'4'}).valid);
+      add('hinge too long blocks generation',!buildDesignResult({...base,giftLidType:'hinged-surface',giftLocatingFrame:false,giftHingeLength:'200'}).valid);
+      add('zero hinge gap blocks certain collision',!buildDesignResult({...base,giftLidType:'hinged-surface',giftLocatingFrame:false,giftClosedHingeGap:'0'}).valid);
+      add('screw pattern beyond leaf blocks generation',!buildDesignResult({...base,giftLidType:'hinged-surface',giftLocatingFrame:false,giftScrewCount:'4',giftScrewSpacing:'20'}).valid);
+      add('close screw edge distance is a warning',buildDesignResult({...base,giftLidType:'hinged-surface',giftLocatingFrame:false,giftHingeLeafWidth:'4'}).warnings.some(message=>/3-6 mm/.test(message)));
+      add('frame rail below minimum blocks generation',!buildDesignResult({...base,giftFrameRailWidth:'1'}).valid);
+      add('frame opening below zero blocks generation',!buildDesignResult({...base,giftFrameRailWidth:'60'}).valid);
+      add('zero dimension blocks generation',!buildDesignResult({...base,giftLength:'0'}).valid);
+      add('negative dimension blocks generation',!buildDesignResult({...base,giftHeight:'-2'}).valid);
+      add('nonfinite input blocks generation',!buildDesignResult({...base,giftWidth:'NaN'}).valid);
+      add('negative kerf blocks generation',!buildDesignResult({...base,giftKerf:'-1'}).valid);
+      add('negative lid clearance blocks generation',!buildDesignResult({...base,giftLidClearance:'-1'}).valid);
+      add('panel spacing is honored',buildDesignResult({...base,giftPanelSpacing:'22'}).valid&&buildDesignResult({...base,giftPanelSpacing:'22'}).heightMm>result.heightMm);
+      add('structural contours are closed',result.panels.every(panel=>panel.points[0].x===panel.points.at(-1).x&&panel.points[0].y===panel.points.at(-1).y));
+      add('production SVG is deterministic',result.svg===buildDesignResult(base).svg);
+      add('production SVG has red cut group',svgRoot?.querySelector('#cut')?.getAttribute('stroke')==='#ff0000');
+      add('production SVG has blue guide group',result.svg.includes('stroke="#0000ff"'));
+      const giftViewRoot=svg=>new DOMParser().parseFromString(svg,'image/svg+xml').documentElement, giftLidPoints=svg=>[...(giftViewRoot(svg)?.querySelector('#gift-box-lid')?.getAttribute('points')||'').trim().split(/\s+/)].map(pair=>pair.split(',').map(Number)), giftPolygonArea=points=>Math.abs(points.reduce((sum,point,index)=>{const next=points[(index+1)%points.length];return sum+point[0]*next[1]-next[0]*point[1];},0)/2), giftClosedSvg=buildGiftBoxFinishedViewSvg(result,'closed'), giftOpenSvg=buildGiftBoxFinishedViewSvg(result,'open'), giftClosedPoints=giftLidPoints(giftClosedSvg), giftOpenPoints=giftLidPoints(giftOpenSvg), giftFinitePoints=points=>points.length>=4&&points.every(point=>point.length===2&&point.every(Number.isFinite))&&giftPolygonArea(points)>0;
+      add('finished preview is screen-only',!result.svg.includes('gift-box-finished-view')&&giftClosedSvg.includes('gift-box-finished-view'));
+      add('Finished View lid coordinates are finite and non-degenerate',giftFinitePoints(giftClosedPoints)&&giftFinitePoints(giftOpenPoints));
+      add('Closed lift-off lid overlaps the shell top projection',giftClosedPoints.every(point=>point[0]>=0&&point[0]<=520&&point[1]>=0&&point[1]<=340)&&giftClosedPoints.some(point=>point[1]<200));
+      add('Open lift-off lid remains full-size and moves aside',giftFinitePoints(giftOpenPoints)&&Math.abs(giftPolygonArea(giftOpenPoints)/giftPolygonArea(giftClosedPoints)-1)<.05&&giftOpenPoints[0][0]>giftClosedPoints[0][0]+80);
+      add('closed Finished View identifies three-quarter state',buildGiftBoxFinishedViewSvg(result,'closed').includes('Closed three-quarter view'));
+      add('open lift-off Finished View identifies removal rather than hinge rotation',/lift-off lid removed aside/i.test(giftOpenSvg)&&!giftOpenSvg.includes('approximately 90 degrees'),'lift-off removal caption',giftOpenSvg.match(/<title>[^<]+|<text[^>]*>[^<]+/g)?.slice(-4).join('|')||'');
+      const hingedClosedSvg=buildGiftBoxFinishedViewSvg(hinged,'closed'), hingedOpenSvg=buildGiftBoxFinishedViewSvg(hinged,'open'), hingedClosedPoints=giftLidPoints(hingedClosedSvg), hingedOpenPoints=giftLidPoints(hingedOpenSvg), hingeAxis=giftViewRoot(hingedClosedSvg)?.querySelector('.gift-box-hinge circle'), hingeAxisOpen=giftViewRoot(hingedOpenSvg)?.querySelector('.gift-box-hinge circle');
+      add('Closed hinged lid is finite and seated',giftFinitePoints(hingedClosedPoints)&&hingedClosedPoints.every(point=>point[1]<230));
+      add('Open hinged lid rotates around a fixed rear axis',giftFinitePoints(hingedOpenPoints)&&hingeAxis?.getAttribute('cx')===hingeAxisOpen?.getAttribute('cx')&&hingeAxis?.getAttribute('cy')===hingeAxisOpen?.getAttribute('cy')&&Math.abs(hingedOpenPoints[0][1]-hingedClosedPoints[0][1])>10);
+      add('Open hinged Finished View identifies approximate 90 degree rotation',hingedOpenSvg.includes('Hinged lid approximately 90 degrees open')&&hingedOpenSvg.includes('surface hinges'));
+      add('open and closed Finished Views differ',giftOpenSvg!==giftClosedSvg&&hingedOpenSvg!==hingedClosedSvg);
+      add('Finished View reports locating frame',buildGiftBoxFinishedViewSvg(result,'closed').includes('data-frame-enabled="true"'));
+      add('Open lift-off frame rails move with the lid',giftOpenSvg.includes('id="frame-front"')&&giftOpenSvg.includes('id="frame-back"')&&giftOpenSvg.includes('id="frame-left"')&&giftOpenSvg.includes('id="frame-right"'));
+      add('Finished View reports lid appearance',buildGiftBoxFinishedViewSvg(overhang,'closed').includes('data-lid-appearance="overhanging"'));
+      add('project handoff remains generic',projectDraftFromDesign(hinged,{template:'gift-box'})?.name.startsWith('Gift Box '));
+      add('project handoff mentions placement coupon',projectDraftFromDesign(hinged,{template:'gift-box'})?.notes.includes('placement coupon'));
+      add('assembly labels use Gift Box names',result.metrics.assemblyLabels&&result.metrics.labelCount>0&&result.svg.includes('FRAME-FRONT'));
+      add('Gift Box labels only target existing panels',!result.warnings.some(message=>/HINGE-COUPON omitted: missing panel/i.test(message))&&!result.warnings.some(message=>/FRAME-(LEFT|RIGHT) omitted/i.test(message))&&hinged.warnings.some(message=>/HINGE-COUPON omitted: missing panel/i.test(message))===false);
+      const giftSummaryHtml=(()=>{const saved=designDraft;try{designDraft={...base};return designResultsHtml(result);}finally{designDraft=saved;}})();
+      add('Gift Box label count and side-rail guidance are accurate',result.metrics.labelCount===result.labelPaths.length&&giftSummaryHtml.includes('identical and interchangeable'),`${result.labelPaths.length}/interchangeable`,`${result.metrics.labelCount}/${giftSummaryHtml.includes('identical and interchangeable')}`);
+      add('front clasp guide is optional',buildDesignResult({...base,giftFrontClaspGuide:true}).metrics.operations.score>result.metrics.operations.score);
+      add('magnet guides are optional',buildDesignResult({...base,giftMagnetGuides:true}).metrics.operations.score>result.metrics.operations.score);
+      add('no storage writes occur',localStorage.getItem(STORAGE_KEY)===localStorage.getItem(STORAGE_KEY));
+      const passed=results.filter(item=>item.pass).length,failed=results.length-passed; console.group('Gift Box fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd(); return {passed,failed,results};
+    }
+    window.runGiftBoxFixtures = runGiftBoxFixtures;
     function runDesignGeometryFixtures() {
       const fixture = (name, pass, expected = '', actual = '') => ({ name, pass: !!pass, expected, actual });
       const results = [], add = (name, pass, expected = '', actual = '') => results.push(fixture(name, pass, expected, actual));
@@ -5145,7 +5422,7 @@
       const insertionChangedKeys=Object.keys(aDimensions).filter(key=>aDimensions[key]!==changedInsertion.metrics.dimensions[key]);
       add('Changing Front insertion clearance changes only Hf',insertionChangedKeys.join('|')==='frontHeight','frontHeight',insertionChangedKeys.join('|'));
       add('Excessive side clearance blocks minimum engagement',!buildDesignResult({...slidingA,lidSideClearance:'4.01'}).valid);
-      add('Kerf is absent from sliding draft and SVG',!JSON.stringify(slidingA).toLowerCase().includes('kerf')&&!slidingAResult.svg.toLowerCase().includes('kerf'));
+      add('Kerf is absent from sliding draft and SVG',!Object.keys(slidingA).some(key=>/^(?:kerf|slidingKerf)$/i.test(key))&&!slidingAResult.svg.toLowerCase().includes('kerf'));
 
       const slidingIds=slidingAResult.panels.map(panel=>panel.id),railLeft=slidingAResult.panels.find(panel=>panel.id==='rail-left'),railRight=slidingAResult.panels.find(panel=>panel.id==='rail-right'),slidingLid=slidingAResult.panels.find(panel=>panel.id==='sliding-lid');
       add('Sliding panel IDs and order are stable',slidingIds.join('|')==='bottom|sliding-lid|front-open|back|left|right|rail-left|rail-right');
@@ -5856,7 +6133,7 @@
         defaultsFor('qr-stand'),defaultsFor('hanging-sign'),defaultsFor('dice-tray'),defaultsFor('divider-tray'),defaultsFor('finger-box'),defaultsFor('sliding-lid-box',{lidPull:'rectangular',lidPullWidth:'28'}),defaultsFor('drawer-cabinet'),defaultsFor('drawer-cabinet',{drawerLayoutMode:'custom-row',drawerRows:'3',drawerTopColumns:'3',drawerMiddleColumns:'2',drawerBottomColumns:'1',drawerUseSeparateInteriorThickness:true,drawerInteriorThickness:'4'}),defaultsFor('joint-fit-coupon'),defaultsFor('joint-fit-coupon',{couponType:'wall-base-tab'}),defaultsFor('concealed-cleat-corner-prototype'),defaultsFor('concealed-cleat-full-box-prototype')
       ];let formCases=[];try{formCases=formDrafts.map(draft=>{designDraft={...draft};const documentNode=new DOMParser().parseFromString(renderDesigns(),'text/html'),form=documentNode.querySelector('#designForm'),details=[...form.querySelectorAll('details.project-section')],allNames=[...form.querySelectorAll('[name]')].map(element=>element.name),outsideNames=[...form.querySelectorAll('[name]')].filter(element=>!element.closest('details')).map(element=>element.name),detailNames=details.flatMap(item=>[...item.querySelectorAll('[name]')].map(element=>element.name));return {draft,documentNode,form,details,allNames,outsideNames,detailNames};});}finally{designDraft=savedFormOrganizationDraft;designPreviewMode=savedFormOrganizationMode;}
       const templateCase=formCases.find(item=>item.draft.template==='qr-stand'),templateSelect=templateCase?.form.querySelector('select[name="template"]'),templateGroups=[...templateSelect?.querySelectorAll('optgroup')||[]],templateValues=templateGroups.flatMap(group=>[...group.querySelectorAll('option')].map(option=>option.value)),registeredTemplateValues=['finger-box','sliding-lid-box','drawer-cabinet','dice-tray','divider-tray','qr-stand','hanging-sign','joint-fit-coupon','concealed-cleat-corner-prototype','concealed-cleat-full-box-prototype'];
-      add('Template selector uses four native optgroups with every registered template selected and dispatched normally',templateGroups.map(group=>group.label).join('|')==='Boxes and cabinets|Trays|Signs and stands|Coupons and prototypes'&&templateValues.length===10&&new Set(templateValues).size===10&&registeredTemplateValues.every(value=>templateValues.includes(value))&&templateSelect?.value==='qr-stand');
+      add('Template selector uses four native optgroups with every registered template selected and dispatched normally',templateGroups.map(group=>group.label).join('|')==='Boxes and cabinets|Trays|Signs and stands|Coupons and prototypes'&&templateValues.length===11&&new Set(templateValues).size===11&&registeredTemplateValues.every(value=>templateValues.includes(value))&&templateSelect?.value==='qr-stand');
       const simpleTemplates=['qr-stand','hanging-sign','dice-tray','divider-tray','finger-box','joint-fit-coupon','concealed-cleat-corner-prototype','concealed-cleat-full-box-prototype'];
       add('Simple Designs templates remain compact with no Advanced disclosure and unique wrapped controls',formCases.filter(item=>simpleTemplates.includes(item.draft.template)).every(item=>item.details.length===0&&item.allNames.length===new Set(item.allNames).size&&[...item.form.querySelectorAll('label')].every(label=>!!label.querySelector('input, select, textarea'))));
       const slidingFormCase=formCases.find(item=>item.draft.template==='sliding-lid-box'),slidingDetails=slidingFormCase?.details[0],slidingAdvancedNames=['slidingJointClearance','slidingPreferredFingerWidth','lidSideClearance','lidVerticalClearance','frontInsertionClearance','slidingGuideMarks','assemblyLabels','slidingFitCoupon'],slidingBasicNames=['slidingDimensionMode','slidingWidth','slidingDepth','slidingHeight','lidPull','lidPullWidth'];
@@ -10719,7 +10996,7 @@
             designProductionNotice = '';
             designPreviewMode = 'cut-layout';
           }
-          if (['template','couponType','boxDimensionMode','slidingDimensionMode','lidPull','slidingGuideMarks','slidingFitCoupon','drawerShelfGuides','drawerRows','drawerColumns','drawerLayoutMode','drawerBottomColumns','drawerMiddleColumns','drawerTopColumns','drawerUseSeparateInteriorThickness','drawerInteriorThickness','trayBottomCover','assemblyLabels'].includes(e.target.name)) render();
+          if (['template','couponType','boxDimensionMode','slidingDimensionMode','lidPull','slidingGuideMarks','slidingFitCoupon','giftUnits','giftLidType','giftLidAppearance','giftLocatingFrame','giftHingeCoupon','drawerShelfGuides','drawerRows','drawerColumns','drawerLayoutMode','drawerBottomColumns','drawerMiddleColumns','drawerTopColumns','drawerUseSeparateInteriorThickness','drawerInteriorThickness','trayBottomCover','assemblyLabels'].includes(e.target.name)) render();
           else refreshDesignPreview();
         };
       }
@@ -12654,6 +12931,7 @@
     if (selftest === 'empty-state' || selftest === 'all') runEmptyStateDanglingReferenceFixtures();
     if (selftest === 'beginner' || selftest === 'all') runBeginnerClarityFixtures();
     if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
+    if (selftest === 'gift-box' || selftest === 'all') runGiftBoxFixtures();
     if (selftest === 'design' || selftest === 'designs' || selftest === 'all') runDesignGeometryFixtures();
   })();
   </script>
