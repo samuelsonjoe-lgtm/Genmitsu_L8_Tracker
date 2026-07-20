@@ -544,6 +544,16 @@
       const key = typeof id === 'string' ? id.trim() : '';
       return key && Array.isArray(machines) ? machines.find(machine => machine?.id === key) || null : null;
     }
+    function normalizeOptionalMachineId(value) {
+      if (typeof value !== 'string') return '';
+      const id = value.trim();
+      return id || '';
+    }
+    function activeOwnedMachineSnapshot() {
+      const id = normalizeOptionalMachineId(state.activeMachineId);
+      const machine = id ? machineById(id, state.machines) : null;
+      return machine ? { machineId:id, key:'custom', label:ownedMachineDisplayName(machine) } : null;
+    }
     function resolveActiveMachineId(machines, activeMachineId) {
       const list = normalizeMachines(machines), requested = machineById(activeMachineId, list);
       if (requested && !requested.archived) return requested.id;
@@ -916,6 +926,60 @@
       return { passed, failed, results };
     }
     window.runMachineManagerFixtures = runMachineManagerFixtures;
+    function runMachineRecordIdentityFixtures() {
+      const results = [], add = (name, pass) => results.push({ name, pass:!!pass });
+      const stateBefore = JSON.stringify(state), storageBefore = localStorage.getItem(STORAGE_KEY), tabBefore = state.activeTab, profileTestsBefore = JSON.stringify(profileDraftTests), profileSettingsBefore = JSON.stringify(profileDraftProductionSettings), evidenceBefore = JSON.stringify(productionEvidenceDraft), projectPhotosBefore = JSON.stringify(projectPhotosDraft), projectLinesBefore = JSON.stringify(projectMaterialLinesDraft), pendingBefore = pendingImport, applyingBefore = importApplying, dismissedBefore = firstRunOnboardingDismissed, draftBefore = JSON.stringify(designDraft), previewBefore = designPreviewMode, searchBefore = machineManagerSearch, archivedBefore = machineManagerShowArchived, machineModeBefore = machineModalMode, machineOperationBefore = machineModalOperation, machineSourceBefore = machineModalSourceId, machineInitialBefore = machineModalInitial, originsBefore = [...modalFocusOrigins.entries()], orderBefore = [...modalOpenOrder], focusBefore = document.activeElement;
+      const modalIds = ['machineModal','gridModal','profileModal','productionSettingModal','projectModal'], modalBefore = Object.fromEntries(modalIds.map(id => { const node = document.getElementById(id); return [id, node ? { html:node.innerHTML, open:node.classList.contains('open'), aria:node.getAttribute('aria-hidden') } : null]; }));
+      const restore = () => { Object.assign(state, JSON.parse(stateBefore)); if (storageBefore === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, storageBefore); state.activeTab = tabBefore; profileDraftTests = JSON.parse(profileTestsBefore); profileDraftProductionSettings = JSON.parse(profileSettingsBefore); productionEvidenceDraft = JSON.parse(evidenceBefore); projectPhotosDraft = JSON.parse(projectPhotosBefore); projectMaterialLinesDraft = JSON.parse(projectLinesBefore); pendingImport = pendingBefore; importApplying = applyingBefore; firstRunOnboardingDismissed = dismissedBefore; designDraft = JSON.parse(draftBefore); designPreviewMode = previewBefore; machineManagerSearch = searchBefore; machineManagerShowArchived = archivedBefore; machineModalMode = machineModeBefore; machineModalOperation = machineOperationBefore; machineModalSourceId = machineSourceBefore; machineModalInitial = machineInitialBefore; modalFocusOrigins.clear(); originsBefore.forEach(([id, origin]) => modalFocusOrigins.set(id, origin)); modalOpenOrder.splice(0, modalOpenOrder.length, ...orderBefore); render(); modalIds.forEach(id => { const node = document.getElementById(id), snapshot = modalBefore[id]; if (node && snapshot) { node.innerHTML = snapshot.html; node.classList.toggle('open', snapshot.open); if (snapshot.aria === null) node.removeAttribute('aria-hidden'); else node.setAttribute('aria-hidden', snapshot.aria); } }); if (focusBefore?.isConnected) try { focusBefore.focus({ preventScroll:true }); } catch (_) { focusBefore.focus(); } };
+      try {
+        Object.assign(state, freshState());
+        state.machines = [normalizeOwnedMachine({ id:'m3-a', name:'Machine A' }), normalizeOwnedMachine({ id:'m3-b', name:'Machine B' })]; state.activeMachineId = 'm3-a'; synchronizeMachineIdentity();
+        const active = activeOwnedMachineSnapshot();
+        add('Active owned snapshot is stable, custom, and ID-bearing', active.machineId === 'm3-a' && active.key === 'custom' && active.label === 'Machine A');
+        state.machines[0].name = ''; add('Blank owned name uses the unnamed workshop fallback', activeOwnedMachineSnapshot().label === 'Unnamed workshop machine'); state.machines[0].name = 'Machine A';
+        state.activeMachineId = 'missing'; add('Missing active owned machine falls back to legacy snapshot without an ID', !activeMachineSnapshot().machineId && activeMachineSnapshot().key === 'genmitsu-l8-20w'); state.activeMachineId = 'm3-a';
+        openGridForm(); const newGridWording = document.querySelector('#gridForm select[name=machineAction]')?.textContent || ''; closeModal('gridModal'); openGridForm({ id:'wording-grid', machine:{ key:'custom', label:'Machine A', machineId:'m3-a' } }); const editGridWording = document.querySelector('#gridForm select[name=machineAction]')?.textContent || ''; add('Test Grid choices explicitly identify the workshop machine', newGridWording.includes('Use active workshop machine') && editGridWording.includes('Assign active workshop machine') && !newGridWording.includes('Use active machine') && !editGridWording.includes('Assign active machine')); closeModal('gridModal');
+        const grid = normalizeTestGrid({ id:'g-m3', name:'M3 Grid', machine:active });
+        const derived = buildGridCellMaterialTestRecord(grid, '20_200', { power:20, speed:200, rating:4, best:true, notes:'' }, grid.machine);
+        add('Grid snapshots retain owned identity and grid-derived tests inherit it', grid.machine.machineId === 'm3-a' && derived.machineId === 'm3-a' && derived.machineKey === 'custom' && derived.machine === 'Machine A');
+        const legacyGrid = normalizeTestGrid({ id:'legacy-grid', machine:{ key:'genmitsu-l8-20w', label:'Genmitsu L8 20W' } });
+        add('Legacy grid snapshots remain unchanged and unowned', legacyGrid.machine.key === 'genmitsu-l8-20w' && !legacyGrid.machine.machineId);
+        const standalone = buildWizardMaterialTestRecord({ machine:active, date:'2026-07-19', testType:'engrave_matrix', results:{ status:'experimental', winningSpeed:100, winningPower:20, winningInterval:'', winningPasses:1, airAssist:false, confidence:3, resultSummary:'', overallResult:'Usable', observedTraits:[], winnerLocation:'', winnerComment:'' }, notes:'', intendedOperation:'engrave_vector', adaptiveMode:'', optimizationGoal:'', plan:{ adaptiveMode:'', rationale:'' }, baseline:{ source:'', label:'' } });
+        add('Standalone Material Test snapshots the active owned machine', standalone.machineId === 'm3-a' && standalone.machineKey === 'custom' && standalone.machine === 'Machine A');
+        const setting = normalizeProductionSetting({ id:'ps-m3', machine:{ key:'custom', label:'Machine A', machineId:'m3-a' } });
+        add('Production settings preserve optional machineId', setting.machine.machineId === 'm3-a');
+        const candidate = buildMaterialTestPromotionCandidate({ id:'p-m3', material:'Plywood', thicknessValue:3, thicknessUnit:'mm' }, { id:'t-m3', machineId:'m3-a', machineKey:'custom', machine:'Machine A', testType:'cut', status:'recommended', date:'2026-07-19', winningSpeed:100, winningPower:20, physicalRunCompleted:true });
+        const evidence = promotionEvidenceSnapshot(candidate, { physicalChecks:{} }, {});
+        add('Promoted evidence inherits source identity without resnapshotting', candidate.machine.machineId === 'm3-a' && evidence.machineId === 'm3-a');
+        add('Candidate ID with target without ID is not an exact match', !productionMachineIdentityMatches({ key:'custom', machineId:'m3-a' }, { key:'custom', label:'Machine A' }));
+        add('Candidate without ID with target ID is not an exact match', !productionMachineIdentityMatches({ key:'custom', label:'Machine A' }, { key:'custom', machineId:'m3-a' }));
+        add('Same label and key with different IDs is not an exact match', !productionMachineIdentityMatches({ key:'custom', label:'Same name', machineId:'m3-a' }, { key:'custom', label:'Same name', machineId:'m3-b' }));
+        add('Same ID with renamed labels remains an exact match', productionMachineIdentityMatches({ key:'custom', label:'Old name', machineId:'m3-a' }, { key:'custom', label:'New name', machineId:'m3-a' }));
+        state.profiles = [{ id:'p-m3', material:'Plywood', thicknessValue:3, thicknessUnit:'mm', productionSettings:[] }]; state.activeMachineId = 'm3-a'; synchronizeMachineIdentity();
+        const switchSession = { candidate, targetProfileId:'p-m3', action:'create', selectedFields:{ speedMmPerMin:true, powerMinPercent:true }, requestedStatus:'tested', physicalChecks:{ cutCompleted:true }, measurementScope:'unknown', batchLabel:'', verifiedDate:'', reviewNotes:'', label:'Frozen source setting', preferred:false, metadataSelections:{ label:false, measurementScope:false, batchLabel:false, status:false, verifiedDate:false, preferred:false } };
+        setActiveWorkshopMachine('m3-b'); const switchResult = savePromotionTransaction(switchSession, () => true, () => true); const switchSetting = state.profiles[0].productionSettings[0], switchEvidence = switchSetting?.evidence?.[0];
+        add('Promotion-time active-machine switching preserves frozen source identity in candidate, setting, and evidence', switchResult.ok && candidate.machine.machineId === 'm3-a' && candidate.machine.label === 'Machine A' && switchSetting.machine.machineId === 'm3-a' && switchSetting.machine.label === 'Machine A' && switchEvidence.machineId === 'm3-a' && !switchSetting.machine.machineId?.includes('m3-b'));
+        const project = normalizeProject({ name:'M3 project', material:'Plywood', thicknessValue:'', thicknessUnit:'mm', jobType:'cut', dateCreated:'2026-07-19', tags:'', rating:'0', notes:'', settingsMachineId:'m3-a', settingsMachineKey:'custom', settingsMachineLabel:'Machine A', settingsMinPower:'20', settingsMaxPower:'', settingsSpeed:'100', settingsPasses:'1', settingsLineInterval:'', settingsAirAssist:false, settingsAirPressure:'', settingsOverscanPercent:'', settingsKerfOffset:'', settingsDitherMode:'none', settingsFocusValue:'', settingsFocusUnit:'mm', settingsSoftware:'', settingsFile:'' }, '');
+        add('Project settings snapshot copies source identity', project.settings.machine.machineId === 'm3-a' && project.settings.machine.label === 'Machine A');
+        state.projects = [project]; state.activeTab = 'projects'; render(); openProject(project); const projectForm = document.getElementById('projectForm'); const hiddenBefore = ['settingsMachineId','settingsMachineKey','settingsMachineLabel'].map(name => projectForm?.elements[name]?.value); projectForm.elements.notes.value = 'Unrelated edit'; projectForm.dispatchEvent(new Event('submit', { bubbles:true, cancelable:true })); const savedProject = state.projects.find(item => item.id === project.id);
+        add('Project hidden machine fields round-trip through the real edit/save path', hiddenBefore.join('|') === 'm3-a|custom|Machine A' && savedProject?.notes === 'Unrelated edit' && savedProject.settings.machine.machineId === 'm3-a' && savedProject.settings.machine.key === 'custom' && savedProject.settings.machine.label === 'Machine A' && state.activeMachineId === 'm3-b');
+        const referenceIndex = reference20w.findIndex(row => row[3] != null && row[4] != null); saveReference(`20W:${referenceIndex}`); const referenceNote = document.querySelector('#profileForm [name=notes]')?.value || ''; add('Reference Copy remains an attributed, unowned Library draft', referenceIndex >= 0 && referenceNote.includes('Official SainSmart 20W starting point') && profileDraftTests.every(test => !test.machineId) && profileDraftProductionSettings.length === 0 && productionEvidenceDraft.length === 0); closeModal('profileModal');
+        state.grids = [grid]; state.profiles = [{ id:'p-m3', productionSettings:[{ machine:{ key:'custom', label:'Machine A', machineId:'m3-a' }, evidence:[evidence] }] }]; state.projects = [project]; state.entries = [{ id:'e-m3', machineId:'m3-a' }]; state.inventory = [{ id:'i-m3', machineId:'m3-a' }];
+        state.profiles[0].tests = [{ id:'t-ref', machineId:'m3-a', machine:'Machine A', machineKey:'custom' }]; state.grids.push({ id:'label-only', machine:{ key:'custom', label:'Machine A' } }); const refs = machineReferencePaths('m3-a');
+        add('Exact Grid machineId references are detected', refs.some(path => path.startsWith('grids')));
+        add('Exact Material Test machineId references are detected', refs.some(path => path.startsWith('profiles') && path.includes('tests')));
+        add('Exact Production Setting machineId references are detected', refs.some(path => path.startsWith('profiles') && path.includes('productionSettings')));
+        add('Exact Evidence machineId references are detected', refs.some(path => path.startsWith('profiles') && path.includes('evidence')));
+        add('Exact Project settings machineId references are detected', refs.some(path => path.startsWith('projects') && path.includes('settings')));
+        const recordBeforeMachineAction = JSON.stringify({ grids:state.grids, profiles:state.profiles, projects:state.projects }); state.activeMachineId = 'm3-b'; synchronizeMachineIdentity(); openMachineConfirmation('archive', 'm3-a'); document.getElementById('confirmMachineAction')?.click(); const archivedMachine = machineById('m3-a', state.machines); const recordsAfterArchive = JSON.stringify({ grids:state.grids, profiles:state.profiles, projects:state.projects }); add('Referenced non-active machine can be archived without rewriting records', archivedMachine?.archived === true && recordsAfterArchive === recordBeforeMachineAction); add('Label-only snapshots without machineId are not references', !machineReferencePaths('label-only').length); add('Permanent deletion remains blocked for a referenced machine', !openMachineConfirmation('delete', 'm3-a') && !!machineById('m3-a', state.machines) && JSON.stringify({ grids:state.grids, profiles:state.profiles, projects:state.projects }) === recordBeforeMachineAction);
+        const unknown = normalizeMaterialTests([{ id:'unknown', machine:'Historical', machineKey:'custom', machineId:'missing-machine' }]); add('Unknown machine IDs survive normalization without machine fabrication', unknown[0].machineId === 'missing-machine' && !state.machines.some(machine => machine.id === 'missing-machine'));
+        const beforeLegacy = JSON.stringify({ machine:'Genmitsu L8 20W', machineKey:'genmitsu-l8-20w' }); const legacy = normalizeMaterialTests([JSON.parse(beforeLegacy)])[0]; add('Historical label/key records receive no backfilled machineId', !legacy.machineId && legacy.machine === 'Genmitsu L8 20W' && legacy.machineKey === 'genmitsu-l8-20w');
+      } finally { restore(); }
+      const passed = results.filter(result => result.pass).length, failed = results.length - passed;
+      console.group('Machine record identity fixtures'); console.table(results); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results };
+    }
+    window.runMachineRecordIdentityFixtures = runMachineRecordIdentityFixtures;
     function runMachineSetupFixtures() {
       return runMachineSetupCompatibilityFixtures();
     }
@@ -1694,12 +1758,13 @@
       });
     }
     function settingsFromSetting(o) {
+      const machine = o?.machine && typeof o.machine === 'object' ? { key:o.machine.key || '', label:o.machine.label || '', ...(normalizeOptionalMachineId(o.machine.machineId) ? { machineId:normalizeOptionalMachineId(o.machine.machineId) } : {}) } : null;
       return {
         minPower: o.minPower ?? '', maxPower: o.maxPower ?? '', speed: o.speed ?? '', passes: o.passes ?? 1,
         lineInterval: o.lineInterval ?? '', airAssist: !!o.airAssist, airPressure: o.airPressure ?? '',
         overscanPercent: o.overscanPercent ?? '', kerfOffset: o.kerfOffset ?? '', ditherMode: o.ditherMode || 'none',
         focusValue: o.focusValue ?? '', focusUnit: o.focusUnit || state.unit,
-        software: o.software || '', settingsFile: o.settingsFile || ''
+        software: o.software || '', settingsFile: o.settingsFile || '', ...(machine ? { machine } : {})
       };
     }
     function focusSuggestion(jobType, thicknessMm) {
@@ -7287,9 +7352,11 @@
       return `<div class="span2 small muted">Avoid PVC/vinyl/chlorinated plastics. Verify unknown materials before lasering.</div><div id="materialSafetyWarning" class="span2">${materialSafetyWarningHtml(material)}</div>`;
     }
     function normalizeMaterialTests(tests) {
-      return Array.isArray(tests) ? tests.filter(test => test && typeof test === 'object').map(test => ({
+      return Array.isArray(tests) ? tests.filter(test => test && typeof test === 'object').map(test => {
+        const machineSource = test.machine && typeof test.machine === 'object' ? test.machine : {};
+        return {
         ...test,
-        id: test.id || uid(), date: test.date || '', machine: test.machine || '',
+        id: test.id || uid(), date: test.date || '', machine: typeof test.machine === 'string' ? test.machine : machineSource.label || '', machineKey: typeof test.machineKey === 'string' ? test.machineKey.trim() : typeof machineSource.key === 'string' ? machineSource.key.trim() : '', machineId: normalizeOptionalMachineId(test.machineId || machineSource.machineId),
         testType: materialTestTypes.includes(test.testType) ? test.testType : 'other',
         status: materialTestStatuses.includes(test.status) ? test.status : 'experimental',
         notes: test.notes || '', winningSpeed: test.winningSpeed ?? '', winningPower: test.winningPower ?? '',
@@ -7308,7 +7375,8 @@
         baselineSource: typeof test.baselineSource === 'string' ? test.baselineSource : '',
         baselineLabel: typeof test.baselineLabel === 'string' ? test.baselineLabel : '',
         baselineTestId: typeof test.baselineTestId === 'string' ? test.baselineTestId : ''
-      })) : [];
+        };
+      }) : [];
     }
     function strictOptionalNumber(value) {
       if (value === '' || value == null) return '';
@@ -7341,6 +7409,7 @@
         sourceId: typeof item.sourceId === 'string' ? item.sourceId : '',
         sourceProfileId: typeof item.sourceProfileId === 'string' ? item.sourceProfileId : '',
         sourceLabel: typeof item.sourceLabel === 'string' ? item.sourceLabel.trim() : '',
+        machineId: normalizeOptionalMachineId(item.machineId),
         date: typeof item.date === 'string' ? item.date : '',
         result: typeof item.result === 'string' ? item.result.trim() : '',
         notes: typeof item.notes === 'string' ? item.notes.trim() : ''
@@ -7371,6 +7440,7 @@
           ...machineSource,
           key: machineKey,
           label: typeof machineSource.label === 'string' && machineSource.label.trim() ? machineSource.label.trim() : productionMachineDefaultLabel(machineKey),
+          ...(normalizeOptionalMachineId(machineSource.machineId) ? { machineId: normalizeOptionalMachineId(machineSource.machineId) } : {}),
           lens: typeof machineSource.lens === 'string' ? machineSource.lens.trim() : '',
           focusMethod: typeof machineSource.focusMethod === 'string' ? machineSource.focusMethod.trim() : ''
         },
@@ -7455,7 +7525,13 @@
       const label = String(source.label || source.machine || '').trim();
       const text = `${rawKey} ${label}`.toLowerCase();
       const key = rawKey === 'genmitsu-l8-20w' || rawKey === 'genmitsu-l8-40w' || rawKey === 'custom' ? rawKey : inferLabel && /40\s*w|40w/.test(text) ? 'genmitsu-l8-40w' : inferLabel && /20\s*w|20w/.test(text) ? 'genmitsu-l8-20w' : '';
-      return { key, label: label || (key ? productionMachineDefaultLabel(key) : ''), source: promotionClone(source) };
+      return { key, label: label || (key ? productionMachineDefaultLabel(key) : ''), ...(normalizeOptionalMachineId(source.machineId) ? { machineId: normalizeOptionalMachineId(source.machineId) } : {}), source: promotionClone(source) };
+    }
+    function productionMachineIdentityMatches(candidateMachine, targetMachine) {
+      const candidate = candidateMachine || {}, target = targetMachine || {};
+      const candidateId = normalizeOptionalMachineId(candidate.machineId), targetId = normalizeOptionalMachineId(target.machineId);
+      if (candidateId || targetId) return !!candidateId && !!targetId && candidateId === targetId;
+      return !!candidate.key && !!target.key && candidate.key === target.key;
     }
     function promotionProfileThicknessMm(profile) {
       if (!profile || profile.thicknessValue === '' || profile.thicknessValue == null) return '';
@@ -7489,7 +7565,7 @@
       const cut = normalized.testType === 'cut' || normalized.intendedOperation === 'cut';
       const kerf = normalized.testType === 'kerf' || normalized.intendedOperation === 'kerf';
       const physical = normalized.status !== 'archived' && normalized.status !== 'failed' && (normalized.physicalRunCompleted === true || normalized.completed === true || normalized.completionStatus === 'completed' || normalized.resultState === 'completed' || normalized.testStatus === 'completed');
-      const candidate = promotionCandidateBase('material-test', normalized, profile, { sourceId: normalized.id, sourceLabel: `${profile?.material || 'Material'} - ${materialTestLabel(normalized.testType)}`, sourceDate: normalized.date, sourceStatus: normalized.status, operation: cut ? 'cut' : normalized.intendedOperation || normalized.testType, machine: normalized.machine, defaultStatus: physical ? 'tested' : normalized.status === 'recommended' ? 'estimated' : 'untested', canVerify: cut, limitations: cut ? (physical ? [] : ['Physical completion is not explicitly recorded; tested status requires a reviewed Cut completed confirmation.']) : ['This test is not a Cut test; review it as evidence-only unless compatible Cut values are explicitly present.'] });
+      const candidate = promotionCandidateBase('material-test', normalized, profile, { sourceId: normalized.id, sourceLabel: `${profile?.material || 'Material'} - ${materialTestLabel(normalized.testType)}`, sourceDate: normalized.date, sourceStatus: normalized.status, operation: cut ? 'cut' : normalized.intendedOperation || normalized.testType, machine: { key: normalized.machineKey, label: normalized.machine, machineId: normalized.machineId }, defaultStatus: physical ? 'tested' : normalized.status === 'recommended' ? 'estimated' : 'untested', canVerify: cut, limitations: cut ? (physical ? [] : ['Physical completion is not explicitly recorded; tested status requires a reviewed Cut completed confirmation.']) : ['This test is not a Cut test; review it as evidence-only unless compatible Cut values are explicitly present.'] });
       promotionAddField(candidate, 'measuredThicknessMm', 'Measured thickness', normalized.measuredThicknessMm, 'materialCondition.measuredThicknessMm');
       promotionAddField(candidate, 'speedMmPerMin', 'Speed', normalized.winningSpeed, 'cutSettings.speedMmPerMin', { machineDependent: true });
       promotionAddField(candidate, 'powerMinPercent', 'Minimum power', normalized.winningPower, 'cutSettings.powerMinPercent', { machineDependent: true });
@@ -7586,7 +7662,7 @@
         if (requested[key] !== true) { malformed.push(key); return; }
         const value = fieldData.value;
         if (value === '' || value == null || (typeof value === 'number' && !Number.isFinite(value))) { malformed.push(key); return; }
-        if (fieldData.machineDependent && target?.machine?.key && candidate?.machine?.key && target.machine.key !== candidate.machine.key) { blocked.push(key); return; }
+        if (fieldData.machineDependent && target?.machine && !productionMachineIdentityMatches(candidate?.machine, target.machine)) { blocked.push(key); return; }
         if (fieldData.machineDependent && !candidate?.machine?.key && session?.action !== 'evidence') { blocked.push(key); return; }
         valid[key] = true;
       });
@@ -7599,7 +7675,7 @@
       if (!targetProfile) errors.push('Choose an existing target Library profile.');
       if (action === 'update' || action === 'evidence') {
         if (!targetSetting) errors.push('Choose a target Production Setting.');
-        if (targetSetting && machine.key && targetSetting.machine?.key && machine.key !== targetSetting.machine.key) warnings.push('Machine mismatch: measured thickness may be reviewed, but machine-dependent values are blocked.');
+        if (targetSetting && !productionMachineIdentityMatches(machine, targetSetting.machine)) warnings.push('Machine identity mismatch: machine-dependent values are blocked.');
       }
       if (action !== 'evidence' && !Object.keys(selection.valid).length) errors.push('Select at least one compatible value before saving.');
       if (selection.unknown.length) errors.push(`Unknown promotion field(s): ${selection.unknown.join(', ')}.`);
@@ -7630,7 +7706,7 @@
       return errors;
     }
     function promotionEvidenceSnapshot(candidate, session, selectedValues) {
-      return { kind: candidate.sourceType, sourceId: candidate.sourceId, sourceProfileId: candidate.sourceProfileId, sourceLabel: candidate.sourceLabel, date: candidate.sourceDate, sourceDate: candidate.sourceDate, sourceStatus: candidate.sourceStatus, createdDate: today(), sourceSnapshot: promotionClone(candidate.sourceSnapshot), selectedValues: promotionClone(selectedValues), physicalChecks: promotionClone(session.physicalChecks || {}), promotionSignature: promotionSignature(candidate, session), result: candidate.sourceSnapshot?.result || '', notes: String(session.reviewNotes || candidate.sourceSnapshot?.notes || '').trim() };
+      return { kind: candidate.sourceType, sourceId: candidate.sourceId, sourceProfileId: candidate.sourceProfileId, sourceLabel: candidate.sourceLabel, machineId: normalizeOptionalMachineId(candidate.machine?.machineId), date: candidate.sourceDate, sourceDate: candidate.sourceDate, sourceStatus: candidate.sourceStatus, createdDate: today(), sourceSnapshot: promotionClone(candidate.sourceSnapshot), selectedValues: promotionClone(selectedValues), physicalChecks: promotionClone(session.physicalChecks || {}), promotionSignature: promotionSignature(candidate, session), result: candidate.sourceSnapshot?.result || '', notes: String(session.reviewNotes || candidate.sourceSnapshot?.notes || '').trim() };
     }
     function promotionSignature(candidate, session) {
       const selected = promotionValidSelectedFields(candidate, session, session?.targetSetting).valid;
@@ -7666,7 +7742,7 @@
       if (session?.evidenceId && normalizeProductionSettings(targetProfile.productionSettings).some(setting => (setting.evidence || []).some(item => item.id === session.evidenceId))) return { ok: false, errors: ['The requested evidence ID already exists; no existing evidence was replaced.'] };
       if (session.action === 'create' && !candidate.machine.key) return { ok: false, errors: ['Create requires an exact or explicitly labeled source machine.'] };
       if (session.action !== 'evidence' && !candidate.machine.key && Object.keys(selection.valid).some(key => candidate.fields[key]?.machineDependent)) return { ok: false, errors: ['Machine-dependent values require an exact source machine identity.'] };
-      if (targetSetting && candidate.machine.key && targetSetting.machine?.key && candidate.machine.key !== targetSetting.machine.key && Object.keys(selection.valid).some(key => key !== 'measuredThicknessMm' && candidate.fields[key]?.machineDependent)) return { ok: false, errors: ['Machine-dependent fields cannot be promoted across machines.'] };
+      if (targetSetting && !productionMachineIdentityMatches(candidate.machine, targetSetting.machine) && Object.keys(selection.valid).some(key => key !== 'measuredThicknessMm' && candidate.fields[key]?.machineDependent)) return { ok: false, errors: ['Machine-dependent fields cannot be promoted across machines.'] };
       const previousProfile = promotionClone(targetProfile), nextProfile = promotionClone(targetProfile), settings = normalizeProductionSettings(nextProfile.productionSettings), selected = Object.keys(session.selectedFields || {}).reduce((out, key) => { if (candidate.fields[key]) out[key] = candidate.fields[key].value; return out; }, {});
       let nextSetting = targetSetting ? promotionClone(targetSetting) : null;
       if (session.action === 'create') {
@@ -7998,9 +8074,10 @@
       if (!key && !label) return null;
       if (!productionMachineKeys.includes(key)) return null;
       if (key === 'custom' && !label) return null;
-      return { key, label: label || productionMachineDefaultLabel(key) };
+      return { key, label: label || productionMachineDefaultLabel(key), ...(normalizeOptionalMachineId(machine.machineId) ? { machineId: normalizeOptionalMachineId(machine.machineId) } : {}) };
     }
-    function activeMachineSnapshot(active = state.machineProfile) {
+    function activeMachineSnapshot(active) {
+      if (arguments.length === 0) return activeOwnedMachineSnapshot() || activeMachineSnapshot(state.machineProfile);
       if (active && typeof active === 'object') return gridMachineSnapshot(active);
       const key = active === '40W' ? 'genmitsu-l8-40w' : 'genmitsu-l8-20w';
       return gridMachineSnapshot({ key, label: productionMachineDefaultLabel(key) });
@@ -8024,7 +8101,7 @@
       const markedBest = values.best ? 'Marked best: yes.' : 'Marked best: no.';
       const notes = [`Source Test Grid: ${grid.name || 'Untitled grid'}`, `Cell: ${settings.power}% / ${settings.speed} mm/min`, `Rating: ${values.rating}/5.`, markedBest, grid.software ? `Software: ${grid.software}.` : '', grid.ditherMode ? `Dither mode: ${grid.ditherMode}.` : '', values.notes ? `Cell notes: ${values.notes}` : ''].filter(Boolean).join('\n');
       return normalizeMaterialTests([{
-        id: uid(), date: /^\d{4}-\d{2}-\d{2}$/.test(String(grid.createdDate || '')) ? grid.createdDate : today(), machine: typeof machine === 'object' ? machine.label : machine || '', machineKey: typeof machine === 'object' ? machine.key : '', testType: gridTestTypeFromGrid(grid), status: values.best && values.rating >= 4 ? 'recommended' : 'experimental', notes,
+        id: uid(), date: /^\d{4}-\d{2}-\d{2}$/.test(String(grid.createdDate || '')) ? grid.createdDate : today(), machine: typeof machine === 'object' ? machine.label : machine || '', machineKey: typeof machine === 'object' ? machine.key : '', machineId: typeof machine === 'object' ? normalizeOptionalMachineId(machine.machineId) : '', testType: gridTestTypeFromGrid(grid), status: values.best && values.rating >= 4 ? 'recommended' : 'experimental', notes,
         winningSpeed: settings.speed, winningPower: settings.power, winningInterval: grid.lineInterval === '' || grid.lineInterval == null ? '' : num(grid.lineInterval), winningPasses: Math.max(1, Math.round(num(grid.passes, 1))), airAssist: !!grid.airAssist, confidence,
         attachments: [], overallResult, observedTraits: [], resultSummary: values.notes, winnerLocation: '', winnerComment: '', intendedOperation: gridIntendedOperationFromGrid(grid), adaptiveMode: '', optimizationGoal: '', recommendationRationale: '', baselineSource: '', baselineLabel: '', baselineTestId: '',
         sourceKind: 'test-grid', sourceGridId: grid.id || '', sourceCellKey: String(cellKey || ''), sourceGridName: grid.name || ''
@@ -8835,7 +8912,7 @@
         replacement.verificationStatus !== 'superseded' &&
         !String(replacement.supersededById || '').trim() &&
         oldSetting.operation === replacement.operation &&
-        oldSetting.machine.key === replacement.machine.key;
+        productionMachineIdentityMatches(oldSetting.machine, replacement.machine);
     }
     function supersedeProductionSettingDraft(settings, oldId, replacementId) {
       const next = normalizeProductionSettings(settings);
@@ -8957,7 +9034,7 @@
     function openProductionSetting(setting) {
       const parent = editingProfileId ? state.profiles.find(item => item.id === editingProfileId) : null;
       const nominalMm = parent?.thicknessValue === '' || parent?.thicknessValue == null ? '' : parent?.thicknessUnit === 'in' ? roundUnitValue(num(parent.thicknessValue) * 25.4) : parent?.thicknessValue;
-      const data = normalizeProductionSetting(setting || { id: uid(), operation: 'cut', machine: { key: state.machineProfile === '40W' ? 'genmitsu-l8-40w' : 'genmitsu-l8-20w' }, materialCondition: { nominalThicknessMm: nominalMm, measurementScope: 'unknown' }, verificationStatus: 'untested', createdDate: today(), updatedDate: today() });
+      const data = normalizeProductionSetting(setting || { id: uid(), operation: 'cut', machine: activeMachineSnapshot(), materialCondition: { nominalThicknessMm: nominalMm, measurementScope: 'unknown' }, verificationStatus: 'untested', createdDate: today(), updatedDate: today() });
       productionEvidenceDraft = normalizeProductionEvidence(data.evidence);
       openModal('productionSettingModal', `<div class="dialog"><div class="spread"><h2>${setting ? 'Edit production setting' : 'Add production setting'}</h2><button data-close>&times;</button></div><form id="productionSettingForm" class="formgrid">${productionSettingFields(data)}<div class="span2 actions"><button type="button" data-close>Cancel</button><button class="primary">Save setting</button></div></form></div>`);
       bindModal('productionSettingModal');
@@ -10084,7 +10161,7 @@
     function openMaterialTestWizard(profileId = '') {
       const profile = state.profiles.find(item => item.id === profileId) || state.profiles[0];
       if (!profile) return alert('Add or save a Library material before starting a material test.');
-      materialTestWizard = { step: 1, materialId: profile.id, machine: wizardMachineLabel(), testType: 'engrave_matrix', date: today(), thickness: profile.thicknessValue ?? '', thicknessUnit: profile.thicknessUnit || state.unit, materialFamily: wizardFamilyFromMaterial(profile.material), surfaceFinish: 'unknown', intendedOperation: 'engrave_vector', currentKnowledge: profile.speed || profile.minPower ? 'prior' : 'never', testSize: 'balanced', testFocus: 'material', baselineSource: 'auto', baselineTestId: '', manualBaselineSpeed: '', manualBaselinePower: '', manualBaselineInterval: '', manualBaselinePasses: '', manualBaselineAirAssist: false, adaptiveMode: 'auto', optimizationGoal: 'Best overall', notes: '', planCustomized: false, results: { status: 'experimental', winningSpeed: profile.speed ?? '', winningPower: profile.minPower ?? '', winningInterval: profile.lineInterval ?? '', winningPasses: profile.passes ?? '', airAssist: !!profile.airAssist, confidence: 3, resultSummary: '', overallResult: 'Usable', observedTraits: [], winnerLocation: '', winnerComment: '' }, applyWinner: false };
+      materialTestWizard = { step: 1, materialId: profile.id, machine: activeMachineSnapshot() || wizardMachineLabel(), testType: 'engrave_matrix', date: today(), thickness: profile.thicknessValue ?? '', thicknessUnit: profile.thicknessUnit || state.unit, materialFamily: wizardFamilyFromMaterial(profile.material), surfaceFinish: 'unknown', intendedOperation: 'engrave_vector', currentKnowledge: profile.speed || profile.minPower ? 'prior' : 'never', testSize: 'balanced', testFocus: 'material', baselineSource: 'auto', baselineTestId: '', manualBaselineSpeed: '', manualBaselinePower: '', manualBaselineInterval: '', manualBaselinePasses: '', manualBaselineAirAssist: false, adaptiveMode: 'auto', optimizationGoal: 'Best overall', notes: '', planCustomized: false, results: { status: 'experimental', winningSpeed: profile.speed ?? '', winningPower: profile.minPower ?? '', winningInterval: profile.lineInterval ?? '', winningPasses: profile.passes ?? '', airAssist: !!profile.airAssist, confidence: 3, resultSummary: '', overallResult: 'Usable', observedTraits: [], winnerLocation: '', winnerComment: '' }, applyWinner: false };
       materialTestWizard.plan = recommendAdaptivePlan(materialTestWizard);
       renderMaterialTestWizard();
     }
@@ -10112,8 +10189,9 @@
       const winnerComment = typeof r.winnerComment === 'string' ? r.winnerComment.trim() : '';
       const resultSummary = typeof r.resultSummary === 'string' ? r.resultSummary.trim() : '';
       const notes = [draft.notes, `Adaptive recommendation\nMode: ${plan.adaptiveMode || draft.adaptiveMode}\nGoal: ${draft.optimizationGoal}\nBaseline: ${baseline.label || baseline.sourceLabel || ''}\nRationale: ${plan.rationale || ''}`, `Interval setup:\n${wizardIntervalSummary(notesDraft)}`, `Material test setup:\n${wizardMaterialSummary(notesDraft)}`, `Result\nOverall: ${overallResult}\nObserved traits: ${observedTraits.join(', ') || 'None recorded'}\nWinner location: ${winnerLocation || 'Not specified'}${winnerComment ? `\nWinner comment: ${winnerComment}` : ''}`, resultSummary ? `Result summary: ${resultSummary}` : ''].filter(Boolean).join('\n\n');
+      const machine = typeof draft.machine === 'object' ? draft.machine : { key: '', label: draft.machine || '' };
       return normalizeMaterialTests([{
-        id: options.id || uid(), date: draft.date || today(), machine: draft.machine, testType: wizardStoredTestType(draft), status: materialTestStatuses.includes(r.status) ? r.status : 'experimental', notes,
+        id: options.id || uid(), date: draft.date || today(), machine: machine.label || '', machineKey: machine.key || '', machineId: normalizeOptionalMachineId(machine.machineId), testType: wizardStoredTestType(draft), status: materialTestStatuses.includes(r.status) ? r.status : 'experimental', notes,
         winningSpeed: r.winningSpeed === '' ? '' : num(r.winningSpeed), winningPower: r.winningPower === '' ? '' : num(r.winningPower), winningInterval: r.winningInterval === '' ? '' : num(r.winningInterval), winningPasses: r.winningPasses === '' ? '' : Math.max(1, Math.round(num(r.winningPasses, 1))), airAssist: !!r.airAssist, confidence: Math.max(1, Math.min(5, Math.round(num(r.confidence, 3)))), attachments: [],
         overallResult, observedTraits, winnerLocation, winnerComment, resultSummary,
         intendedOperation: typeof draft.intendedOperation === 'string' ? draft.intendedOperation : '', adaptiveMode: typeof plan.adaptiveMode === 'string' ? plan.adaptiveMode : '', optimizationGoal: typeof draft.optimizationGoal === 'string' ? draft.optimizationGoal : '', recommendationRationale: typeof plan.rationale === 'string' ? plan.rationale : '', baselineSource: typeof baseline.source === 'string' ? baseline.source : '', baselineLabel: typeof (baseline.label || baseline.sourceLabel) === 'string' ? (baseline.label || baseline.sourceLabel) : '', baselineTestId: typeof baseline.test?.id === 'string' ? baseline.test.id : ''
@@ -10950,6 +11028,7 @@
     function projectSettingsFields(settings) {
       const s = settings || {};
       return `
+        ${s.machine ? `<input name="settingsMachineId" value="${esc(s.machine.machineId || '')}" hidden><input name="settingsMachineKey" value="${esc(s.machine.key || '')}" hidden><input name="settingsMachineLabel" value="${esc(s.machine.label || '')}" hidden>` : ''}
         ${field('settingsMinPower','Power min (%)',s.minPower,'number','min="0" max="100"','Laser power percent; higher is stronger and hotter.')}
         ${field('settingsMaxPower','Power max (%)',s.maxPower,'number','min="0" max="100"','Optional upper power for ramps; leave same as min for fixed power.')}
         ${field('settingsSpeed','Speed (mm/min)',s.speed,'number','min="0"','Laser head travel speed; slower usually burns or cuts deeper.')}
@@ -11084,6 +11163,18 @@
     function normalizeProject(f, existingId) {
       const minPower = num(f.settingsMinPower);
       const existingProject = existingId ? state.projects.find(p => p.id === existingId) : null;
+      const machine = existingProject?.settings?.machine || (f.settingsMachineId || f.settingsMachineKey || f.settingsMachineLabel ? { machineId:normalizeOptionalMachineId(f.settingsMachineId), key:f.settingsMachineKey || '', label:f.settingsMachineLabel || '' } : null);
+      const settings = {
+        minPower, maxPower: f.settingsMaxPower === '' ? minPower : num(f.settingsMaxPower), speed: num(f.settingsSpeed),
+        passes: Math.max(1, Math.round(num(f.settingsPasses, 1))), lineInterval: f.settingsLineInterval === '' ? '' : num(f.settingsLineInterval),
+        airAssist: !!f.settingsAirAssist, airPressure: f.settingsAirPressure === '' ? '' : num(f.settingsAirPressure),
+        overscanPercent: f.settingsOverscanPercent === '' ? '' : num(f.settingsOverscanPercent),
+        kerfOffset: f.settingsKerfOffset === '' ? '' : num(f.settingsKerfOffset),
+        ditherMode: f.settingsDitherMode || 'none',
+        focusValue: f.settingsFocusValue === '' ? '' : num(f.settingsFocusValue), focusUnit: f.settingsFocusUnit,
+        software: (f.settingsSoftware || '').trim(), settingsFile: (f.settingsFile || '').trim()
+      };
+      if (machine) settings.machine = machine;
       const project = {
         id: existingId || uid(), name: f.name.trim(), material: f.material.trim(),
         thicknessValue: f.thicknessValue === '' ? '' : num(f.thicknessValue), thicknessUnit: f.thicknessUnit,
@@ -11091,16 +11182,7 @@
         rating: num(f.rating, 0), notes: (f.notes || '').trim(),
         sourceEntryId: f.sourceEntryId || null, sourceProfileId: f.sourceProfileId || null,
         photos: normalizeProjectPhotos(projectPhotosDraft),
-        settings: {
-          minPower, maxPower: f.settingsMaxPower === '' ? minPower : num(f.settingsMaxPower), speed: num(f.settingsSpeed),
-          passes: Math.max(1, Math.round(num(f.settingsPasses, 1))), lineInterval: f.settingsLineInterval === '' ? '' : num(f.settingsLineInterval),
-          airAssist: !!f.settingsAirAssist, airPressure: f.settingsAirPressure === '' ? '' : num(f.settingsAirPressure),
-          overscanPercent: f.settingsOverscanPercent === '' ? '' : num(f.settingsOverscanPercent),
-          kerfOffset: f.settingsKerfOffset === '' ? '' : num(f.settingsKerfOffset),
-          ditherMode: f.settingsDitherMode || 'none',
-          focusValue: f.settingsFocusValue === '' ? '' : num(f.settingsFocusValue), focusUnit: f.settingsFocusUnit,
-          software: (f.settingsSoftware || '').trim(), settingsFile: (f.settingsFile || '').trim()
-        }
+        settings
       };
       Object.assign(project, normalizeProjectAccounting(f));
       return project;
@@ -11819,8 +11901,8 @@
       const recorded = gridMachineSnapshot(existing?.machine), isNew = !existing;
       const action = isNew ? 'active' : recorded ? 'keep' : '';
       const options = isNew
-        ? `<option value="active" selected>Use active machine</option>`
-        : `<option value="" ${!recorded ? 'selected' : ''}>Leave not recorded</option><option value="keep" ${recorded ? 'selected' : ''}>Keep recorded machine</option><option value="active">Assign active machine</option>`;
+        ? `<option value="active" selected>Use active workshop machine</option>`
+        : `<option value="" ${!recorded ? 'selected' : ''}>Leave not recorded</option><option value="keep" ${recorded ? 'selected' : ''}>Keep recorded machine</option><option value="active">Assign active workshop machine</option>`;
       return `<div class="span2 panel"><b>Machine</b><div id="gridMachineSummary" class="small muted" style="margin-top:6px">Machine: ${esc(recorded?.label || (isNew ? activeMachineSnapshot().label : 'Not recorded'))}</div><details style="margin-top:7px"><summary>${isNew ? 'Advanced machine choice' : 'Change machine'}</summary><select name="machineAction" style="margin-top:7px">${options}<option value="20W">Use Genmitsu L8 20W</option><option value="40W">Use Genmitsu L8 40W</option><option value="custom">Use custom machine</option></select>${field('machineLabel','Custom machine label',recorded?.key === 'custom' ? recorded.label : '')}<div class="small muted">The selected machine is stored with this Grid and is not replaced by the global preference later.</div></details></div>`;
     }
     function openGridForm(grid = null) {
@@ -12564,6 +12646,7 @@
     if (selftest === 'machine' || selftest === 'all') runMachineSetupFixtures();
     if (selftest === 'machines-m1' || selftest === 'all') runMultiMachineStorageFixtures();
     if (selftest === 'machines-m2' || selftest === 'all') runMachineManagerFixtures();
+    if (selftest === 'machines-m3' || selftest === 'all') runMachineRecordIdentityFixtures();
     if (selftest === 'help' || selftest === 'all') runHelpSafetyFixtures();
     if (selftest === 'modal' || selftest === 'all') runModalAccessibilityFixtures();
     if (selftest === 'accessibility' || selftest === 'all') runAccessibilityPolishFixtures();
