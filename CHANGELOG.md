@@ -1,5 +1,7 @@
 # Changelog
 
+- Added Tabletop Accessories T3B Tabletop Storage Tray: a session-only coordinated ten-piece T2 Floor-owned shell plus T3A four-rail removable false-bottom prototype. The production SVG is exact-scale and pinned at `2860` bytes / FNV-1a `3e256fad`; the Finished Assembled view is screen-only. T2 Shell-proven and Storage Fit Coupon-proven statements remain independent exact component checks, while cork fit and the complete tray remain unproven. No recorder, evidence kind, storage, schema, backup/import/export, automatic promotion, or existing production SVG changed.
+
 - Added T3A-E1 Storage Fit Coupon evidence recording: schema v3 adds dedicated `tabletopStorageResults`, frozen T2-shell links, tri-state observations, backup/import/merge support, exact-only matching, and explicit Storage Fit Coupon-proven promotion. Production SVG geometry is unchanged.
 
 - Added Tabletop Accessories T3A Tabletop Storage Fit Coupon: a session-only five-piece retrofit kit for an existing physical T2 shell. It emits only four bottom-supported rails and one plain wood false bottom; rail lengths are inset by the actual generated T2 floor-pattern widths, false-bottom clearance is total-across-dimension and split equally per side, and the Finished View is contextual/screen-only. Existing shell evidence is explicitly outer-shell scope only; T3A result recording and promotion are deferred rather than changing storage or evidence schema. No protected legacy, T1, T2 shell, tray, coupon, or cleat production output changed.
