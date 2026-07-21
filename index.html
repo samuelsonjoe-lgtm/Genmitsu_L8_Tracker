@@ -428,6 +428,9 @@
       return Number.isFinite(n) ? n : fallback;
     };
     const fmt = (v, u) => v === '' || v == null ? '-' : `${v}${u || ''}`;
+    const tabletopShellObservationValues = {
+      assemblyEffort:['easy','moderate','difficult','not-tested'], cornerGaps:['none','minor','significant','not-tested'], floorEdgeGaps:['none','minor','significant','not-tested'], squareOrRacking:['square','minor-racking','significant-racking','not-tested']
+    };
     let storageRecoveryIssue = null;
     let firstRunOnboardingDismissed = false;
     const state = loadState();
@@ -715,9 +718,6 @@
     }
     function tabletopCouponManualRecord(data = {}) { return normalizeTabletopCouponResult({ ...data, sourceMode:'manual', templateId:'tabletop-corner-floor-coupon', id:data.id, candidates:data.candidates, constructionIdentity:data.constructionIdentity || {}, generatorVersion:data.generatorVersion || '', clearanceStepMm:data.clearanceStepMm, measuredThicknessMm:data.measuredThicknessMm, material:data.material || { label:data.materialLabel || '' }, machine:data.machine || tabletopCouponGeneratedMachineSnapshot(), testGeometry:data.testGeometry || {} }); }
     function tabletopCouponRecordSave(record) { const normalized=normalizeTabletopCouponResult(record), index=state.tabletopCouponResults.findIndex(item=>item.id===normalized?.id), previous=index>=0?state.tabletopCouponResults[index]:null; if(!normalized)return false; normalized.updatedAt=new Date().toISOString(); if(index>=0)state.tabletopCouponResults[index]=normalized;else state.tabletopCouponResults.unshift(normalized); if(!persist()){if(index>=0)state.tabletopCouponResults[index]=previous;else state.tabletopCouponResults.shift();return false;} return true; }
-    const tabletopShellObservationValues = {
-      assemblyEffort:['easy','moderate','difficult','not-tested'], cornerGaps:['none','minor','significant','not-tested'], floorEdgeGaps:['none','minor','significant','not-tested'], squareOrRacking:['square','minor-racking','significant-racking','not-tested']
-    };
     function tabletopShellNormalizeDimensions(value, keys) { const source=value&&typeof value==='object'&&!Array.isArray(value)?value:{}; return keys.reduce((out,key)=>{ const number=tabletopCouponFinitePositive(source[key]); out[key]=number; return out; },{}); }
     function tabletopShellNormalizePattern(value) { const source=value&&typeof value==='object'&&!Array.isArray(value)?value:{}; return { count:Number.isInteger(Number(source.count))&&Number(source.count)>0?Number(source.count):null, actualWidth:tabletopCouponFinitePositive(source.actualWidth ?? source.actualWidthMm) }; }
     function tabletopShellNormalizeObservations(value) {
@@ -5834,6 +5834,11 @@
         Object.assign(state, freshState());
         const profile=normalizeLibraryProfiles([{id:'t2b-recorder-fixture-material',material:'Synthetic Recorder Plywood',category:'sheet',thicknessValue:3,thicknessUnit:'mm',productionSettings:[]}])[0], source = tabletopShellFixtureRecord({ machine:{machineId:'t2b-recorder-fixture-machine',key:'custom',label:'Synthetic Recorder L8'}, material:{materialId:profile.id,label:profile.material,type:'sheet'} });
         state.profiles=[profile]; state.machines=[{id:source.machine.machineId,name:source.machine.label,key:source.machine.key,archived:false}]; state.activeMachineId=source.machine.machineId;
+        const startupRaw={...source,id:'startup-shell-result',observations:{...source.observations,cornerGaps:'unknown-legacy-value'},promotedEvidence:{profileId:profile.id,settingId:'startup-t2b-setting',evidenceId:'startup-t2b-evidence'}},startupProfiles=[{...profile,productionSettings:[{id:'startup-t1-setting',label:'Saved T1 shell evidence',machine:source.machine,evidence:[{id:'startup-t1-evidence',kind:'tabletop-shell',sourceId:'saved-t1-shell',sourceProfileId:profile.id,sourceLabel:'Saved T1 Shell-proven',machineId:source.machine.machineId,date:'2026-07-20',result:'pass',fitContext:{constructionIdentity:{...source.constructionIdentity,generatorVersion:'tabletop-accessory-t1'}}}]},{id:'startup-t2b-setting',label:'Saved T2B shell evidence',machine:source.machine,evidence:[{id:'startup-t2b-evidence',kind:'tabletop-shell',sourceId:startupRaw.id,sourceProfileId:profile.id,sourceLabel:'Saved T2B Shell-proven',machineId:source.machine.machineId,date:'2026-07-20',result:'pass',fitContext:{constructionIdentity:source.constructionIdentity}}]}]}],startupState={...freshState(),profiles:startupProfiles,machines:state.machines,activeMachineId:state.activeMachineId,tabletopShellResults:[startupRaw]},startupJson=JSON.stringify(startupState);
+        localStorage.setItem(STORAGE_KEY,startupJson); const startupLoaded=loadState(),startupRecord=startupLoaded.tabletopShellResults[0],startupEvidence=startupLoaded.profiles[0]?.productionSettings.flatMap(setting=>setting.evidence||[])||[];
+        add('seeded saved shell startup normalizes decimals and observations without rewriting storage',startupRecord?.measuredThicknessMm===2.88&&startupRecord.clearanceMm===-.075&&startupRecord.observations.assemblyEffort==='easy'&&startupRecord.observations.cornerGaps==='not-tested'&&localStorage.getItem(STORAGE_KEY)===startupJson,'2.88 / -0.075 / valid observations retained',startupRecord?.observations);
+        add('seeded startup keeps existing T1 and T2B Shell-proven evidence accessible',startupEvidence.length===2&&startupEvidence.some(evidence=>evidence.fitContext?.constructionIdentity?.generatorVersion==='tabletop-accessory-t1')&&startupEvidence.some(evidence=>evidence.id==='startup-t2b-evidence'),2,startupEvidence);
+        localStorage.setItem(STORAGE_KEY,storage===null?'':storage); if(storage===null)localStorage.removeItem(STORAGE_KEY);
         openTabletopShellResultRecorder(null, null, source);
         const form = document.getElementById('tabletopShellResultForm'), formData = form && new FormData(form);
         const set=(name,value)=>form.elements[name].value=String(value);
