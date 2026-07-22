@@ -309,6 +309,7 @@
   <div class="modal" id="projectWizardModal"></div>
   <div class="modal" id="helpModal"></div>
   <div class="modal" id="importModeModal"></div>
+  <div class="modal" id="backupModal"></div>
   <div class="modal" id="machineModal"></div>
   <div class="modal" id="tabletopCouponResultModal"></div>
   <div class="modal" id="tabletopCouponResultsModal"></div>
@@ -651,6 +652,8 @@
     let pricingPersistTimer = null;
     let pendingImport = null;
     let importApplying = false;
+    let backupModalOperation = null;
+    let backupDownloadText = downloadTextFile;
     let machineManagerSearch = '';
     let machineManagerShowArchived = false;
     let machineModalMode = '';
@@ -12646,6 +12649,7 @@
       if (id === 'productionSettingModal') productionEvidenceDraft = [];
       if (id === 'projectWizardModal') projectWizard = null;
       if (id === 'importModeModal') { pendingImport = null; importApplying = false; resetImportFileSelection(); }
+      if (id === 'backupModal') { if (backupModalOperation) backupModalOperation.cancelled = true; backupModalOperation = null; }
       const modal = document.getElementById(id);
       modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); modal.innerHTML = '';
       const index = modalOpenOrder.lastIndexOf(id); if (index >= 0) modalOpenOrder.splice(index, 1);
@@ -14453,33 +14457,165 @@
     function deleteActiveGrid() {
       del('grids', activeGridId, 'Delete this test grid?', 'Test grid');
     }
+    function backupOperationIsCurrent(operation) {
+      return backupModalOperation === operation && !operation.cancelled && document.getElementById('backupModal')?.classList.contains('open');
+    }
+    function backupModalStatus(form, message, bad = false) {
+      const status = form?.querySelector('[data-backup-status]');
+      if (!status) return;
+      status.textContent = message;
+      status.className = bad ? 'small softbad' : 'small muted';
+    }
+    function openBackupMessage(title, message) {
+      openModal('backupModal', `<div class="dialog"><div class="spread"><div><h2>${esc(title)}</h2></div><button type="button" data-close aria-label="Close backup message">&times;</button></div><div class="panel small" style="margin-top:12px">${esc(message)}</div><div class="actions" style="margin-top:14px"><button type="button" class="primary" data-close>Close</button></div></div>`);
+      bindModal('backupModal');
+    }
+    function encryptedBackupUnavailableMessage() {
+      return 'Password-encrypted backups are unavailable because this browser cannot complete the required native Web Crypto checks. No weaker fallback is available.';
+    }
+    async function createEncryptedBackupExport(passphrase) {
+      const backup = backupObject();
+      return encryptSyntheticEncryptedBackup(backup, passphrase);
+    }
+    async function decryptValidatedEncryptedBackup(envelope, passphrase) {
+      const envelopeValidation = validateEncryptedBackupEnvelopeV1(envelope);
+      if (!envelopeValidation.valid) return { ok:false, stage:'envelope', code:envelopeValidation.code };
+      const decrypted = await decryptSyntheticEncryptedBackup(envelope, passphrase);
+      if (!decrypted.ok) return { ok:false, stage:'decrypt', code:decrypted.code };
+      const backupValidation = validateBackupImport(decrypted.backup);
+      if (!backupValidation.accepted) return { ok:false, stage:'backup', code:'invalid-plaintext-backup', validation:backupValidation };
+      return { ok:true, data:decrypted.backup, validation:backupValidation };
+    }
+    function downloadBackupJson(filename, text) {
+      backupDownloadText(filename, text, 'application/json');
+    }
+    function openBackupChoiceDialog() {
+      openModal('backupModal', `<div class="dialog"><div class="spread"><div><h2>Export backup</h2><div class="small muted">Choose a protected backup for private records, or a readable compatibility copy.</div></div><button type="button" data-close aria-label="Cancel export">&times;</button></div><div class="panel" style="margin-top:12px"><b>Password-encrypted backup</b><div class="small muted" style="margin-top:5px">Recommended. Your passphrase is used only to create this file and is never saved by the Tracker.</div><div class="actions" style="margin-top:10px"><button type="button" class="primary" data-encrypted-backup-export>Create password-encrypted backup</button></div></div><div class="panel" style="margin-top:10px"><b>Plain JSON backup (readable)</b><div class="small muted" style="margin-top:5px">For compatibility and recovery. It contains readable Tracker records, including workshop, project, pricing, inventory, and evidence data.</div><div class="actions" style="margin-top:10px"><button type="button" data-plain-backup-export>Create readable JSON backup</button></div></div></div>`);
+      const modal = document.getElementById('backupModal');
+      modal.querySelector('[data-encrypted-backup-export]').onclick = () => { void openEncryptedBackupExportDialog(); };
+      modal.querySelector('[data-plain-backup-export]').onclick = () => openPlainBackupWarning();
+      bindModal('backupModal');
+    }
+    async function openEncryptedBackupExportDialog(probe = probeEncryptedBackupCryptoCapability) {
+      const operation = { kind:'encrypted-export-preflight', cancelled:false };
+      backupModalOperation = operation;
+      const button = document.querySelector('#backupModal [data-encrypted-backup-export]');
+      if (button) { button.disabled = true; button.textContent = 'Checking encrypted backup support…'; }
+      const capability = await probe();
+      if (!backupOperationIsCurrent(operation)) return false;
+      backupModalOperation = null;
+      if (!capability.available) { openBackupMessage('Encrypted backup unavailable', encryptedBackupUnavailableMessage()); return false; }
+      openModal('backupModal', `<div class="dialog"><div class="spread"><div><h2>Password-encrypted backup</h2><div class="small muted">The passphrase is not saved. There is no recovery if it is forgotten.</div></div><button type="button" data-close aria-label="Cancel encrypted export">&times;</button></div><form id="encryptedBackupExportForm" style="margin-top:12px"><label>Passphrase<input name="passphrase" type="password" autocomplete="new-password" required></label><label>Confirm passphrase<input name="passphraseConfirm" type="password" autocomplete="new-password" required></label><div class="small muted" data-backup-status aria-live="polite" style="margin-top:10px">A protected backup file will be created; Tracker browser data stays in its current plaintext storage.</div><div class="actions" style="margin-top:14px"><button type="button" data-close>Cancel</button><button type="submit" class="primary">Create encrypted backup</button></div></form></div>`);
+      const form = document.getElementById('encryptedBackupExportForm');
+      form.onsubmit = event => { event.preventDefault(); void startEncryptedBackupExport(form); };
+      bindModal('backupModal');
+      return true;
+    }
+    function startEncryptedBackupExport(form) {
+      if (backupModalOperation?.kind === 'encrypted-export') return Promise.resolve(false);
+      let passphrase = String(form.elements.passphrase?.value ?? '');
+      let confirmation = String(form.elements.passphraseConfirm?.value ?? '');
+      if (passphrase === '') { backupModalStatus(form, 'Enter a passphrase to protect this backup.', true); return Promise.resolve(false); }
+      if (passphrase !== confirmation) { backupModalStatus(form, 'The passphrase confirmation does not match.', true); return Promise.resolve(false); }
+      const operation = { kind:'encrypted-export', cancelled:false };
+      backupModalOperation = operation;
+      form.querySelector('[type="submit"]').disabled = true;
+      backupModalStatus(form, 'Creating encrypted backup…');
+      operation.completion = (async () => {
+        const encrypted = await createEncryptedBackupExport(passphrase);
+        passphrase = ''; confirmation = '';
+        form.elements.passphrase.value = ''; form.elements.passphraseConfirm.value = '';
+        if (!backupOperationIsCurrent(operation)) return false;
+        if (!encrypted.ok) { form.querySelector('[type="submit"]').disabled = false; backupModalStatus(form, 'The encrypted backup could not be created. Check browser support and try again.', true); return false; }
+        downloadBackupJson(`l8-tracker-backup-encrypted-${today()}.json`, JSON.stringify(encrypted.envelope, null, 2));
+        closeModal('backupModal');
+        showInfoToast('Password-encrypted backup created.');
+        return true;
+      })().catch(error => {
+        passphrase = ''; confirmation = '';
+        form.elements.passphrase.value = ''; form.elements.passphraseConfirm.value = '';
+        if (backupOperationIsCurrent(operation)) { form.querySelector('[type="submit"]').disabled = false; backupModalStatus(form, 'The encrypted backup could not be created. Check browser support and try again.', true); }
+        return false;
+      });
+      return operation.completion;
+    }
+    function openPlainBackupWarning() {
+      const backupJson = JSON.stringify(backupObject(), null, 2), photos = projectPhotoCount();
+      const photoWarning = photos ? ` This file is about ${formatBytes(new Blob([backupJson]).size)} and includes ${photos} embedded project photo(s).` : '';
+      let downloading = false;
+      openModal('backupModal', `<div class="dialog"><div class="spread"><div><h2>Create readable JSON backup?</h2></div><button type="button" data-close aria-label="Cancel readable export">&times;</button></div><div class="panel softbad" style="margin-top:12px"><b>This backup is readable.</b><div class="small" style="margin-top:5px">It will contain readable Tracker records, including workshop, project, pricing, inventory, and evidence data.${esc(photoWarning)}</div></div><div class="actions" style="margin-top:14px"><button type="button" data-close>Cancel</button><button type="button" class="primary" data-confirm-plain-backup>Create readable JSON backup</button></div></div>`);
+      const modal = document.getElementById('backupModal');
+      modal.querySelector('[data-confirm-plain-backup]').onclick = event => { if (downloading) return; downloading = true; event.currentTarget.disabled = true; downloadBackupJson(`l8-tracker-backup-${today()}.json`, backupJson); closeModal('backupModal'); showInfoToast('Readable JSON backup created.'); };
+      bindModal('backupModal');
+    }
+    async function openEncryptedBackupImportDialog(envelope, probe = probeEncryptedBackupCryptoCapability) {
+      const structural = validateEncryptedBackupEnvelopeV1(envelope);
+      if (!structural.valid) { openBackupMessage('Encrypted backup rejected', 'This password-encrypted backup is incomplete, damaged, or unsupported. No data was imported.'); return false; }
+      const operation = { kind:'encrypted-import-preflight', cancelled:false };
+      backupModalOperation = operation;
+      openModal('backupModal', `<div class="dialog"><div class="spread"><div><h2>Open password-encrypted backup</h2></div><button type="button" data-close aria-label="Cancel encrypted import">&times;</button></div><div class="small muted" data-backup-status aria-live="polite" style="margin-top:12px">Checking encrypted backup support…</div></div>`);
+      bindModal('backupModal');
+      const capability = await probe();
+      if (!backupOperationIsCurrent(operation)) return false;
+      backupModalOperation = null;
+      if (!capability.available) { openBackupMessage('Encrypted backup unavailable', encryptedBackupUnavailableMessage()); return false; }
+      openModal('backupModal', `<div class="dialog"><div class="spread"><div><h2>Open password-encrypted backup</h2><div class="small muted">Enter the passphrase used when this backup was created. It is not saved.</div></div><button type="button" data-close aria-label="Cancel encrypted import">&times;</button></div><form id="encryptedBackupImportForm" style="margin-top:12px"><label>Passphrase<input name="passphrase" type="password" autocomplete="current-password" required></label><div class="small muted" data-backup-status aria-live="polite" style="margin-top:10px"></div><div class="actions" style="margin-top:14px"><button type="button" data-close>Cancel</button><button type="submit" class="primary">Open backup</button></div></form></div>`);
+      const form = document.getElementById('encryptedBackupImportForm');
+      form.onsubmit = event => { event.preventDefault(); void startEncryptedBackupImport(envelope, form); };
+      bindModal('backupModal');
+      return true;
+    }
+    function startEncryptedBackupImport(envelope, form) {
+      if (backupModalOperation?.kind === 'encrypted-import') return Promise.resolve(false);
+      let passphrase = String(form.elements.passphrase?.value ?? '');
+      if (passphrase === '') { backupModalStatus(form, 'Enter the passphrase for this backup.', true); return Promise.resolve(false); }
+      const operation = { kind:'encrypted-import', cancelled:false };
+      backupModalOperation = operation;
+      form.querySelector('[type="submit"]').disabled = true;
+      backupModalStatus(form, 'Opening encrypted backup…');
+      operation.completion = (async () => {
+        const opened = await decryptValidatedEncryptedBackup(envelope, passphrase);
+        passphrase = ''; form.elements.passphrase.value = '';
+        if (!backupOperationIsCurrent(operation)) return false;
+        if (!opened.ok) { form.querySelector('[type="submit"]').disabled = false; backupModalStatus(form, opened.stage === 'backup' ? 'This decrypted file is not a supported Tracker backup.' : 'Could not open this backup. Check the passphrase or file.', true); return false; }
+        closeModal('backupModal');
+        openImportModeDialog(opened.data, opened.validation);
+        return true;
+      })().catch(error => {
+        passphrase = ''; form.elements.passphrase.value = '';
+        if (backupOperationIsCurrent(operation)) { form.querySelector('[type="submit"]').disabled = false; backupModalStatus(form, 'Could not open this backup. Check the passphrase or file.', true); }
+        return false;
+      });
+      return operation.completion;
+    }
+    function routeBackupImportData(data) {
+      if (isEncryptedBackupEnvelope(data)) {
+        const structural = validateEncryptedBackupEnvelopeV1(data);
+        if (!structural.valid) { openBackupMessage('Encrypted backup rejected', 'This password-encrypted backup is incomplete, damaged, or unsupported. No data was imported.'); return false; }
+        void openEncryptedBackupImportDialog(data);
+        return true;
+      }
+      const validation = validateBackupImport(data);
+      if (!validation.accepted) { openBackupMessage('Backup rejected', validation.message); return false; }
+      return openImportModeDialog(data, validation);
+    }
+    function handleBackupImportText(text) {
+      const decoded = decodeStoredState(text);
+      if (decoded.status !== 'ok') { openBackupMessage('Could not read backup', 'Make sure the selected file is valid backup JSON.'); return false; }
+      return routeBackupImportData(decoded.data);
+    }
     document.getElementById('unitIn').onclick = () => setUnit('in');
     document.getElementById('unitMm').onclick = () => setUnit('mm');
     document.getElementById('helpBtn').onclick = () => openHelp();
-    document.getElementById('exportBtn').onclick = () => {
-      const backupJson = JSON.stringify(backupObject(), null, 2);
-      const blob = new Blob([backupJson], { type: 'application/json' });
-      const photos = projectPhotoCount();
-      if (photos && !confirm(`This JSON backup is about ${formatBytes(blob.size)} and includes ${photos} embedded project photo(s). Photos can make backups and browser storage large. Continue export?`)) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `l8-tracker-backup-${today()}.json`; a.click();
-      URL.revokeObjectURL(url);
-    };
+    document.getElementById('exportBtn').onclick = () => openBackupChoiceDialog();
     document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
     document.getElementById('importFile').onchange = e => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = () => {
-        try {
-          const decoded = decodeStoredState(reader.result);
-          if (decoded.status !== 'ok') throw new Error('Invalid backup JSON.');
-          const data = decoded.data;
-          const validation = validateBackupImport(data);
-          if (!validation.accepted) { alert(validation.message); return; }
-          openImportModeDialog(data, validation);
-        } catch (_) { alert('Could not read that file. Make sure it is a valid backup JSON.'); }
+        try { handleBackupImportText(String(reader.result ?? '')); }
+        catch (_) { openBackupMessage('Could not read backup', 'Make sure the selected file is valid backup JSON.'); }
       };
       reader.readAsText(file); e.target.value = '';
     };
@@ -14673,6 +14809,75 @@
       return {passed,failed,results};
     }
     window.runSecurityS1CryptoFixtures=runSecurityS1CryptoFixtures;
+    async function runSecurityS2EncryptedBackupFixtures() {
+      window.securityS2EncryptedBackupFixtureRunCount=(window.securityS2EncryptedBackupFixtureRunCount||0)+1;
+      const results=[];
+      const add=(name,pass,expected='',actual='')=>results.push({name:`Security S2 encrypted backup - ${name}`,pass:!!pass,expected,actual});
+      const stateBefore=JSON.stringify(state),storageBefore=localStorage.getItem(STORAGE_KEY),backupBefore=JSON.stringify(backupObject()),pendingBefore=pendingImport,applyingBefore=importApplying,operationBefore=backupModalOperation,downloadBefore=backupDownloadText,originsBefore=[...modalFocusOrigins.entries()],orderBefore=[...modalOpenOrder],focusBefore=document.activeElement;
+      const modalIds=['backupModal','importModeModal'], modalBefore=Object.fromEntries(modalIds.map(id=>{const modal=document.getElementById(id);return [id,{html:modal.innerHTML,open:modal.classList.contains('open'),aria:modal.getAttribute('aria-hidden')}]}));
+      const downloads=[];
+      try {
+        backupDownloadText=(filename,text,type)=>downloads.push({filename,text,type});
+        const capability=await probeEncryptedBackupCryptoCapability();
+        add('native encrypted-backup capability probe is available before password work',capability.available,true,capability.reason);
+        openBackupChoiceDialog();
+        add('Export opens a choice with encrypted primary and readable plain secondary controls',document.querySelector('#backupModal [data-encrypted-backup-export].primary')&&document.querySelector('#backupModal [data-plain-backup-export]')&&!backupModalOperation,true,'');
+        await openEncryptedBackupExportDialog(async()=>({available:false}));
+        add('unavailable native crypto blocks encrypted export without a weak fallback',/No weaker fallback/i.test(document.getElementById('backupModal').textContent)&&downloads.length===0,true,document.getElementById('backupModal').textContent);
+        openBackupChoiceDialog();
+        document.querySelector('#backupModal [data-plain-backup-export]').click();
+        const readableWarning=document.getElementById('backupModal').textContent;
+        add('plain export requires a readable-data warning confirmation',/This backup is readable/i.test(readableWarning)&&/pricing, inventory, and evidence/i.test(readableWarning),true,readableWarning);
+        document.querySelector('#backupModal [data-confirm-plain-backup]').click();
+        const plain=downloads.at(-1), liveBackupJson=JSON.stringify(backupObject(),null,2);
+        add('plain export preserves the existing filename, MIME type, and exact pretty JSON serialization',plain?.filename===`l8-tracker-backup-${today()}.json`&&plain?.type==='application/json'&&plain?.text===liveBackupJson,true,plain);
+        openBackupChoiceDialog();
+        await openEncryptedBackupExportDialog();
+        const exportForm=document.getElementById('encryptedBackupExportForm');
+        add('encrypted export form uses password and exact confirmation fields without persistence controls',!!exportForm&&exportForm.elements.passphrase.type==='password'&&exportForm.elements.passphraseConfirm.type==='password'&&!/remember|save passphrase/i.test(exportForm.textContent),true,exportForm?.textContent);
+        const blankExport=await startEncryptedBackupExport(exportForm);
+        add('empty encrypted-export passphrase is rejected by the S2 UI without trimming or replacement',blankExport===false&&/Enter a passphrase/i.test(exportForm.textContent),true,exportForm.textContent);
+        exportForm.elements.passphrase.value='  S2 exact \u00e9  '; exportForm.elements.passphraseConfirm.value='  S2 exact \u00e9  ';
+        exportForm.requestSubmit(); const encryptedExport=await backupModalOperation.completion, encryptedDownload=downloads.at(-1), envelope=encryptedDownload?JSON.parse(encryptedDownload.text):null;
+        add('encrypted export uses the frozen S1 envelope and encrypted filename',encryptedExport&&encryptedDownload?.filename===`l8-tracker-backup-encrypted-${today()}.json`&&encryptedDownload?.type==='application/json'&&validateEncryptedBackupEnvelopeV1(envelope).valid,true,encryptedDownload?.filename);
+        add('encrypted export file does not expose the exact passphrase or plaintext backup serialization',!!encryptedDownload&&!encryptedDownload.text.includes('  S2 exact \u00e9  ')&&!encryptedDownload.text.includes(liveBackupJson),true,'');
+        const opened=await decryptValidatedEncryptedBackup(envelope,'  S2 exact \u00e9  '), wrong=await decryptValidatedEncryptedBackup(envelope,'S2 exact \u00e9');
+        add('encrypted import decrypts through S1 then reuses existing plaintext backup validation',opened.ok&&opened.validation.accepted&&JSON.stringify(opened.data,null,2)===liveBackupJson,true,opened.code);
+        add('whitespace in passphrases remains exact and wrong passphrases do not open import mode',!wrong.ok&&wrong.stage==='decrypt'&&pendingImport===null,true,wrong.code);
+        const malformed={backupFormat:ENCRYPTED_BACKUP_FORMAT};
+        routeBackupImportData(malformed);
+        add('malformed exact encrypted marker is rejected before plaintext fallback or password work',document.getElementById('backupModal').textContent.includes('Encrypted backup rejected')&&pendingImport===null,true,document.getElementById('backupModal').textContent);
+        closeModal('backupModal');
+        await openEncryptedBackupImportDialog(envelope);
+        const importForm=document.getElementById('encryptedBackupImportForm');
+        add('valid encrypted file reaches a passphrase dialog before existing Merge or Replace choices',!!importForm&&!document.getElementById('importModeModal').classList.contains('open'),true,'');
+        const blankImport=await startEncryptedBackupImport(envelope,importForm);
+        add('empty encrypted-import passphrase is rejected before decryption',blankImport===false&&/Enter the passphrase/i.test(importForm.textContent),true,importForm.textContent);
+        importForm.elements.passphrase.value='  S2 exact \u00e9  ';
+        importForm.requestSubmit(); const encryptedImport=await backupModalOperation.completion;
+        add('valid encrypted import opens the unchanged Merge or Replace dialog without mutation',encryptedImport&&document.getElementById('importModeModal').classList.contains('open')&&pendingImport?.data&&JSON.stringify(state)===stateBefore&&localStorage.getItem(STORAGE_KEY)===storageBefore,true,'');
+        closeModal('importModeModal');
+        openBackupChoiceDialog();
+        await openEncryptedBackupExportDialog();
+        const cancelForm=document.getElementById('encryptedBackupExportForm');
+        cancelForm.elements.passphrase.value='cancelled export'; cancelForm.elements.passphraseConfirm.value='cancelled export';
+        cancelForm.requestSubmit(); const cancelled=backupModalOperation.completion, duplicate=await startEncryptedBackupExport(cancelForm), downloadCountBeforeCancel=downloads.length; closeModal('backupModal'); await cancelled;
+        add('duplicate or cancelled encrypted export work cannot create an extra download',duplicate===false&&downloads.length===downloadCountBeforeCancel&&backupModalOperation===null,true,'');
+        add('S2 fixture keeps state, localStorage, and backup serialization unchanged before explicit import application',JSON.stringify(state)===stateBefore&&localStorage.getItem(STORAGE_KEY)===storageBefore&&JSON.stringify(backupObject())===backupBefore,true,'');
+      } catch (error) {
+        add('fixture completed without unexpected exception',false,'no exception',error?.message||String(error));
+      } finally {
+        backupDownloadText=downloadBefore; backupModalOperation=operationBefore; pendingImport=pendingBefore; importApplying=applyingBefore;
+        Object.assign(state,JSON.parse(stateBefore)); if(storageBefore===null)localStorage.removeItem(STORAGE_KEY);else localStorage.setItem(STORAGE_KEY,storageBefore);
+        modalFocusOrigins.clear(); originsBefore.forEach(([id,origin])=>modalFocusOrigins.set(id,origin)); modalOpenOrder.splice(0,modalOpenOrder.length,...orderBefore);
+        modalIds.forEach(id=>{const modal=document.getElementById(id),snapshot=modalBefore[id];modal.innerHTML=snapshot.html;modal.classList.toggle('open',snapshot.open);if(snapshot.aria===null)modal.removeAttribute('aria-hidden');else modal.setAttribute('aria-hidden',snapshot.aria);});
+        render(); if(focusBefore?.isConnected) try { focusBefore.focus({preventScroll:true}); } catch (_) { focusBefore.focus(); }
+      }
+      const passed=results.filter(item=>item.pass).length,failed=results.length-passed;
+      console.group('Security S2 encrypted backup fixtures');console.table(results);console.log(`${passed} passed`);console.log(`${failed} failed`);console.groupEnd();
+      return {passed,failed,results};
+    }
+    window.runSecurityS2EncryptedBackupFixtures=runSecurityS2EncryptedBackupFixtures;
     async function runRequestedSelftests(selftest) {
       let failed=0;
       const collect=result=>{if(!result||!Number.isFinite(result.passed)||!Number.isFinite(result.failed))throw new Error('Self-test group did not return fixture totals.');failed+=result.failed;return result;};
@@ -14732,6 +14937,20 @@
         const securityResult={passed:0,failed:1,results:[{name:'Security S1 crypto - unexpected fixture rejection',pass:false,expected:'resolved fixture result',actual:error?.message||String(error)}]};
         console.error('Security S1 Crypto fixture rejected.',error);
         window.securityS1CryptoFixturePromise=Promise.resolve(securityResult);
+        collect(securityResult);
+      }
+    }
+    if (selftest === 'security-s2-encrypted-backup' || selftest === 'all') {
+      try {
+        window.securityS2EncryptedBackupFixturePromise=runSecurityS2EncryptedBackupFixtures();
+        const securityResult=await window.securityS2EncryptedBackupFixturePromise;
+        window.securityS2EncryptedBackupFixturePromise=Promise.resolve(securityResult);
+        collect(securityResult);
+        if (securityResult.failed) console.error('Security S2 Encrypted Backup fixture failed.',securityResult);
+      } catch (error) {
+        const securityResult={passed:0,failed:1,results:[{name:'Security S2 encrypted backup - unexpected fixture rejection',pass:false,expected:'resolved fixture result',actual:error?.message||String(error)}]};
+        console.error('Security S2 Encrypted Backup fixture rejected.',error);
+        window.securityS2EncryptedBackupFixturePromise=Promise.resolve(securityResult);
         collect(securityResult);
       }
     }
