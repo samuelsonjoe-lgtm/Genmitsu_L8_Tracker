@@ -330,6 +330,172 @@
     const APP_VERSION = '0.9.0';
     const BUILD_DATE = '2026-07-19';
     const BACKUP_FORMAT = 'genmitsu-l8-tracker-backup-v1';
+    const ENCRYPTED_BACKUP_FORMAT = 'genmitsu-l8-tracker-encrypted-backup-v1';
+    const ENCRYPTED_BACKUP_ENVELOPE_VERSION = 1;
+    const ENCRYPTED_BACKUP_KDF = 'PBKDF2-SHA256';
+    const ENCRYPTED_BACKUP_CIPHER = 'AES-256-GCM';
+    const ENCRYPTED_BACKUP_KDF_ITERATIONS = 600000;
+    const ENCRYPTED_BACKUP_KDF_ITERATIONS_MAX = 2000000;
+    const ENCRYPTED_BACKUP_SALT_BYTES = 16;
+    const ENCRYPTED_BACKUP_IV_BYTES = 12;
+    const ENCRYPTED_BACKUP_TAG_BITS = 128;
+    const ENCRYPTED_BACKUP_AAD_FIELDS = Object.freeze(['app','appVersion','backupFormat','envelopeVersion','createdAt','crypto.kdf','crypto.kdfIterations','crypto.cipher','crypto.saltB64','crypto.ivB64','innerSchemaVersion','plaintextBackupFormat']);
+
+    function encryptedBackupIsPlainObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    }
+    function encryptedBackupHasExactKeys(value, keys) {
+      if (!encryptedBackupIsPlainObject(value)) return false;
+      const actual = Object.keys(value).sort();
+      const expected = [...keys].sort();
+      return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+    }
+    function encryptedBackupCryptoApi(dependencies={}) {
+      return Object.prototype.hasOwnProperty.call(dependencies, 'cryptoApi') ? dependencies.cryptoApi : globalThis.crypto;
+    }
+    function encryptedBackupCryptoSupport(dependencies={}) {
+      const cryptoApi = encryptedBackupCryptoApi(dependencies);
+      const subtle = cryptoApi && cryptoApi.subtle;
+      const features = {
+        getRandomValues: !!(cryptoApi && typeof cryptoApi.getRandomValues === 'function'),
+        importKey: !!(subtle && typeof subtle.importKey === 'function'),
+        deriveKey: !!(subtle && typeof subtle.deriveKey === 'function'),
+        encrypt: !!(subtle && typeof subtle.encrypt === 'function'),
+        decrypt: !!(subtle && typeof subtle.decrypt === 'function')
+      };
+      return {available:Object.values(features).every(Boolean),cryptoApi,subtle,features};
+    }
+    function encryptedBackupUtf8Encode(value) {
+      if (typeof value !== 'string' || typeof TextEncoder !== 'function') throw new Error('UTF-8 encoding is unavailable.');
+      return new TextEncoder().encode(value);
+    }
+    function encryptedBackupUtf8Decode(bytes) {
+      if (!(bytes instanceof Uint8Array) || typeof TextDecoder !== 'function') throw new Error('UTF-8 decoding is unavailable.');
+      return new TextDecoder('utf-8',{fatal:true}).decode(bytes);
+    }
+    function encryptedBackupBytesToBase64(bytes) {
+      if (!(bytes instanceof Uint8Array) || typeof btoa !== 'function') throw new Error('Base64 encoding is unavailable.');
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let offset=0;offset<bytes.length;offset+=chunkSize) {
+        const end = Math.min(offset+chunkSize,bytes.length);
+        let chunk = '';
+        for (let index=offset;index<end;index++) chunk += String.fromCharCode(bytes[index]);
+        binary += chunk;
+      }
+      return btoa(binary);
+    }
+    function encryptedBackupBase64ToBytes(value) {
+      if (typeof value !== 'string' || !value || value.length % 4 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value) || typeof atob !== 'function') throw new Error('Invalid Base64.');
+      let binary;
+      try { binary = atob(value); } catch { throw new Error('Invalid Base64.'); }
+      const bytes = new Uint8Array(binary.length);
+      for (let index=0;index<binary.length;index++) bytes[index] = binary.charCodeAt(index);
+      if (encryptedBackupBytesToBase64(bytes) !== value) throw new Error('Non-canonical Base64.');
+      return bytes;
+    }
+    function encryptedBackupCanonicalHeader(envelope) {
+      return JSON.stringify(ENCRYPTED_BACKUP_AAD_FIELDS.map(path => {
+        const value = path.startsWith('crypto.') ? envelope.crypto[path.slice(7)] : envelope[path];
+        return [path,value];
+      }));
+    }
+    function isEncryptedBackupEnvelope(value) {
+      return encryptedBackupIsPlainObject(value) && Object.prototype.hasOwnProperty.call(value,'backupFormat') && value.backupFormat === ENCRYPTED_BACKUP_FORMAT;
+    }
+    function validateEncryptedBackupEnvelopeV1(envelope) {
+      const invalid = code => ({valid:false,code});
+      if (!isEncryptedBackupEnvelope(envelope)) return invalid('not-encrypted-envelope');
+      if (!encryptedBackupHasExactKeys(envelope,['app','appVersion','backupFormat','envelopeVersion','createdAt','crypto','ciphertextB64','innerSchemaVersion','plaintextBackupFormat'])) return invalid('ambiguous-envelope');
+      if (!encryptedBackupHasExactKeys(envelope.crypto,['kdf','kdfIterations','cipher','saltB64','ivB64'])) return invalid('ambiguous-crypto');
+      if (envelope.app !== APP_ID) return invalid('foreign-app');
+      if (typeof envelope.appVersion !== 'string' || !envelope.appVersion) return invalid('invalid-app-version');
+      if (envelope.backupFormat !== ENCRYPTED_BACKUP_FORMAT) return invalid('invalid-format');
+      if (envelope.envelopeVersion !== ENCRYPTED_BACKUP_ENVELOPE_VERSION) return invalid('unsupported-envelope-version');
+      if (typeof envelope.createdAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(envelope.createdAt) || Number.isNaN(Date.parse(envelope.createdAt))) return invalid('invalid-created-at');
+      if (envelope.crypto.kdf !== ENCRYPTED_BACKUP_KDF) return invalid('invalid-kdf');
+      if (envelope.crypto.cipher !== ENCRYPTED_BACKUP_CIPHER) return invalid('invalid-cipher');
+      if (!Number.isSafeInteger(envelope.crypto.kdfIterations) || envelope.crypto.kdfIterations < ENCRYPTED_BACKUP_KDF_ITERATIONS || envelope.crypto.kdfIterations > ENCRYPTED_BACKUP_KDF_ITERATIONS_MAX) return invalid('invalid-kdf-iterations');
+      if (!Number.isSafeInteger(envelope.innerSchemaVersion) || envelope.innerSchemaVersion < 1 || envelope.innerSchemaVersion > SCHEMA_VERSION) return invalid('invalid-inner-schema');
+      if (envelope.plaintextBackupFormat !== BACKUP_FORMAT) return invalid('invalid-plaintext-format');
+      let salt,iv,ciphertext;
+      try {
+        salt = encryptedBackupBase64ToBytes(envelope.crypto.saltB64);
+        iv = encryptedBackupBase64ToBytes(envelope.crypto.ivB64);
+        ciphertext = encryptedBackupBase64ToBytes(envelope.ciphertextB64);
+      } catch { return invalid('invalid-base64'); }
+      if (salt.length !== ENCRYPTED_BACKUP_SALT_BYTES) return invalid('invalid-salt-length');
+      if (iv.length !== ENCRYPTED_BACKUP_IV_BYTES) return invalid('invalid-iv-length');
+      if (ciphertext.length <= ENCRYPTED_BACKUP_TAG_BITS / 8) return invalid('invalid-ciphertext');
+      return {valid:true,salt,iv,ciphertext};
+    }
+    function encryptedBackupSyntheticPlaintextIsValid(backup) {
+      return encryptedBackupIsPlainObject(backup) && backup.app === APP_ID && backup.backupFormat === BACKUP_FORMAT && Number.isSafeInteger(backup.schemaVersion) && backup.schemaVersion >= 1 && backup.schemaVersion <= SCHEMA_VERSION;
+    }
+    async function deriveEncryptedBackupKey(passphrase,salt,iterations,dependencies={}) {
+      if (typeof passphrase !== 'string') return {ok:false,code:'invalid-passphrase'};
+      if (!(salt instanceof Uint8Array) || salt.length !== ENCRYPTED_BACKUP_SALT_BYTES) return {ok:false,code:'invalid-salt'};
+      if (!Number.isSafeInteger(iterations) || iterations < ENCRYPTED_BACKUP_KDF_ITERATIONS || iterations > ENCRYPTED_BACKUP_KDF_ITERATIONS_MAX) return {ok:false,code:'invalid-kdf-iterations'};
+      const support = encryptedBackupCryptoSupport(dependencies);
+      if (!support.available) return {ok:false,available:false,code:'web-crypto-unavailable',features:support.features};
+      try {
+        const material = await support.subtle.importKey('raw',encryptedBackupUtf8Encode(passphrase),'PBKDF2',false,['deriveKey']);
+        const key = await support.subtle.deriveKey({name:'PBKDF2',hash:'SHA-256',salt,iterations},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+        return {ok:true,key};
+      } catch (error) { return {ok:false,code:'key-derivation-failed',error}; }
+    }
+    async function probeEncryptedBackupCryptoCapability(dependencies={}) {
+      const support = encryptedBackupCryptoSupport(dependencies);
+      if (!support.available) return {available:false,reason:'web-crypto-unavailable',features:support.features};
+      try {
+        const startedAt = performance.now();
+        const salt = new Uint8Array(ENCRYPTED_BACKUP_SALT_BYTES);
+        const iv = new Uint8Array(ENCRYPTED_BACKUP_IV_BYTES);
+        support.cryptoApi.getRandomValues(salt);
+        support.cryptoApi.getRandomValues(iv);
+        const derived = await deriveEncryptedBackupKey('capability-probe',salt,ENCRYPTED_BACKUP_KDF_ITERATIONS,dependencies);
+        if (!derived.ok) return {available:false,reason:derived.code,features:support.features};
+        const aad = encryptedBackupUtf8Encode('genmitsu-l8-tracker-s1-capability-probe');
+        const plaintext = encryptedBackupUtf8Encode('probe');
+        const ciphertext = await support.subtle.encrypt({name:'AES-GCM',iv,additionalData:aad,tagLength:ENCRYPTED_BACKUP_TAG_BITS},derived.key,plaintext);
+        const decrypted = await support.subtle.decrypt({name:'AES-GCM',iv,additionalData:aad,tagLength:ENCRYPTED_BACKUP_TAG_BITS},derived.key,ciphertext);
+        if (encryptedBackupUtf8Decode(new Uint8Array(decrypted)) !== 'probe') throw new Error('Probe round trip failed.');
+        return {available:true,features:support.features,pbkdf2AndAesRoundTripMs:performance.now()-startedAt};
+      } catch (error) { return {available:false,reason:'web-crypto-operation-failed',features:support.features,error}; }
+    }
+    async function encryptSyntheticEncryptedBackup(backup,passphrase,options={},dependencies={}) {
+      if (!encryptedBackupSyntheticPlaintextIsValid(backup)) return {ok:false,code:'invalid-plaintext-backup'};
+      if (typeof passphrase !== 'string') return {ok:false,code:'invalid-passphrase'};
+      const support = encryptedBackupCryptoSupport(dependencies);
+      if (!support.available) return {ok:false,available:false,code:'web-crypto-unavailable',features:support.features};
+      const salt = new Uint8Array(ENCRYPTED_BACKUP_SALT_BYTES);
+      const iv = new Uint8Array(ENCRYPTED_BACKUP_IV_BYTES);
+      support.cryptoApi.getRandomValues(salt);
+      support.cryptoApi.getRandomValues(iv);
+      const envelope = {app:APP_ID,appVersion:APP_VERSION,backupFormat:ENCRYPTED_BACKUP_FORMAT,envelopeVersion:ENCRYPTED_BACKUP_ENVELOPE_VERSION,createdAt:options.createdAt || new Date().toISOString(),crypto:{kdf:ENCRYPTED_BACKUP_KDF,kdfIterations:options.kdfIterations === undefined ? ENCRYPTED_BACKUP_KDF_ITERATIONS : options.kdfIterations,cipher:ENCRYPTED_BACKUP_CIPHER,saltB64:encryptedBackupBytesToBase64(salt),ivB64:encryptedBackupBytesToBase64(iv)},ciphertextB64:'',innerSchemaVersion:backup.schemaVersion,plaintextBackupFormat:BACKUP_FORMAT};
+      const validation = validateEncryptedBackupEnvelopeV1({...envelope,ciphertextB64:encryptedBackupBytesToBase64(new Uint8Array(ENCRYPTED_BACKUP_TAG_BITS / 8 + 1))});
+      if (!validation.valid) return {ok:false,code:validation.code};
+      const derived = await deriveEncryptedBackupKey(passphrase,salt,envelope.crypto.kdfIterations,dependencies);
+      if (!derived.ok) return derived;
+      try {
+        const ciphertext = await support.subtle.encrypt({name:'AES-GCM',iv,additionalData:encryptedBackupUtf8Encode(encryptedBackupCanonicalHeader(envelope)),tagLength:ENCRYPTED_BACKUP_TAG_BITS},derived.key,encryptedBackupUtf8Encode(JSON.stringify(backup)));
+        envelope.ciphertextB64 = encryptedBackupBytesToBase64(new Uint8Array(ciphertext));
+        return {ok:true,envelope};
+      } catch (error) { return {ok:false,code:'encryption-failed',error}; }
+    }
+    async function decryptSyntheticEncryptedBackup(envelope,passphrase,dependencies={}) {
+      const validation = validateEncryptedBackupEnvelopeV1(envelope);
+      if (!validation.valid) return {ok:false,code:validation.code};
+      const derived = await deriveEncryptedBackupKey(passphrase,validation.salt,envelope.crypto.kdfIterations,dependencies);
+      if (!derived.ok) return derived;
+      const support = encryptedBackupCryptoSupport(dependencies);
+      try {
+        const plaintextBytes = await support.subtle.decrypt({name:'AES-GCM',iv:validation.iv,additionalData:encryptedBackupUtf8Encode(encryptedBackupCanonicalHeader(envelope)),tagLength:ENCRYPTED_BACKUP_TAG_BITS},derived.key,validation.ciphertext);
+        const plaintext = JSON.parse(encryptedBackupUtf8Decode(new Uint8Array(plaintextBytes)));
+        if (!encryptedBackupSyntheticPlaintextIsValid(plaintext) || plaintext.schemaVersion !== envelope.innerSchemaVersion) return {ok:false,code:'invalid-decrypted-backup'};
+        return {ok:true,backup:plaintext};
+      } catch (error) { return {ok:false,code:'authentication-failed',error}; }
+    }
     const tabs = [
       ['log', 'Log'],
       ['library', 'Library'],
@@ -14451,53 +14617,133 @@
       const passed=results.filter(item=>item.pass).length,failed=results.length-passed;console.group('Tabletop T3B complete-tray evidence fixtures');console.table(results);console.log(`${passed} passed`);console.log(`${failed} failed`);console.groupEnd();return {passed,failed,results};
     }
     window.runTabletopTrayResultFixtures=runTabletopTrayResultFixtures;
+    async function runSecurityS1CryptoFixtures() {
+      window.securityS1CryptoFixtureRunCount=(window.securityS1CryptoFixtureRunCount||0)+1;
+      const results=[];
+      const add=(name,pass,expected='',actual='')=>results.push({name:`Security S1 crypto - ${name}`,pass:!!pass,expected,actual});
+      const stateBefore=JSON.stringify(state),storageBefore=localStorage.getItem(STORAGE_KEY),exportHandlerBefore=document.getElementById('exportBtn').onclick,importHandlerBefore=document.getElementById('importFile').onchange;
+      const backup={app:APP_ID,appVersion:APP_VERSION,backupFormat:BACKUP_FORMAT,schemaVersion:SCHEMA_VERSION,entries:[{id:'s1-synthetic',notes:'Disposable Security S1 fixture payload.'}],profiles:[],grids:[],projects:[],inventory:{rawMaterials:[],finishedBatches:[]}};
+      const passphrase='  caf\u00e9 \ud83d\udd10  ',createdAt='2026-07-22T12:00:00.000Z';
+      try {
+        const capability=await probeEncryptedBackupCryptoCapability();
+        add('native Web Crypto capability probe executes PBKDF2 and AES-GCM operations',capability.available,true,capability);
+        const unavailable=await probeEncryptedBackupCryptoCapability({cryptoApi:{}});
+        add('injected unavailable capability branch is explicit',!unavailable.available&&unavailable.reason==='web-crypto-unavailable',false,unavailable);
+        const first=await encryptSyntheticEncryptedBackup(backup,passphrase,{createdAt});
+        const second=await encryptSyntheticEncryptedBackup(backup,passphrase,{createdAt});
+        add('synthetic plaintext encrypts into a valid v1 envelope',first.ok&&validateEncryptedBackupEnvelopeV1(first.envelope).valid,true,first.code);
+        const validation=first.ok?validateEncryptedBackupEnvelopeV1(first.envelope):{valid:false};
+        add('envelope uses the mandated algorithm policy and byte lengths',validation.valid&&first.envelope.backupFormat===ENCRYPTED_BACKUP_FORMAT&&first.envelope.envelopeVersion===1&&first.envelope.crypto.kdf==='PBKDF2-SHA256'&&first.envelope.crypto.kdfIterations===600000&&first.envelope.crypto.cipher==='AES-256-GCM'&&validation.salt.length===16&&validation.iv.length===12,true,first.envelope?.crypto);
+        add('identical plaintext and passphrase receive fresh salt, IV, and ciphertext',first.ok&&second.ok&&(first.envelope.crypto.saltB64!==second.envelope.crypto.saltB64)&&(first.envelope.crypto.ivB64!==second.envelope.crypto.ivB64)&&(first.envelope.ciphertextB64!==second.envelope.ciphertextB64),true,'');
+        const decrypted=first.ok?await decryptSyntheticEncryptedBackup(first.envelope,passphrase):{ok:false};
+        add('round trip restores the exact synthetic plaintext',decrypted.ok&&JSON.stringify(decrypted.backup)===JSON.stringify(backup),true,decrypted.code);
+        const derived=first.ok?await deriveEncryptedBackupKey(passphrase,validation.salt,600000):{ok:false};
+        let keyIsNonextractable=false;
+        if (derived.ok) { try { await globalThis.crypto.subtle.exportKey('raw',derived.key); } catch { keyIsNonextractable=true; } }
+        add('derived AES key is nonextractable',keyIsNonextractable,true,'');
+        const wrongPass=first.ok?await decryptSyntheticEncryptedBackup(first.envelope,'different passphrase'):{ok:false};
+        add('wrong passphrase is rejected by authenticated decryption',!wrongPass.ok&&wrongPass.code==='authentication-failed',true,wrongPass.code);
+        const tamperedCipher=first.ok?{...first.envelope,ciphertextB64:`${first.envelope.ciphertextB64[0]==='A'?'B':'A'}${first.envelope.ciphertextB64.slice(1)}`} : null;
+        const cipherResult=tamperedCipher?await decryptSyntheticEncryptedBackup(tamperedCipher,passphrase):{ok:false};
+        add('ciphertext tampering is rejected',!cipherResult.ok&&cipherResult.code==='authentication-failed',true,cipherResult.code);
+        const tamperedHeader=first.ok?{...first.envelope,appVersion:`${first.envelope.appVersion}-tampered`}:null;
+        const headerResult=tamperedHeader?await decryptSyntheticEncryptedBackup(tamperedHeader,passphrase):{ok:false};
+        add('canonical authenticated header rejects metadata tampering',!headerResult.ok&&headerResult.code==='authentication-failed',true,headerResult.code);
+        const inheritedFormat=Object.create({backupFormat:ENCRYPTED_BACKUP_FORMAT}),ownMarkerOnly={backupFormat:ENCRYPTED_BACKUP_FORMAT};
+        add('encrypted detection requires an exact own backupFormat marker',first.ok&&isEncryptedBackupEnvelope(first.envelope)&&isEncryptedBackupEnvelope(ownMarkerOnly)&&!validateEncryptedBackupEnvelopeV1(ownMarkerOnly).valid&&!isEncryptedBackupEnvelope(inheritedFormat)&&!isEncryptedBackupEnvelope({envelopeVersion:1})&&!isEncryptedBackupEnvelope({...first.envelope,backupFormat:BACKUP_FORMAT})&&!isEncryptedBackupEnvelope({backupFormat:`${ENCRYPTED_BACKUP_FORMAT}-extra`})&&!isEncryptedBackupEnvelope({backupFormat:ENCRYPTED_BACKUP_FORMAT.toUpperCase()})&&!isEncryptedBackupEnvelope(null)&&!isEncryptedBackupEnvelope([])&&!isEncryptedBackupEnvelope(ENCRYPTED_BACKUP_FORMAT),true,'');
+        const invalidEnvelope=(change,code)=>first.ok&&validateEncryptedBackupEnvelopeV1(change(first.envelope)).code===code;
+        add('foreign app and future envelope version fail closed',invalidEnvelope(value=>({...value,app:'foreign-app'}),'foreign-app')&&invalidEnvelope(value=>({...value,envelopeVersion:2}),'unsupported-envelope-version'),true,'');
+        add('unsupported KDF and cipher fail closed',invalidEnvelope(value=>({...value,crypto:{...value.crypto,kdf:'PBKDF2-SHA1'}}),'invalid-kdf')&&invalidEnvelope(value=>({...value,crypto:{...value.crypto,cipher:'AES-CBC'}}),'invalid-cipher'),true,'');
+        add('KDF iteration policy enforces 600000 through 2000000',invalidEnvelope(value=>({...value,crypto:{...value.crypto,kdfIterations:599999}}),'invalid-kdf-iterations')&&invalidEnvelope(value=>({...value,crypto:{...value.crypto,kdfIterations:2000001}}),'invalid-kdf-iterations'),true,'');
+        add('invalid or future inner schema is rejected',invalidEnvelope(value=>({...value,innerSchemaVersion:0}),'invalid-inner-schema')&&invalidEnvelope(value=>({...value,innerSchemaVersion:SCHEMA_VERSION+1}),'invalid-inner-schema'),true,'');
+        add('malformed Base64 and wrong salt or IV lengths fail closed',invalidEnvelope(value=>({...value,crypto:{...value.crypto,saltB64:'!!!'}}),'invalid-base64')&&invalidEnvelope(value=>({...value,crypto:{...value.crypto,saltB64:encryptedBackupBytesToBase64(new Uint8Array(15))}}),'invalid-salt-length')&&invalidEnvelope(value=>({...value,crypto:{...value.crypto,ivB64:encryptedBackupBytesToBase64(new Uint8Array(11))}}),'invalid-iv-length'),true,'');
+        add('ambiguous outer or crypto fields are rejected',invalidEnvelope(value=>({...value,extra:true}),'ambiguous-envelope')&&invalidEnvelope(value=>({...value,crypto:{...value.crypto,extra:true}}),'ambiguous-crypto'),true,'');
+        const whitespacePassphrase=first.ok?await decryptSyntheticEncryptedBackup(first.envelope,passphrase):{ok:false},trimmedPassphrase=first.ok?await decryptSyntheticEncryptedBackup(first.envelope,passphrase.trim()):{ok:false};
+        add('Unicode and whitespace passphrases remain exact and unmodified',whitespacePassphrase.ok&&!trimmedPassphrase.ok&&trimmedPassphrase.code==='authentication-failed',true,trimmedPassphrase.code);
+        add('passphrase never appears in the envelope JSON',first.ok&&!JSON.stringify(first.envelope).includes(passphrase),true,'');
+        const largeBackup={...backup,entries:[{id:'s1-large',payload:'x'.repeat(1024*1024)}]},large=await encryptSyntheticEncryptedBackup(largeBackup,'large-payload-passphrase',{createdAt});
+        const largeRoundTrip=large.ok?await decryptSyntheticEncryptedBackup(large.envelope,'large-payload-passphrase'):{ok:false};
+        add('Base64 conversion round-trips a 1 MiB synthetic payload',largeRoundTrip.ok&&largeRoundTrip.backup.entries[0].payload.length===1024*1024,true,largeRoundTrip.code);
+      } catch (error) {
+        add('fixture completed without unexpected exception',false,'no exception',error?.message || String(error));
+      }
+      add('fixture leaves application state, localStorage, and Export/Import handlers unchanged',JSON.stringify(state)===stateBefore&&localStorage.getItem(STORAGE_KEY)===storageBefore&&document.getElementById('exportBtn').onclick===exportHandlerBefore&&document.getElementById('importFile').onchange===importHandlerBefore,true,'');
+      const passed=results.filter(item=>item.pass).length,failed=results.length-passed;
+      console.group('Security S1 crypto fixtures');console.table(results);console.log(`${passed} passed`);console.log(`${failed} failed`);console.groupEnd();
+      return {passed,failed,results};
+    }
+    window.runSecurityS1CryptoFixtures=runSecurityS1CryptoFixtures;
+    async function runRequestedSelftests(selftest) {
+      let failed=0;
+      const collect=result=>{if(!result||!Number.isFinite(result.passed)||!Number.isFinite(result.failed))throw new Error('Self-test group did not return fixture totals.');failed+=result.failed;return result;};
+    if (selftest === 'baseline' || selftest === 'all') collect(runBaselineResolutionFixtures());
+    if (selftest === 'normalization' || selftest === 'all') collect(runMaterialTestNormalizationFixtures());
+    if (selftest === 'production' || selftest === 'all') collect(runProductionSettingsFixtures());
+    if (selftest === 'promotion' || selftest === 'all') collect(runEvidencePromotionFixtures());
+    if (selftest === 'design-production' || selftest === 'all') collect(runDesignProductionSettingsFixtures());
+    if (selftest === 'grid' || selftest === 'all') collect(runGridPromotionFixtures());
+    if (selftest === 'grid-machine' || selftest === 'all') collect(runTestGridMachineIdentityFixtures());
+    if (selftest === 'grid-browser' || selftest === 'all') collect(runGridBrowserFixtures());
+    if (selftest === 'materials' || selftest === 'all') collect(window.runMaterialBrowserFixtures());
+    if (selftest === 'library-browser' || selftest === 'all') collect(runLibraryBrowserFixtures());
+    if (selftest === 'project-browser' || selftest === 'all') collect(runProjectBrowserFixtures());
+    if (selftest === 'design-project' || selftest === 'all') collect(runDesignToProjectHandoffFixtures());
+    if (selftest === 'metadata' || selftest === 'all') collect(runWizardMetadataFixtures());
+    if (selftest === 'storage' || selftest === 'all') collect(runStorageRecoveryFixtures());
+    if (selftest === 'first-run' || selftest === 'all') collect(runFirstRunOnboardingFixtures());
+    if (selftest === 'machine' || selftest === 'all') collect(runMachineSetupFixtures());
+    if (selftest === 'machines-m1' || selftest === 'all') collect(runMultiMachineStorageFixtures());
+    if (selftest === 'machines-m2' || selftest === 'all') collect(runMachineManagerFixtures());
+    if (selftest === 'machines-m3' || selftest === 'all') collect(runMachineRecordIdentityFixtures());
+    if (selftest === 'help' || selftest === 'all') collect(runHelpSafetyFixtures());
+    if (selftest === 'modal' || selftest === 'all') collect(runModalAccessibilityFixtures());
+    if (selftest === 'accessibility' || selftest === 'all') collect(runAccessibilityPolishFixtures());
+    if (selftest === 'responsive' || selftest === 'all') collect(runResponsiveTuningFixtures());
+    if (selftest === 'empty-state' || selftest === 'all') collect(runEmptyStateDanglingReferenceFixtures());
+    if (selftest === 'beginner' || selftest === 'all') collect(runBeginnerClarityFixtures());
+    if (selftest === 'project-wizard' || selftest === 'all') collect(runProjectWizardFixtures());
+    if (selftest === 'gift-box' || selftest === 'all') collect(runGiftBoxFixtures());
+    if (selftest === 'dice-tray-system' || selftest === 'all') collect(runDiceTraySystemFixtures());
+    if (selftest === 'tabletop-engine' || selftest === 'all') collect(runTabletopAccessoryEngineFixtures());
+    if (selftest === 'tabletop-corner-floor-coupon' || selftest === 'all') collect(runTabletopCornerFloorCouponFixtures());
+    if (selftest === 'tabletop-storage-fit-coupon' || selftest === 'all') collect(runTabletopStorageFitCouponFixtures());
+    if (selftest === 'tabletop-coupon-results' || selftest === 'all') collect(runTabletopCouponResultsFixtures());
+    if (selftest === 'tabletop-evidence-promotion' || selftest === 'all') collect(runTabletopEvidencePromotionFixtures());
+    if (selftest === 'tabletop-evidence-matching' || selftest === 'all') collect(runTabletopEvidenceMatchingFixtures());
+    if (selftest === 'tabletop-rectangular-shell' || selftest === 'all') collect(runTabletopRectangularShellFixtures());
+    if (selftest === 'tabletop-rectangular-shell-evidence' || selftest === 'all') collect(runTabletopRectangularShellEvidenceFixtures());
+    if (selftest === 'tabletop-closed-corners' || selftest === 'all') collect(runTabletopClosedCornerFixtures());
+    if (selftest === 'tabletop-layout' || selftest === 'all') collect(runTabletopLayoutFixtures());
+    if (selftest === 'tabletop-shell-results' || selftest === 'all') collect(runTabletopShellResultsFixtures());
+    if (selftest === 'tabletop-shell-evidence-promotion' || selftest === 'all') collect(runTabletopShellEvidencePromotionFixtures());
+    if (selftest === 'tabletop-shell-evidence-matching' || selftest === 'all') collect(runTabletopShellEvidenceMatchingFixtures());
+    if (selftest === 'tabletop-storage-results' || selftest === 'all') collect(runTabletopStorageResultFixtures());
+    if (selftest === 'tabletop-storage-tray' || selftest === 'all') collect(runTabletopStorageTrayFixtures());
+    if (selftest === 'tabletop-workshop-ready' || selftest === 'all') collect(runTabletopWorkshopReadyFixtures());
+    if (selftest === 'tabletop-tray-results' || selftest === 'all') collect(runTabletopTrayResultFixtures());
+    if (selftest === 'security-s1-crypto' || selftest === 'all') {
+      try {
+        window.securityS1CryptoFixturePromise=runSecurityS1CryptoFixtures();
+        const securityResult=await window.securityS1CryptoFixturePromise;
+        window.securityS1CryptoFixturePromise=Promise.resolve(securityResult);
+        collect(securityResult);
+        if (securityResult.failed) console.error('Security S1 Crypto fixture failed.',securityResult);
+      } catch (error) {
+        const securityResult={passed:0,failed:1,results:[{name:'Security S1 crypto - unexpected fixture rejection',pass:false,expected:'resolved fixture result',actual:error?.message||String(error)}]};
+        console.error('Security S1 Crypto fixture rejected.',error);
+        window.securityS1CryptoFixturePromise=Promise.resolve(securityResult);
+        collect(securityResult);
+      }
+    }
+    if (selftest === 'design' || selftest === 'designs' || selftest === 'all') collect(runDesignGeometryFixtures());
+      return {selftest,completed:true,failed};
+    }
     const selftest = new URLSearchParams(window.location.search).get('selftest');
-    if (selftest === 'baseline' || selftest === 'all') runBaselineResolutionFixtures();
-    if (selftest === 'normalization' || selftest === 'all') runMaterialTestNormalizationFixtures();
-    if (selftest === 'production' || selftest === 'all') runProductionSettingsFixtures();
-    if (selftest === 'promotion' || selftest === 'all') runEvidencePromotionFixtures();
-    if (selftest === 'design-production' || selftest === 'all') runDesignProductionSettingsFixtures();
-    if (selftest === 'grid' || selftest === 'all') runGridPromotionFixtures();
-    if (selftest === 'grid-machine' || selftest === 'all') runTestGridMachineIdentityFixtures();
-    if (selftest === 'grid-browser' || selftest === 'all') runGridBrowserFixtures();
-    if (selftest === 'materials' || selftest === 'all') window.runMaterialBrowserFixtures();
-    if (selftest === 'library-browser' || selftest === 'all') runLibraryBrowserFixtures();
-    if (selftest === 'project-browser' || selftest === 'all') runProjectBrowserFixtures();
-    if (selftest === 'design-project' || selftest === 'all') runDesignToProjectHandoffFixtures();
-    if (selftest === 'metadata' || selftest === 'all') runWizardMetadataFixtures();
-    if (selftest === 'storage' || selftest === 'all') runStorageRecoveryFixtures();
-    if (selftest === 'first-run' || selftest === 'all') runFirstRunOnboardingFixtures();
-    if (selftest === 'machine' || selftest === 'all') runMachineSetupFixtures();
-    if (selftest === 'machines-m1' || selftest === 'all') runMultiMachineStorageFixtures();
-    if (selftest === 'machines-m2' || selftest === 'all') runMachineManagerFixtures();
-    if (selftest === 'machines-m3' || selftest === 'all') runMachineRecordIdentityFixtures();
-    if (selftest === 'help' || selftest === 'all') runHelpSafetyFixtures();
-    if (selftest === 'modal' || selftest === 'all') runModalAccessibilityFixtures();
-    if (selftest === 'accessibility' || selftest === 'all') runAccessibilityPolishFixtures();
-    if (selftest === 'responsive' || selftest === 'all') runResponsiveTuningFixtures();
-    if (selftest === 'empty-state' || selftest === 'all') runEmptyStateDanglingReferenceFixtures();
-    if (selftest === 'beginner' || selftest === 'all') runBeginnerClarityFixtures();
-    if (selftest === 'project-wizard' || selftest === 'all') runProjectWizardFixtures();
-    if (selftest === 'gift-box' || selftest === 'all') runGiftBoxFixtures();
-    if (selftest === 'dice-tray-system' || selftest === 'all') runDiceTraySystemFixtures();
-    if (selftest === 'tabletop-engine' || selftest === 'all') runTabletopAccessoryEngineFixtures();
-    if (selftest === 'tabletop-corner-floor-coupon' || selftest === 'all') runTabletopCornerFloorCouponFixtures();
-    if (selftest === 'tabletop-storage-fit-coupon' || selftest === 'all') runTabletopStorageFitCouponFixtures();
-    if (selftest === 'tabletop-coupon-results' || selftest === 'all') runTabletopCouponResultsFixtures();
-    if (selftest === 'tabletop-evidence-promotion' || selftest === 'all') runTabletopEvidencePromotionFixtures();
-    if (selftest === 'tabletop-evidence-matching' || selftest === 'all') runTabletopEvidenceMatchingFixtures();
-    if (selftest === 'tabletop-rectangular-shell' || selftest === 'all') runTabletopRectangularShellFixtures();
-    if (selftest === 'tabletop-rectangular-shell-evidence' || selftest === 'all') runTabletopRectangularShellEvidenceFixtures();
-    if (selftest === 'tabletop-closed-corners' || selftest === 'all') runTabletopClosedCornerFixtures();
-    if (selftest === 'tabletop-layout' || selftest === 'all') runTabletopLayoutFixtures();
-if (selftest === 'tabletop-shell-results' || selftest === 'all') runTabletopShellResultsFixtures();
-if (selftest === 'tabletop-shell-evidence-promotion' || selftest === 'all') runTabletopShellEvidencePromotionFixtures();
-if (selftest === 'tabletop-shell-evidence-matching' || selftest === 'all') runTabletopShellEvidenceMatchingFixtures();
-    if (selftest === 'tabletop-storage-results' || selftest === 'all') runTabletopStorageResultFixtures();
-    if (selftest === 'tabletop-storage-tray' || selftest === 'all') runTabletopStorageTrayFixtures();
-    if (selftest === 'tabletop-workshop-ready' || selftest === 'all') runTabletopWorkshopReadyFixtures();
-    if (selftest === 'tabletop-tray-results' || selftest === 'all') runTabletopTrayResultFixtures();
-    if (selftest === 'design' || selftest === 'designs' || selftest === 'all') runDesignGeometryFixtures();
+    if (selftest) window.selftestCompletionPromise=runRequestedSelftests(selftest).catch(error=>{
+      const result={completed:false,failed:1,error:error?.message||String(error)};
+      console.error('Self-test dispatcher rejected.',error);
+      return result;
+    });
   })();
   </script>
 </body>
