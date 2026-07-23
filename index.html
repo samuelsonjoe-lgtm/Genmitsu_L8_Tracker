@@ -341,6 +341,12 @@
     const ENCRYPTED_BACKUP_IV_BYTES = 12;
     const ENCRYPTED_BACKUP_TAG_BITS = 128;
     const ENCRYPTED_BACKUP_AAD_FIELDS = Object.freeze(['app','appVersion','backupFormat','envelopeVersion','createdAt','crypto.kdf','crypto.kdfIterations','crypto.cipher','crypto.saltB64','crypto.ivB64','innerSchemaVersion','plaintextBackupFormat']);
+    const VAULT_STORAGE_KEY = 'genmitsu-l8-tracker-vault-v1';
+    const VAULT_META_KEY = 'genmitsu-l8-tracker-vault-meta-v1';
+    const VAULT_PENDING_KEY = 'genmitsu-l8-tracker-vault-v1-pending';
+    const VAULT_FORMAT = 'genmitsu-l8-tracker-vault-v1';
+    const VAULT_ENVELOPE_VERSION = 1;
+    const VAULT_AAD_FIELDS = Object.freeze(['app','appVersion','vaultFormat','vaultEnvelopeVersion','createdAt','writeGeneration','crypto.kdf','crypto.kdfIterations','crypto.cipher','crypto.saltB64','crypto.ivB64','innerSchemaVersion']);
 
     function encryptedBackupIsPlainObject(value) {
       return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -497,6 +503,18 @@
         return {ok:true,backup:plaintext};
       } catch (error) { return {ok:false,code:'authentication-failed',error}; }
     }
+    function isVaultEnvelope(value) { return encryptedBackupIsPlainObject(value) && Object.prototype.hasOwnProperty.call(value,'vaultFormat') && value.vaultFormat === VAULT_FORMAT; }
+    function vaultCanonicalHeader(envelope) { return JSON.stringify(VAULT_AAD_FIELDS.map(path => [path,path.startsWith('crypto.') ? envelope.crypto[path.slice(7)] : envelope[path]])); }
+    function validateVaultEnvelopeV1(envelope) {
+      const invalid=code=>({valid:false,code}); if (!isVaultEnvelope(envelope)) return invalid('not-vault-envelope');
+      if (!encryptedBackupHasExactKeys(envelope,['app','appVersion','vaultFormat','vaultEnvelopeVersion','createdAt','writeGeneration','crypto','ciphertextB64','innerSchemaVersion']) || !encryptedBackupHasExactKeys(envelope.crypto,['kdf','kdfIterations','cipher','saltB64','ivB64'])) return invalid('ambiguous-envelope');
+      if (envelope.app!==APP_ID)return invalid('foreign-app'); if(typeof envelope.appVersion!=='string'||!envelope.appVersion)return invalid('invalid-app-version'); if(envelope.vaultFormat!==VAULT_FORMAT)return invalid('invalid-format'); if(envelope.vaultEnvelopeVersion!==VAULT_ENVELOPE_VERSION)return invalid(envelope.vaultEnvelopeVersion>VAULT_ENVELOPE_VERSION?'future-vault-version':'unsupported-vault-version'); if(typeof envelope.createdAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(envelope.createdAt)||Number.isNaN(Date.parse(envelope.createdAt))||new Date(envelope.createdAt).toISOString()!==envelope.createdAt)return invalid('invalid-created-at'); if(!Number.isSafeInteger(envelope.writeGeneration)||envelope.writeGeneration<1)return invalid('invalid-write-generation'); if(envelope.crypto.kdf!==ENCRYPTED_BACKUP_KDF||envelope.crypto.cipher!==ENCRYPTED_BACKUP_CIPHER)return invalid('invalid-crypto'); if(!Number.isSafeInteger(envelope.crypto.kdfIterations)||envelope.crypto.kdfIterations<ENCRYPTED_BACKUP_KDF_ITERATIONS||envelope.crypto.kdfIterations>ENCRYPTED_BACKUP_KDF_ITERATIONS_MAX)return invalid('invalid-kdf-iterations'); if(!Number.isSafeInteger(envelope.innerSchemaVersion)||envelope.innerSchemaVersion<1||envelope.innerSchemaVersion>SCHEMA_VERSION)return invalid('invalid-inner-schema');
+      let salt,iv,ciphertext;try{salt=encryptedBackupBase64ToBytes(envelope.crypto.saltB64);iv=encryptedBackupBase64ToBytes(envelope.crypto.ivB64);ciphertext=encryptedBackupBase64ToBytes(envelope.ciphertextB64)}catch{return invalid('invalid-base64')}if(salt.length!==16)return invalid('invalid-salt-length');if(iv.length!==12)return invalid('invalid-iv-length');if(ciphertext.length<=16)return invalid('invalid-ciphertext');return {valid:true,salt,iv,ciphertext};
+    }
+    function vaultReadMetadata(raw=localStorage.getItem(VAULT_META_KEY)) { try { if(raw===null||raw==='')return {valid:false,absent:true,data:null};const data=JSON.parse(raw),allowed=['mode','vaultFormat','vaultEnvelopeVersion','createdAt','lastWriteGeneration','pendingTransition'],isUtc=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)&&!Number.isNaN(Date.parse(value))&&new Date(value).toISOString()===value;const valid=encryptedBackupIsPlainObject(data)&&Object.keys(data).every(key=>allowed.includes(key))&&(!Object.hasOwn(data,'mode')||['vault','migrating','disabling'].includes(data.mode))&&(!Object.hasOwn(data,'vaultFormat')||data.vaultFormat===VAULT_FORMAT)&&(!Object.hasOwn(data,'vaultEnvelopeVersion')||data.vaultEnvelopeVersion===VAULT_ENVELOPE_VERSION)&&(!Object.hasOwn(data,'createdAt')||isUtc(data.createdAt))&&(!Object.hasOwn(data,'lastWriteGeneration')||(Number.isSafeInteger(data.lastWriteGeneration)&&data.lastWriteGeneration>0))&&(!Object.hasOwn(data,'pendingTransition')||encryptedBackupIsPlainObject(data.pendingTransition));return valid?{valid:true,data}:{valid:false,data:null}; } catch{return {valid:false,data:null}} }
+    function vaultBootstrapDetect() { const raw=localStorage.getItem(VAULT_STORAGE_KEY),meta=vaultReadMetadata(),pending=localStorage.getItem(VAULT_PENDING_KEY);if(raw!==null){try{const envelope=JSON.parse(raw),validation=validateVaultEnvelopeV1(envelope);return validation.valid?{mode:'vault-locked',envelope,validation,meta,pending}:{mode:'vault-blocked',code:validation.code,meta,pending}}catch{return {mode:'vault-blocked',code:'invalid-vault-json',meta,pending}}}return {mode:'plaintext',transitionNotice:meta.valid&&meta.data?.mode==='vault'&&localStorage.getItem(STORAGE_KEY)!==null?'Vault metadata exists without committed ciphertext; plaintext remains authoritative.':'',meta,pending}; }
+    async function vaultEncryptWithKey(documentValue,session,dependencies={}) { const support=encryptedBackupCryptoSupport(dependencies);if(!support.available)return {ok:false,code:'web-crypto-unavailable'};const iv=new Uint8Array(12);support.cryptoApi.getRandomValues(iv);const envelope={app:APP_ID,appVersion:session.appVersion,vaultFormat:VAULT_FORMAT,vaultEnvelopeVersion:1,createdAt:session.createdAt,writeGeneration:session.knownGeneration+1,crypto:{kdf:ENCRYPTED_BACKUP_KDF,kdfIterations:session.kdfIterations,cipher:ENCRYPTED_BACKUP_CIPHER,saltB64:session.saltB64,ivB64:encryptedBackupBytesToBase64(iv)},ciphertextB64:encryptedBackupBytesToBase64(new Uint8Array(17)),innerSchemaVersion:documentValue.schemaVersion};const validation=validateVaultEnvelopeV1(envelope);if(!validation.valid)return {ok:false,code:validation.code};envelope.ciphertextB64='';try{const ciphertext=await support.subtle.encrypt({name:'AES-GCM',iv,additionalData:encryptedBackupUtf8Encode(vaultCanonicalHeader(envelope)),tagLength:128},session.key,encryptedBackupUtf8Encode(JSON.stringify(documentValue)));envelope.ciphertextB64=encryptedBackupBytesToBase64(new Uint8Array(ciphertext));return {ok:true,envelope}}catch(error){return {ok:false,code:'encryption-failed',error}} }
+    async function vaultDecryptWithPassphrase(envelope,passphrase,dependencies={}) { const validation=validateVaultEnvelopeV1(envelope);if(!validation.valid)return {ok:false,stage:'envelope',code:validation.code};const support=encryptedBackupCryptoSupport(dependencies);if(!support.available)return {ok:false,stage:'capability',code:'web-crypto-unavailable'};const derived=await deriveEncryptedBackupKey(passphrase,validation.salt,envelope.crypto.kdfIterations,dependencies);if(!derived.ok)return {ok:false,stage:'derive',code:derived.code};try{const bytes=await support.subtle.decrypt({name:'AES-GCM',iv:validation.iv,additionalData:encryptedBackupUtf8Encode(vaultCanonicalHeader(envelope)),tagLength:128},derived.key,validation.ciphertext),data=JSON.parse(encryptedBackupUtf8Decode(new Uint8Array(bytes)));if(!encryptedBackupIsPlainObject(data)||!Number.isSafeInteger(data.schemaVersion)||data.schemaVersion<1||data.schemaVersion>SCHEMA_VERSION||data.schemaVersion!==envelope.innerSchemaVersion)return {ok:false,stage:'document',code:'invalid-decrypted-vault'};return {ok:true,data,key:derived.key,validation}}catch(error){return {ok:false,stage:'decrypt',code:'authentication-failed',error}} }
     const tabs = [
       ['log', 'Log'],
       ['library', 'Library'],
@@ -614,7 +632,13 @@
     const tabletopTrayObservationLabel = key => tabletopTrayObservationLabels[key] || key;
     let storageRecoveryIssue = null;
     let firstRunOnboardingDismissed = false;
-    const state = loadState();
+    let vaultBootstrap = vaultBootstrapDetect();
+    let vaultMode = vaultBootstrap.mode;
+    let vaultSession = null;
+    let vaultOperationToken = 0;
+    let vaultPersistCoordinator = { inFlight:false, queued:false, failed:false, status:'', token:0 };
+    let vaultPersistWriteHook = null;
+    const state = vaultMode === 'plaintext' ? loadState() : freshState();
     let activeGridId = null;
     let activeCellKey = null;
     let editingGridId = null;
@@ -964,6 +988,15 @@
     function freshState() {
       return { activeTab: 'log', schemaVersion: SCHEMA_VERSION, unit: 'in', entries: [], profiles: [], grids: [], projects: [], inventory: inventoryDefaults(), tabletopCouponResults: [], tabletopShellResults: [], tabletopStorageResults: [], tabletopTrayResults: [], search: '', materialFilter: 'all', entrySort: 'date-desc', librarySearch: '', libraryFilter: 'all', libraryTagFilter: 'all', libraryMatchMaterial: '', libraryMatchThickness: '', libraryMatchUnit: 'in', librarySort: 'material-asc', libraryViewMode: 'manage', gridViewMode: 'manage', projectSearch: '', projectTagFilter: 'all', projectStatusFilter: 'all', projectSort: 'date-desc', projectViewMode: 'manage', inventorySearch: '', inventoryCategoryFilter: 'all', inventoryBatchStatusFilter: 'all', inventoryRawSort: 'low-stock', inventoryBatchSort: 'name-asc', inventoryViewMode: 'manage', focusMaterialMm: '', focusJobType: 'engrave', machineProfile: '20W', machines: [], activeMachineId: '', machineIdentity: normalizeMachineIdentity(), pricing: pricingDefaults(), pricingPrefs: pricingPreferenceDefaults() };
     }
+    function liveStateDocument() {
+      synchronizeMachineIdentity();
+      const { entries, profiles, grids, projects, inventory, tabletopCouponResults, tabletopShellResults, tabletopStorageResults, tabletopTrayResults, unit, entrySort, librarySort, libraryViewMode, gridViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, machines, activeMachineId, machineIdentity, pricing, pricingPrefs } = state;
+      return { schemaVersion: SCHEMA_VERSION, entries, profiles, grids, projects, inventory, tabletopCouponResults:normalizeTabletopCouponResults(tabletopCouponResults), tabletopShellResults:normalizeTabletopShellResults(tabletopShellResults), tabletopStorageResults:normalizeTabletopStorageResults(tabletopStorageResults), tabletopTrayResults:normalizeTabletopTrayResults(tabletopTrayResults), unit, entrySort, librarySort, libraryViewMode, gridViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, machines, activeMachineId, machineIdentity, pricing, pricingPrefs };
+    }
+    function liveStateFromData(data) {
+      const machineRoot=machineRootFromData(data);
+      return { ...freshState(), schemaVersion:data.schemaVersion || 1, unit:data.unit || 'in', entries:data.entries || [], profiles:normalizeLibraryProfiles(data.profiles), grids:data.grids || [], projects:data.projects || [], inventory:normalizeInventory(data.inventory), tabletopCouponResults:normalizeTabletopCouponResults(data.tabletopCouponResults), tabletopShellResults:normalizeTabletopShellResults(data.tabletopShellResults), tabletopStorageResults:normalizeTabletopStorageResults(data.tabletopStorageResults), tabletopTrayResults:normalizeTabletopTrayResults(data.tabletopTrayResults), libraryMatchMaterial:data.libraryMatchMaterial || '', libraryMatchThickness:data.libraryMatchThickness || '', libraryMatchUnit:data.libraryMatchUnit || data.unit || 'in', entrySort:data.entrySort || 'date-desc', librarySort:data.librarySort || 'material-asc', libraryViewMode:normalizeLibraryViewMode(data.libraryViewMode), gridViewMode:normalizeGridViewMode(data.gridViewMode), projectSort:data.projectSort || 'date-desc', projectViewMode:normalizeProjectViewMode(data.projectViewMode), inventoryRawSort:data.inventoryRawSort || 'low-stock', inventoryBatchSort:data.inventoryBatchSort || 'name-asc', inventoryViewMode:normalizeInventoryViewMode(data.inventoryViewMode), machineProfile:data.machineProfile || '20W', machines:machineRoot.machines, activeMachineId:machineRoot.activeMachineId, machineIdentity:machineRoot.machineIdentity, pricing:{...pricingDefaults(),...(data.pricing || {})}, pricingPrefs:{...pricingPreferenceDefaults(),...(data.pricingPrefs || {})} };
+    }
     function loadState() {
       const decoded = decodeStoredState(localStorage.getItem(STORAGE_KEY));
       if (decoded.status === 'empty') return freshState();
@@ -1007,6 +1040,9 @@
     }
     function persist(options = {}) {
       if (storageRecoveryIssue && !options.allowRecoveryOverwrite) return false;
+      if (vaultMode !== 'plaintext' && vaultMode !== 'vault-unlocked') return false;
+      if (vaultMode === 'plaintext' && localStorage.getItem(VAULT_STORAGE_KEY) !== null) { vaultBootstrap=vaultBootstrapDetect(); vaultMode='vault-blocked'; vaultPersistCoordinator.status='A vault appeared before this plaintext write. Reload is required.'; Object.assign(state,freshState()); render(); return false; }
+      if (vaultMode === 'vault-unlocked') return queueVaultPersist();
       synchronizeMachineIdentity();
       const { entries, profiles, grids, projects, inventory, tabletopCouponResults, tabletopShellResults, tabletopStorageResults, tabletopTrayResults, unit, entrySort, librarySort, libraryViewMode, gridViewMode, projectSort, projectViewMode, inventoryRawSort, inventoryBatchSort, inventoryViewMode, libraryMatchMaterial, libraryMatchThickness, libraryMatchUnit, machineProfile, machines, activeMachineId, machineIdentity, pricing, pricingPrefs } = state;
       try {
@@ -2155,7 +2191,22 @@
       if (kind === 'profile') return { ...base, tests: [], productionSettings: [] };
       return base;
     }
+    function vaultOrdinaryMode() { return vaultMode === 'plaintext' || vaultMode === 'vault-unlocked'; }
+    function renderVaultShell() {
+      const headerControls=document.querySelector('header .actions'); if (headerControls) headerControls.hidden=true;
+      document.getElementById('tabs').innerHTML=''; document.getElementById('tabs').hidden=true;
+      document.getElementById('storageRecoveryPanel').hidden=true;
+      const root=document.getElementById('app');
+      if (vaultMode === 'vault-blocked') { root.innerHTML=`<section class="panel softbad" aria-live="polite"><h2>Local vault needs recovery</h2><p>The saved local vault is damaged, unsupported, or belongs to another application. No records were loaded and nothing was changed.</p><p class="small muted">Recovery and restore are introduced in the next vault phase.</p></section>`; return; }
+      const busy=vaultMode==='vault-unlocking';
+      root.innerHTML=`<section class="panel" aria-labelledby="vaultShellTitle"><h2 id="vaultShellTitle">${esc(APP_NAME)} local vault</h2><p class="small muted">Enter the local-vault passphrase to open saved records in this browser. This is not an encrypted-backup passphrase.</p><form id="vaultUnlockForm" aria-busy="${busy?'true':'false'}"><label>Local-vault passphrase<input id="vaultPassphrase" name="passphrase" type="password" autocomplete="current-password" ${busy?'disabled':''}></label><div class="actions" style="margin-top:10px"><button type="button" id="vaultReveal" aria-pressed="false" ${busy?'disabled':''}>Show passphrase</button><button type="submit" class="primary" ${busy?'disabled':''}>${busy?'Opening vault…':'Unlock vault'}</button></div><div id="vaultStatus" class="small ${vaultPersistCoordinator.failed?'softbad':'muted'}" aria-live="polite" style="margin-top:10px">${esc(vaultPersistCoordinator.status || (vaultBootstrap.transitionNotice || 'Your passphrase is not saved.'))}</div></form></section>`;
+      const form=document.getElementById('vaultUnlockForm'), field=document.getElementById('vaultPassphrase'), reveal=document.getElementById('vaultReveal');
+      form.onsubmit=event=>{event.preventDefault();void unlockVault(field.value);}; reveal.onclick=()=>{const shown=field.type==='text';field.type=shown?'password':'text';reveal.textContent=shown?'Show passphrase':'Hide passphrase';reveal.setAttribute('aria-pressed',String(!shown));field.focus();}; if (!busy) queueMicrotask(()=>field.focus());
+    }
     function render() {
+      if (!vaultOrdinaryMode()) { renderVaultShell(); return; }
+      const headerControls=document.querySelector('header .actions'); if (headerControls) headerControls.hidden=false;
+      document.getElementById('tabs').hidden=false;
       document.body.dataset.activeTab = state.activeTab;
       renderTabs();
       renderHeaderMachineControls();
@@ -2174,6 +2225,37 @@
       if (state.activeTab === 'pricing') root.innerHTML = renderPricing();
       bindPage();
       updateHorizontalScrollRegions();
+    }
+    async function unlockVault(passphrase) {
+      if (vaultMode !== 'vault-locked' || passphrase === '') { if (passphrase === '') vaultPersistCoordinator.status='Enter the local-vault passphrase.'; render(); return false; }
+      const token=++vaultOperationToken, envelope=vaultBootstrap.envelope; vaultMode='vault-unlocking'; vaultPersistCoordinator.status='Opening vault…'; render();
+      const opened=await vaultDecryptWithPassphrase(envelope,passphrase); passphrase='';
+      if (token !== vaultOperationToken || vaultMode !== 'vault-unlocking') return false;
+      if (!opened.ok) { vaultMode=opened.stage==='envelope'?'vault-blocked':'vault-locked'; vaultPersistCoordinator.status=opened.stage==='capability'?'This browser cannot use the required native Web Crypto features to open the local vault.':opened.stage==='decrypt'?'Could not open the vault. Check the passphrase; the vault may also be damaged.':'The local vault could not be opened.'; render(); return false; }
+      let next; try { next=liveStateFromData(opened.data); } catch { vaultMode='vault-locked'; vaultPersistCoordinator.status='The decrypted vault data is invalid.'; render(); return false; }
+      Object.assign(state,next); vaultSession={key:opened.key,appVersion:envelope.appVersion,createdAt:envelope.createdAt,saltB64:envelope.crypto.saltB64,kdfIterations:envelope.crypto.kdfIterations,knownGeneration:envelope.writeGeneration}; vaultMode='vault-unlocked'; vaultPersistCoordinator.status='Vault unlocked; changes are saved encrypted in this browser.'; render(); return true;
+    }
+    function queueVaultPersist() {
+      if (!vaultSession) return false;
+      if (vaultPersistCoordinator.failed) vaultPersistCoordinator.failed=false;
+      vaultPersistCoordinator.document=liveStateDocument(); vaultPersistCoordinator.queued=true; vaultPersistCoordinator.status='Saving encrypted vault…'; if (!vaultPersistCoordinator.inFlight) void drainVaultPersist(); render(); return true;
+    }
+    async function drainVaultPersist() {
+      const token=++vaultPersistCoordinator.token;
+      while (vaultMode==='vault-unlocked' && vaultPersistCoordinator.queued) {
+        vaultPersistCoordinator.queued=false; vaultPersistCoordinator.inFlight=true; const documentValue=vaultPersistCoordinator.document, encrypted=await vaultEncryptWithKey(documentValue,vaultSession);
+        if (token!==vaultPersistCoordinator.token || vaultMode!=='vault-unlocked') return;
+        if (!encrypted.ok) { vaultPersistCoordinator.failed=true; vaultPersistCoordinator.status='Encrypted saving failed. Keep this page open and retry your change.'; showStorageWarning(); break; }
+        const currentRaw=localStorage.getItem(VAULT_STORAGE_KEY); let current=null; try { current=currentRaw?JSON.parse(currentRaw):null; } catch {}
+        const currentValidation=current?validateVaultEnvelopeV1(current):null;
+        if (currentValidation?.valid && current.writeGeneration>vaultSession.knownGeneration) { vaultPersistCoordinator.failed=true; vaultPersistCoordinator.status='Another tab saved a newer vault. Reload is required before editing.'; vaultMode='vault-blocked'; Object.assign(state,freshState()); break; }
+        try { (vaultPersistWriteHook||localStorage.setItem.bind(localStorage))(VAULT_STORAGE_KEY,JSON.stringify(encrypted.envelope)); vaultSession.knownGeneration=encrypted.envelope.writeGeneration; try { localStorage.setItem(VAULT_META_KEY,JSON.stringify({mode:'vault',vaultFormat:VAULT_FORMAT,vaultEnvelopeVersion:VAULT_ENVELOPE_VERSION,createdAt:vaultSession.createdAt,lastWriteGeneration:vaultSession.knownGeneration})); } catch { vaultPersistCoordinator.status='Vault saved; bootstrap metadata could not be updated.'; } } catch { vaultPersistCoordinator.failed=true; vaultPersistCoordinator.status='Encrypted saving failed. The previous vault remains intact.'; showStorageWarning(); break; }
+      }
+      vaultPersistCoordinator.inFlight=false; if (!vaultPersistCoordinator.failed && vaultMode==='vault-unlocked') vaultPersistCoordinator.status='All encrypted changes saved.'; render();
+    }
+    function internalVaultLock() {
+      if (vaultPersistCoordinator.inFlight || vaultPersistCoordinator.queued) return false;
+      ++vaultOperationToken; ++vaultPersistCoordinator.token; vaultSession=null; vaultMode='vault-locked'; vaultPersistCoordinator={inFlight:false,queued:false,failed:false,status:'Vault locked in this tab.',token:vaultPersistCoordinator.token}; Object.assign(state,freshState()); document.querySelectorAll('.modal.open').forEach(modal=>closeModal(modal.id)); document.getElementById('app').innerHTML=''; render(); return true;
     }
     function storageRecoveryFilename() {
       const now = new Date();
@@ -12719,6 +12801,7 @@
       return null;
     }
     function handleShortcuts(e) {
+      if (!vaultOrdinaryMode()) return;
       const modal = activeModal();
       if (modal && e.key === 'Tab') { trapModalFocus(modal, e); return; }
       if (!modal && handlePrimaryTabKeys(e)) return;
@@ -14604,14 +14687,14 @@
       if (decoded.status !== 'ok') { openBackupMessage('Could not read backup', 'Make sure the selected file is valid backup JSON.'); return false; }
       return routeBackupImportData(decoded.data);
     }
-    document.getElementById('unitIn').onclick = () => setUnit('in');
-    document.getElementById('unitMm').onclick = () => setUnit('mm');
+    document.getElementById('unitIn').onclick = () => { if (vaultOrdinaryMode()) setUnit('in'); };
+    document.getElementById('unitMm').onclick = () => { if (vaultOrdinaryMode()) setUnit('mm'); };
     document.getElementById('helpBtn').onclick = () => openHelp();
-    document.getElementById('exportBtn').onclick = () => openBackupChoiceDialog();
-    document.getElementById('importBtn').onclick = () => document.getElementById('importFile').click();
+    document.getElementById('exportBtn').onclick = () => { if (vaultOrdinaryMode()) openBackupChoiceDialog(); };
+    document.getElementById('importBtn').onclick = () => { if (vaultOrdinaryMode()) document.getElementById('importFile').click(); };
     document.getElementById('importFile').onchange = e => {
       const file = e.target.files[0];
-      if (!file) return;
+      if (!file || !vaultOrdinaryMode()) return;
       const reader = new FileReader();
       reader.onload = () => {
         try { handleBackupImportText(String(reader.result ?? '')); }
@@ -14621,7 +14704,7 @@
     };
     document.addEventListener('keydown', handleShortcuts);
     window.addEventListener('resize', updateHorizontalScrollRegions);
-    window.addEventListener('beforeunload', flushPricingPersist);
+    window.addEventListener('beforeunload', event => { if (vaultMode==='vault-unlocked' && (vaultPersistCoordinator.inFlight || vaultPersistCoordinator.queued || vaultPersistCoordinator.failed)) { event.preventDefault(); event.returnValue='Recent encrypted changes may not be saved.'; } flushPricingPersist(); });
     initializeModalAccessibility();
     renderReleaseIdentity();
     render();
@@ -14878,6 +14961,40 @@
       return {passed,failed,results};
     }
     window.runSecurityS2EncryptedBackupFixtures=runSecurityS2EncryptedBackupFixtures;
+    async function runSecurityS3LocalVaultFixtures() {
+      window.securityS3LocalVaultFixtureRunCount=(window.securityS3LocalVaultFixtureRunCount||0)+1;
+      const results=[],add=(name,pass,actual='')=>results.push({name:`Security S3 Local Vault - ${name}`,pass:!!pass,actual});
+      const stateBefore=JSON.stringify(state), keys=[STORAGE_KEY,VAULT_STORAGE_KEY,VAULT_META_KEY,VAULT_PENDING_KEY], storageBefore=Object.fromEntries(keys.map(key=>[key,localStorage.getItem(key)])), modeBefore=vaultMode, bootstrapBefore=vaultBootstrap, sessionBefore=vaultSession, coordinatorBefore=vaultPersistCoordinator, writeHookBefore=vaultPersistWriteHook, warningBefore=storageWarningShown;
+      try {
+        const workspace={schemaVersion:SCHEMA_VERSION,entries:[{id:'s3-secret',material:'Synthetic vault-only record'}],profiles:[],grids:[],projects:[],inventory:inventoryDefaults()};
+        const salt=new Uint8Array(ENCRYPTED_BACKUP_SALT_BYTES); globalThis.crypto.getRandomValues(salt); const derived=await deriveEncryptedBackupKey('  S3 exact \u00e9  ',salt,ENCRYPTED_BACKUP_KDF_ITERATIONS); const session={key:derived.key,appVersion:APP_VERSION,createdAt:'2026-07-23T12:00:00.000Z',saltB64:encryptedBackupBytesToBase64(salt),kdfIterations:ENCRYPTED_BACKUP_KDF_ITERATIONS,knownGeneration:0};
+        const encrypted=await vaultEncryptWithKey(workspace,session), envelope=encrypted.envelope;
+        add('strict seeded live-vault envelope validates',derived.ok&&encrypted.ok&&validateVaultEnvelopeV1(envelope).valid);
+        add('vault detection requires an own exact vaultFormat marker',isVaultEnvelope(envelope)&&!isVaultEnvelope(Object.create({vaultFormat:VAULT_FORMAT}))&&!isVaultEnvelope({vaultFormat:`${VAULT_FORMAT}-extra`}));
+        add('unexpected fields, foreign app, future version, invalid Base64, and bad IV fail structurally',!validateVaultEnvelopeV1({...envelope,extra:true}).valid&&!validateVaultEnvelopeV1({...envelope,app:'foreign'}).valid&&!validateVaultEnvelopeV1({...envelope,vaultEnvelopeVersion:2}).valid&&!validateVaultEnvelopeV1({...envelope,crypto:{...envelope.crypto,saltB64:'!!!'}}).valid&&!validateVaultEnvelopeV1({...envelope,crypto:{...envelope.crypto,ivB64:encryptedBackupBytesToBase64(new Uint8Array(11))}}).valid);
+        let structuralDerivations=0; const countingCrypto={getRandomValues(){},subtle:{importKey:async()=>({}),deriveKey:async()=>{structuralDerivations++;return {};},encrypt:async()=>new ArrayBuffer(17),decrypt:async()=>new ArrayBuffer(0)}};
+        const noncanonical=await vaultDecryptWithPassphrase({...envelope,createdAt:'2026-07-23T12:00:00+00:00'},'  S3 exact \u00e9  ',{cryptoApi:countingCrypto}), unavailable=await vaultDecryptWithPassphrase(envelope,'  S3 exact \u00e9  ',{cryptoApi:{}}), mismatchCrypto={getRandomValues(){},subtle:{importKey:async()=>({}),deriveKey:async()=>({}),encrypt:async()=>new ArrayBuffer(17),decrypt:async()=>encryptedBackupUtf8Encode(JSON.stringify({...workspace,schemaVersion:SCHEMA_VERSION===1?2:1})).buffer}}, schemaMismatch=await vaultDecryptWithPassphrase(envelope,'  S3 exact \u00e9  ',{cryptoApi:mismatchCrypto});
+        add('noncanonical timestamps and invalid metadata are rejected before PBKDF2',noncanonical.stage==='envelope'&&noncanonical.code==='invalid-created-at'&&structuralDerivations===0&&!vaultReadMetadata(JSON.stringify({mode:'vault',createdAt:'2026-07-23T12:00:00+00:00'})).valid);
+        add('unavailable native crypto stays locked before derivation and decrypted schema must match its envelope',unavailable.stage==='capability'&&unavailable.code==='web-crypto-unavailable'&&schemaMismatch.stage==='document'&&schemaMismatch.code==='invalid-decrypted-vault');
+        const opened=await vaultDecryptWithPassphrase(envelope,'  S3 exact \u00e9  '), wrong=await vaultDecryptWithPassphrase(envelope,'S3 exact \u00e9'), tampered=await vaultDecryptWithPassphrase({...envelope,appVersion:'tampered'},'  S3 exact \u00e9  ');
+        add('appVersion is authenticated and exact passphrases decrypt only the valid envelope',opened.ok&&opened.data.entries[0].id==='s3-secret'&&!wrong.ok&&!tampered.ok);
+        localStorage.removeItem(VAULT_STORAGE_KEY); localStorage.setItem(STORAGE_KEY,JSON.stringify(workspace)); localStorage.setItem(VAULT_META_KEY,JSON.stringify({mode:'vault',vaultFormat:VAULT_FORMAT,vaultEnvelopeVersion:VAULT_ENVELOPE_VERSION,createdAt:'2026-07-23T12:00:00.000Z',lastWriteGeneration:1})); vaultBootstrap=vaultBootstrapDetect(); vaultMode=vaultBootstrap.mode; Object.assign(state,loadState()); state.entries.push({id:'s3-transition',material:'Plaintext remains authoritative'}); const transitionAccepted=persist(), transitionSaved=JSON.parse(localStorage.getItem(STORAGE_KEY));
+        add('metadata-only interrupted transition preserves and persists the authoritative plaintext workspace',vaultMode==='plaintext'&&transitionAccepted&&state.entries.some(entry=>entry.id==='s3-transition')&&transitionSaved.entries.some(entry=>entry.id==='s3-transition')&&localStorage.getItem(VAULT_STORAGE_KEY)===null);
+        localStorage.setItem(VAULT_STORAGE_KEY,JSON.stringify(envelope)); const stalePlaintextBlocked=!persist(); add('a vault that appears before a plaintext write blocks and clears the stale plaintext session',stalePlaintextBlocked&&vaultMode==='vault-blocked'&&state.entries.length===0);
+        if(storageBefore[STORAGE_KEY]===null)localStorage.removeItem(STORAGE_KEY);else localStorage.setItem(STORAGE_KEY,storageBefore[STORAGE_KEY]); localStorage.setItem(VAULT_STORAGE_KEY,JSON.stringify(envelope)); localStorage.removeItem(VAULT_META_KEY); vaultBootstrap=vaultBootstrapDetect(); vaultMode=vaultBootstrap.mode; Object.assign(state,freshState()); render();
+        add('valid vault bootstrap is locked with no record-bearing DOM or state',vaultMode==='vault-locked'&&state.entries.length===0&&!document.getElementById('app').textContent.includes('Synthetic vault-only record'));
+        const beforeWrong=localStorage.getItem(VAULT_STORAGE_KEY); await unlockVault('wrong'); add('wrong unlock leaves authoritative ciphertext unchanged and stays locked',vaultMode==='vault-locked'&&localStorage.getItem(VAULT_STORAGE_KEY)===beforeWrong);
+        await unlockVault('  S3 exact \u00e9  '); add('correct unlock installs normalized workspace only after authentication',vaultMode==='vault-unlocked'&&state.entries[0]?.id==='s3-secret'&&!!vaultSession?.key);
+        state.entries.push({id:'s3-latest',material:'Latest'}); const accepted=persist(); while(vaultPersistCoordinator.inFlight||vaultPersistCoordinator.queued) await new Promise(resolve=>setTimeout(resolve,0)); const saved=JSON.parse(localStorage.getItem(VAULT_STORAGE_KEY)); const reopened=await vaultDecryptWithPassphrase(saved,'  S3 exact \u00e9  ');
+        add('vault-unlocked persist accepts synchronously, writes ciphertext only, advances generation, and retains the latest state',accepted&&localStorage.getItem(STORAGE_KEY)===storageBefore[STORAGE_KEY]&&saved.writeGeneration===2&&reopened.ok&&reopened.data.entries.some(entry=>entry.id==='s3-latest'));
+        let failedCiphertext=''; storageWarningShown=true; vaultPersistWriteHook=(key,value)=>{if(key===VAULT_STORAGE_KEY){failedCiphertext=value;throw new Error('synthetic write failure');} localStorage.setItem(key,value);}; state.entries.push({id:'s3-retry',material:'Retry'}); const retryAccepted=persist(); while(vaultPersistCoordinator.inFlight||vaultPersistCoordinator.queued) await new Promise(resolve=>setTimeout(resolve,0)); const retained=localStorage.getItem(VAULT_STORAGE_KEY)===JSON.stringify(saved), failureVisible=vaultPersistCoordinator.failed&&/previous vault remains intact/.test(vaultPersistCoordinator.status); vaultPersistWriteHook=null; const retryPersisted=persist(); while(vaultPersistCoordinator.inFlight||vaultPersistCoordinator.queued) await new Promise(resolve=>setTimeout(resolve,0)); const retried=JSON.parse(localStorage.getItem(VAULT_STORAGE_KEY)), retryOpened=await vaultDecryptWithPassphrase(retried,'  S3 exact \u00e9  ');
+        add('failed encrypted writes retain ciphertext and a later retry uses a fresh IV without plaintext fallback',retryAccepted&&retained&&failureVisible&&retryPersisted&&retried.crypto.ivB64!==JSON.parse(failedCiphertext).crypto.ivB64&&retryOpened.ok&&retryOpened.data.entries.some(entry=>entry.id==='s3-retry')&&localStorage.getItem(STORAGE_KEY)===storageBefore[STORAGE_KEY]);
+        add('internal lock refuses only while drained and clears state without writing plaintext',internalVaultLock()&&vaultMode==='vault-locked'&&state.entries.length===0&&localStorage.getItem(STORAGE_KEY)===storageBefore[STORAGE_KEY]&&localStorage.getItem(VAULT_STORAGE_KEY)!==null);
+      } catch (error) { add('fixture completed without unexpected exception',false,error?.message||String(error)); }
+      finally { Object.assign(state,JSON.parse(stateBefore)); keys.forEach(key=>{if(storageBefore[key]===null)localStorage.removeItem(key);else localStorage.setItem(key,storageBefore[key]);}); vaultMode=modeBefore; vaultBootstrap=bootstrapBefore; vaultSession=sessionBefore; vaultPersistCoordinator=coordinatorBefore; vaultPersistWriteHook=writeHookBefore; storageWarningShown=warningBefore; render(); }
+      const passed=results.filter(item=>item.pass).length,failed=results.length-passed; console.group('Security S3 Local Vault fixtures');console.table(results);console.log(`${passed} passed`);console.log(`${failed} failed`);console.groupEnd(); return {passed,failed,results};
+    }
+    window.runSecurityS3LocalVaultFixtures=runSecurityS3LocalVaultFixtures;
     async function runRequestedSelftests(selftest) {
       let failed=0;
       const collect=result=>{if(!result||!Number.isFinite(result.passed)||!Number.isFinite(result.failed))throw new Error('Self-test group did not return fixture totals.');failed+=result.failed;return result;};
@@ -14953,6 +15070,10 @@
         window.securityS2EncryptedBackupFixturePromise=Promise.resolve(securityResult);
         collect(securityResult);
       }
+    }
+    if (selftest === 'security-s3-local-vault' || selftest === 'all') {
+      try { window.securityS3LocalVaultFixturePromise=runSecurityS3LocalVaultFixtures(); const securityResult=await window.securityS3LocalVaultFixturePromise; window.securityS3LocalVaultFixturePromise=Promise.resolve(securityResult); collect(securityResult); if (securityResult.failed) console.error('Security S3 Local Vault fixture failed.',securityResult); }
+      catch (error) { const securityResult={passed:0,failed:1,results:[{name:'Security S3 Local Vault - unexpected fixture rejection',pass:false,actual:error?.message||String(error)}]}; console.error('Security S3 Local Vault fixture rejected.',error); window.securityS3LocalVaultFixturePromise=Promise.resolve(securityResult); collect(securityResult); }
     }
     if (selftest === 'design' || selftest === 'designs' || selftest === 'all') collect(runDesignGeometryFixtures());
       return {selftest,completed:true,failed};
