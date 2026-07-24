@@ -8155,20 +8155,68 @@
         <div id="projectViewResults">${state.projectViewMode === 'browse' ? projectBrowserResultsHtml(filtered) : projectManageResultsHtml(filtered)}</div>
       `;
     }
+    function inventoryRawSearchHaystack(item, size = parseInventorySizeMetadata(item)) {
+      const displayLabel = size?.displayLabel || '';
+      return [item?.name, item?.category, item?.unit, item?.supplier, item?.notes, item?.aliases, ...tagsOf(item), ...aliasesOf(item), displayLabel, displayLabel.replace(/\s+/g, '')].join(' ').toLowerCase();
+    }
+    function inventoryRawMatchesSearch(item, query, size = parseInventorySizeMetadata(item)) {
+      const q = String(query || '').toLowerCase();
+      return !q || inventoryRawSearchHaystack(item, size).includes(q);
+    }
+    function sortRawMaterialsByMode(items, sort) {
+      const rows = (items || []).map(item => ({ item, size: parseInventorySizeMetadata(item) }));
+      rows.sort((a, b) => {
+        if (sort === 'thickness-asc') {
+          const aParsed = a.size.thicknessConfidence && Number.isFinite(a.size.thicknessValue);
+          const bParsed = b.size.thicknessConfidence && Number.isFinite(b.size.thicknessValue);
+          if (aParsed !== bParsed) return aParsed ? -1 : 1;
+          if (aParsed && a.size.thicknessValue !== b.size.thicknessValue) return a.size.thicknessValue - b.size.thicknessValue;
+          return compareText(a.item.name, b.item.name);
+        }
+        if (sort === 'name-asc') return compareText(a.item.name, b.item.name);
+        if (sort === 'category-asc') return compareText(a.item.category, b.item.category) || compareText(a.item.name, b.item.name);
+        if (sort === 'value-desc') return inventoryValue(b.item) - inventoryValue(a.item) || compareText(a.item.name, b.item.name);
+        if (sort === 'quantity-asc') return num(a.item.quantityOnHand) - num(b.item.quantityOnHand) || compareText(a.item.name, b.item.name);
+        return rawIsLow(b.item) - rawIsLow(a.item) || compareText(a.item.name, b.item.name);
+      });
+      return rows.map(row => row.item);
+    }
+    function cleanupMaterialIdentity(value) {
+      return materialMatchKey(value).replace(/\bsheets?\b/g, '').replace(/\s+/g, ' ').trim();
+    }
+    function possibleRawMaterialCleanupGroups(items) {
+      const rows = (Array.isArray(items) ? items : []).map((item, index) => {
+        const size = parseInventorySizeMetadata(item);
+        return { item, index, nameKey: materialMatchKey(item?.name), identityKey: cleanupMaterialIdentity(item?.name), baseKey: cleanupMaterialIdentity(browserMaterialBaseName(item)), aliasKeys: aliasesOf(item).map(cleanupMaterialIdentity).filter(Boolean), size };
+      });
+      const parent = rows.map((_, index) => index);
+      const find = index => parent[index] === index ? index : (parent[index] = find(parent[index]));
+      const join = (left, right) => { const a = find(left), b = find(right); if (a !== b) parent[b] = a; };
+      const sameThickness = (left, right) => left.size.thicknessConfidence && right.size.thicknessConfidence
+        && Number.isFinite(left.size.thicknessValue) && Number.isFinite(right.size.thicknessValue)
+        && Math.abs(left.size.thicknessValue - right.size.thicknessValue) <= Number.EPSILON * Math.max(left.size.thicknessValue, right.size.thicknessValue, 1);
+      for (let left = 0; left < rows.length; left += 1) for (let right = left + 1; right < rows.length; right += 1) {
+        const a = rows[left], b = rows[right];
+        const equivalentNames = !!a.identityKey && a.identityKey === b.identityKey;
+        const exactNameAlias = !!a.identityKey && (b.aliasKeys.includes(a.identityKey) || a.aliasKeys.includes(b.identityKey));
+        const equivalentBaseAndThickness = !!a.baseKey && a.baseKey !== 'unnamed material' && a.baseKey === b.baseKey && sameThickness(a, b);
+        if (equivalentNames || exactNameAlias || equivalentBaseAndThickness) join(left, right);
+      }
+      const groups = new Map();
+      rows.forEach(row => { const root = find(row.index); if (!groups.has(root)) groups.set(root, []); groups.get(root).push(row.item); });
+      return [...groups.values()].filter(group => group.length > 1).map(group => group.sort((a, b) => compareText(a.name, b.name) || compareText(a.id, b.id))).sort((a, b) => compareText(a[0].name, b[0].name));
+    }
+    function possibleMaterialCleanupHtml(items) {
+      const groups = possibleRawMaterialCleanupGroups(items);
+      if (!groups.length) return '';
+      return `<details class="panel" style="margin-bottom:18px"><summary><b>Possible material cleanup</b> <span class="small muted">(${groups.length} group${groups.length === 1 ? '' : 's'})</span></summary><div class="small muted" style="margin-top:8px">These are suggestions only. Review composition, finish, dimensions, supplier, and notes before changing anything.</div>${groups.map(group => `<div class="small" style="margin-top:10px"><b>Possible match</b><div class="actions" style="margin-top:6px">${group.map(item => `<button type="button" data-edit-raw-material="${esc(item.id)}">${esc(item.name || 'Unnamed material')}</button>`).join('')}</div></div>`).join('')}</details>`;
+    }
     function filteredRawMaterials() {
       const inv = normalizeInventory(state.inventory);
-      const q = state.inventorySearch.toLowerCase();
-      return inv.rawMaterials.filter(item => {
+      return sortRawMaterialsByMode(inv.rawMaterials.filter(item => {
         const categoryOk = state.inventoryCategoryFilter === 'all' || item.category === state.inventoryCategoryFilter;
-        const hay = [item.name, item.category, item.unit, item.supplier, item.notes, item.aliases, ...tagsOf(item), ...aliasesOf(item)].join(' ').toLowerCase();
-        return categoryOk && (!q || hay.includes(q));
-      }).sort((a, b) => {
-        if (state.inventoryRawSort === 'name-asc') return compareText(a.name, b.name);
-        if (state.inventoryRawSort === 'category-asc') return compareText(a.category, b.category) || compareText(a.name, b.name);
-        if (state.inventoryRawSort === 'value-desc') return inventoryValue(b) - inventoryValue(a) || compareText(a.name, b.name);
-        if (state.inventoryRawSort === 'quantity-asc') return num(a.quantityOnHand) - num(b.quantityOnHand) || compareText(a.name, b.name);
-        return rawIsLow(b) - rawIsLow(a) || compareText(a.name, b.name);
-      });
+        return categoryOk && inventoryRawMatchesSearch(item, state.inventorySearch);
+      }), state.inventoryRawSort);
     }
     function filteredFinishedBatches() {
       const inv = normalizeInventory(state.inventory);
@@ -8186,8 +8234,9 @@
       });
     }
     function rawInventoryResultsHtml(inv, raw) {
+      const cleanup = possibleMaterialCleanupHtml(inv.rawMaterials);
       return inv.rawMaterials.length
-        ? (raw.length ? `<div class="grid cards" style="margin-bottom:18px">${raw.map(rawMaterialCard).join('')}</div>` : empty('No raw materials match', 'Adjust search or category filters.', [{ action: 'clear-inventory-raw-filters', label: 'Clear filters' }]))
+        ? `${cleanup}${raw.length ? `<div class="grid cards" style="margin-bottom:18px">${raw.map(rawMaterialCard).join('')}</div>` : empty('No raw materials match', 'Adjust search or category filters.', [{ action: 'clear-inventory-raw-filters', label: 'Clear filters' }])}`
         : empty('No raw materials yet', 'Add sheets, slate, blanks, hardware, packaging, and other shop supplies.', [{ action: 'new-raw-material', label: 'Add raw material', primary: true }]);
     }
     function finishedBatchResultsHtml(inv, batches) {
@@ -8280,7 +8329,7 @@
     function materialBrowserTestSummary(matches) { const profiles=(Array.isArray(matches)?matches:[matches]).filter(Boolean).map(x=>x.profile||x); const tests=profiles.flatMap(p=>normalizeMaterialTests(p.tests)); const valid=tests.filter(t=>/^\d{4}-\d{2}-\d{2}$/.test(t.date)); const latest=[...valid].sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(a.id).localeCompare(String(b.id)))[0]||null; return {profileCount:profiles.length,profilesWithTests:profiles.filter(p=>normalizeMaterialTests(p.tests).length).length,totalTests:tests.length,recommendedCount:tests.filter(t=>t.status==='recommended').length,experimentalCount:tests.filter(t=>t.status==='experimental').length,latestTest:latest,latestTestDate:latest?.date||'',highestConfidence:tests.reduce((n,t)=>Math.max(n,num(t.confidence)),0),hasRecommendedTest:tests.some(t=>t.status==='recommended'),hasPrimaryWithoutTests:profiles.some(p=>!normalizeMaterialTests(p.tests).length&&(p.speed!==''||p.minPower!==''||p.maxPower!==''))}; }
     function materialBrowserTreeHtml(tree) { const branch=(obj, level=0) => Object.entries(obj).map(([key,node]) => { const nodeKey=`${level}:${key}`; const open=inventoryBrowserExpanded.has(nodeKey); const children=level===0?node.bases:level===1?node.sizes:null; if(children) return `<details data-browser-node="${esc(nodeKey)}" ${open?'open':''}><summary>${esc(node.label)} <span class="small muted">(${Object.values(children).reduce((n,x)=>n+(x.items?x.items.length:Object.values(x.sizes).reduce((m,s)=>m+s.items.length,0)),0)})</span></summary>${branch(children,level+1)}</details>`; return `<details data-browser-node="${esc(nodeKey)}" ${open?'open':''}><summary>${esc(node.label)} <span class="small muted">(${node.items.length})</span></summary>${node.items.map(x=>`<button type="button" class="browser-leaf ${x.id===inventoryBrowserSelectedId?'primary':''}" data-browser-item="${esc(x.id)}">${esc(x.item.name)} <span class="small muted">${esc(rawStockStatus(x.item).text)}</span></button>`).join('')}</details>`; }).join(''); return branch(tree); }
     function inventoryBrowseHtml(inv) { return `<div class="toolbar" style="margin-bottom:12px"><div class="row" style="flex:1"><input id="inventorySearch" placeholder="Search materials..." value="${esc(state.inventorySearch)}" style="min-width:230px;flex:1"><label class="row small"><input id="inventoryInStockOnly" type="checkbox" ${inventoryBrowserInStockOnly?'checked':''} style="width:auto"> In stock only</label></div><button class="primary" id="newRawMaterial">New raw material</button></div><div id="inventoryBrowserResults">${materialBrowserResultsHtml(inv)}</div>`; }
-    function inventoryManageHtml(inv,raw) { return `<div class="toolbar" style="margin-bottom:14px"><div class="row" style="flex:1"><input id="inventorySearch" placeholder="Search inventory, supplier, notes, tags..." value="${esc(state.inventorySearch)}" style="min-width:230px;flex:1"><select id="inventoryCategoryFilter"><option value="all">All material categories</option>${rawMaterialCategories.map(c=>`<option value="${esc(c)}" ${state.inventoryCategoryFilter===c?'selected':''}>${esc(c)}</option>`).join('')}</select><select id="inventoryRawSort">${['low-stock','name-asc','category-asc','quantity-asc','value-desc'].map(s=>`<option value="${s}" ${state.inventoryRawSort===s?'selected':''}>Raw: ${s}</option>`).join('')}</select></div><button class="primary" id="newRawMaterial">New raw material</button></div><div id="inventoryRawResults">${rawInventoryResultsHtml(inv,raw)}</div>`; }
+    function inventoryManageHtml(inv,raw) { const sorts=[['low-stock','Raw: Low stock first'],['name-asc','Raw: Name A-Z'],['category-asc','Raw: Category A-Z'],['quantity-asc','Raw: Quantity low-high'],['value-desc','Raw: Value high-low'],['thickness-asc','Thickness: Thin to Thick']]; return `<div class="toolbar" style="margin-bottom:14px"><div class="row" style="flex:1"><input id="inventorySearch" placeholder="Search inventory, supplier, notes, tags..." value="${esc(state.inventorySearch)}" style="min-width:230px;flex:1"><select id="inventoryCategoryFilter"><option value="all">All material categories</option>${rawMaterialCategories.map(c=>`<option value="${esc(c)}" ${state.inventoryCategoryFilter===c?'selected':''}>${esc(c)}</option>`).join('')}</select><select id="inventoryRawSort">${sorts.map(([value,label])=>`<option value="${value}" ${state.inventoryRawSort===value?'selected':''}>${label}</option>`).join('')}</select></div><button class="primary" id="newRawMaterial">New raw material</button></div><div id="inventoryRawResults">${rawInventoryResultsHtml(inv,raw)}</div>`; }
     function refreshMaterialBrowserResults() { const box=document.getElementById('inventoryBrowserResults'); if(!box) return render(); const inv=normalizeInventory(state.inventory), all=inv.rawMaterials.map(enrichInventoryBrowserItem), visible=filterInventoryBrowserItems(all,state.inventorySearch,inventoryBrowserInStockOnly), count=document.getElementById('inventoryRawShownCount'); if(count) count.textContent=`${visible.length}/${inv.rawMaterials.length} raw`; box.innerHTML=materialBrowserResultsHtml(inv); bindMaterialBrowserActions(box); }
     function materialBrowserDetailHtml(selected, hidden) {
       if (!selected) return `<div class="panel"><b>Select a material</b><div class="small muted">Select a material to see stock, settings, tests, and related projects.</div></div>`;
@@ -13349,6 +13398,141 @@
       return { passed, failed, results: all };
     }
     window.runMaterialBrowserFixtures = runMaterialBrowserCorrectionFixtures;
+    function runInventoryOrganizationFixtures() {
+      const fixture = (name, pass) => ({ name, pass: !!pass });
+      const sortable = [
+        { id: 'six', name: 'Zulu 6mm', quantityOnHand: 4 },
+        { id: 'unspecified-z', name: 'Zulu blank', quantityOnHand: 2 },
+        { id: 'three-b', name: 'Beta 3 mm / 1/8 in', quantityOnHand: 3 },
+        { id: 'one-half', name: 'Alpha 1.5mm', quantityOnHand: 1 },
+        { id: 'three-a', name: 'Alpha 3mm', quantityOnHand: 8 },
+        { id: 'unspecified-a', name: 'Alpha blank', quantityOnHand: 0 },
+        { id: 'ambiguous', name: 'Variable 3-6 mm', quantityOnHand: 5 }
+      ];
+      const thicknessSorted = sortRawMaterialsByMode(sortable, 'thickness-asc');
+      const byId = id => thicknessSorted.findIndex(item => item.id === id);
+      const cleanupItems = [
+        { id: 'case-a', name: 'Baltic-Birch 3mm', aliases: '' },
+        { id: 'case-b', name: 'baltic birch 3 mm', aliases: '' },
+        { id: 'sheet-a', name: 'Walnut sheet', aliases: '' },
+        { id: 'sheet-b', name: 'walnut sheets', aliases: '' },
+        { id: 'alias-a', name: 'Cherry veneer', aliases: 'cherry face' },
+        { id: 'alias-b', name: 'Cherry face', aliases: '' },
+        { id: 'base-a', name: 'Maple 3mm', aliases: '' },
+        { id: 'base-b', name: 'maple 3 mm', aliases: '' },
+        { id: 'short-a', name: 'Birch', aliases: '' },
+        { id: 'short-b', name: 'Birch plywood', aliases: '' },
+        { id: 'finish-a', name: 'Walnut 3mm unfinished', aliases: '' },
+        { id: 'finish-b', name: 'Walnut 3mm finished', aliases: '' },
+        { id: 'composition-a', name: 'Birch plywood 3mm', aliases: '' },
+        { id: 'composition-b', name: 'Birch MDF 3mm', aliases: '' },
+        { id: 'color-a', name: 'Black cast acrylic 3mm', aliases: '' },
+        { id: 'color-b', name: 'Clear cast acrylic 3mm', aliases: '' }
+      ];
+      const cleanupBefore = JSON.stringify(cleanupItems);
+      const cleanupGroups = possibleRawMaterialCleanupGroups(cleanupItems);
+      const groupHas = (...ids) => cleanupGroups.some(group => ids.every(id => group.some(item => item.id === id)));
+      const referenceItem = { id: 'reference-raw', name: 'Baltic birch 3mm', aliases: 'birch ply' };
+      const referenceProfiles = [
+        { id: 'profile-name', material: 'Baltic birch 3mm', productionSettings: [{ id: 'setting-one', materialCondition: { inventoryItemId: 'reference-raw', inventoryItemName: 'Baltic birch 3mm' } }, { id: 'setting-two', materialCondition: { inventoryItemId: 'reference-raw', inventoryItemName: 'Baltic birch 3mm' } }] },
+        { id: 'profile-alias', material: 'birch ply', productionSettings: [] }
+      ];
+      const referenceProjects = [
+        { id: 'project-name', name: 'Name project', material: 'Baltic birch 3mm', materialLines: [] },
+        { id: 'project-alias', name: 'Alias project', material: 'birch ply', materialLines: [{ id: 'line', name: 'Baltic birch 3mm' }] },
+        { id: 'project-other', name: 'Other project', material: 'Walnut', materialLines: [] }
+      ];
+      const references = rawMaterialReferenceSummary(referenceItem, referenceProfiles, referenceProjects);
+      const referencedWarning = rawMaterialDeleteWarning(referenceItem, references);
+      const noReferenceWarning = rawMaterialDeleteWarning({ id: 'none', name: 'Unlinked blank' }, { libraryProfiles: 0, projects: 0, productionSettings: 0 });
+      const legacy = normalizeRawMaterial({ id: 'legacy', name: 'Legacy unknown', category: 'special stock', customField: 'kept' }, 'legacy');
+      const reloaded = liveStateFromData({ inventoryRawSort: 'thickness-asc', inventory: { rawMaterials: [legacy], finishedBatches: [{ id: 'batch', itemName: 'Batch' }] } });
+      const importState = JSON.parse(JSON.stringify(state));
+      let importRetentionPassed = false;
+      try {
+        const imported = { schemaVersion: SCHEMA_VERSION, entries: [], profiles: [], grids: [], projects: [], inventory: { rawMaterials: [{ id: 'import-raw', name: 'Imported raw', customField: 'kept' }], finishedBatches: [{ id: 'import-batch', itemName: 'Imported batch' }] }, inventoryRawSort: 'thickness-asc' };
+        state.inventory = { rawMaterials: [{ id: 'current-raw', name: 'Current raw' }], finishedBatches: [{ id: 'current-batch', itemName: 'Current batch' }] };
+        mergeData(imported);
+        const merged = state.inventory.rawMaterials.some(item => item.id === 'current-raw') && state.inventory.rawMaterials.some(item => item.id === 'import-raw') && state.inventory.finishedBatches.some(item => item.id === 'current-batch') && state.inventory.finishedBatches.some(item => item.id === 'import-batch');
+        replaceData(imported);
+        const replaced = state.inventory.rawMaterials.length === 1 && state.inventory.rawMaterials[0].customField === 'kept' && state.inventory.finishedBatches.length === 1 && state.inventory.finishedBatches[0].id === 'import-batch';
+        importRetentionPassed = merged && replaced;
+      } finally {
+        Object.keys(state).forEach(key => { if (!Object.prototype.hasOwnProperty.call(importState, key)) delete state[key]; });
+        Object.assign(state, importState);
+      }
+      const original = { inventory: state.inventory, profiles: state.profiles, projects: state.projects, inventoryRawSort: state.inventoryRawSort, activeTab: state.activeTab, pendingUndo, storageRaw: localStorage.getItem(STORAGE_KEY), confirm: window.confirm };
+      let deletionPassed = false, undoPassed = false, danglingPassed = false, savedRecordsUnchanged = false;
+      try {
+        const linkedSetting = referenceProfiles[0].productionSettings[0];
+        const projectsBefore = JSON.stringify(referenceProjects), profilesBefore = JSON.stringify(referenceProfiles), removedBefore = JSON.stringify(referenceItem);
+        state.inventory = { rawMaterials: [referenceItem, { id: 'other-raw', name: 'Other raw material' }], finishedBatches: [{ id: 'batch', itemName: 'Kept batch' }] };
+        state.profiles = referenceProfiles;
+        state.projects = referenceProjects;
+        state.inventoryRawSort = 'thickness-asc';
+        window.confirm = () => true;
+        delInventory('rawMaterials', referenceItem.id, 'Delete this raw material?', 'Raw material');
+        deletionPassed = state.inventory.rawMaterials.length === 1 && pendingUndo?.item && JSON.stringify(pendingUndo.item) === removedBefore;
+        danglingPassed = productionInventoryLinkState(linkedSetting.materialCondition, state.inventory.rawMaterials).dangling && linkedSetting.materialCondition.inventoryItemName === 'Baltic birch 3mm';
+        savedRecordsUnchanged = JSON.stringify(referenceProjects) === projectsBefore && JSON.stringify(referenceProfiles) === profilesBefore;
+        restoreDeletedItem();
+        undoPassed = JSON.stringify(state.inventory.rawMaterials[0]) === removedBefore && state.inventory.finishedBatches.length === 1;
+      } finally {
+        hideUndoToast();
+        state.inventory = original.inventory;
+        state.profiles = original.profiles;
+        state.projects = original.projects;
+        state.inventoryRawSort = original.inventoryRawSort;
+        state.activeTab = original.activeTab;
+        pendingUndo = original.pendingUndo;
+        window.confirm = original.confirm;
+        if (original.storageRaw === null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, original.storageRaw);
+        render();
+      }
+      const results = [
+        fixture('Thickness sort orders 1.5, 3, and 6 mm', byId('one-half') < byId('three-a') && byId('three-a') < byId('six')),
+        fixture('Equivalent dual-unit thickness uses normalized metric order', byId('three-b') < byId('six')),
+        fixture('Equal thicknesses sort by name', byId('three-a') < byId('three-b')),
+        fixture('Unspecified and ambiguous thicknesses trail parsed values', byId('six') < byId('unspecified-a') && byId('six') < byId('ambiguous')),
+        fixture('Unspecified thicknesses sort by name', byId('unspecified-a') < byId('unspecified-z')),
+        fixture('Existing name sort remains unchanged', sortRawMaterialsByMode(sortable, 'name-asc').map(item => item.name).join('|') === [...sortable].sort((a, b) => compareText(a.name, b.name)).map(item => item.name).join('|')),
+        fixture('Existing raw fields remain searchable', inventoryRawMatchesSearch({ name: 'Cork blank', category: 'sheet', unit: 'each', supplier: 'North', notes: 'coaster stock', aliases: 'round', tags: ['craft'] }, 'coaster')),
+        fixture('Derived size label is searchable', inventoryRawMatchesSearch({ name: 'Metric panel 3mm', aliases: '' }, '3 mm')),
+        fixture('Compact thickness formatting is searchable', inventoryRawMatchesSearch({ name: 'Metric panel 3 mm', aliases: '' }, '3mm')),
+        fixture('Ambiguous size is not numeric', !parseInventorySizeMetadata({ name: 'Variable 3-6 mm' }).thicknessConfidence),
+        fixture('Case, spacing, and punctuation candidates are grouped', groupHas('case-a', 'case-b')),
+        fixture('Sheet and sheets candidates are grouped', groupHas('sheet-a', 'sheet-b')),
+        fixture('Exact name-to-alias candidates are grouped', groupHas('alias-a', 'alias-b')),
+        fixture('Same normalized base and thickness candidates are grouped', groupHas('base-a', 'base-b')),
+        fixture('Short substring overlap is not grouped', !groupHas('short-a', 'short-b')),
+        fixture('Different finishes are not grouped', !groupHas('finish-a', 'finish-b')),
+        fixture('Different compositions are not grouped', !groupHas('composition-a', 'composition-b')),
+        fixture('Different colors are not grouped', !groupHas('color-a', 'color-b')),
+        fixture('Cleanup suggestions do not mutate records', JSON.stringify(cleanupItems) === cleanupBefore),
+        fixture('Empty and singleton cleanup inputs have no groups', possibleRawMaterialCleanupGroups([]).length === 0 && possibleRawMaterialCleanupGroups([cleanupItems[0]]).length === 0),
+        fixture('Cleanup panel is native and collapsed by default', possibleMaterialCleanupHtml(cleanupItems).includes('<details') && !possibleMaterialCleanupHtml(cleanupItems).includes('<details class="panel" open') && possibleMaterialCleanupHtml(cleanupItems).includes('data-edit-raw-material')),
+        fixture('Cleanup panel hides without candidates', possibleMaterialCleanupHtml([{ id: 'only', name: 'Only material' }]) === ''),
+        fixture('Library references count distinctly', references.libraryProfiles === 2),
+        fixture('Project references count distinctly', references.projects === 2),
+        fixture('Exact production-setting links count distinctly', references.productionSettings === 2),
+        fixture('Unreferenced deletion warning remains concise', noReferenceWarning === 'Delete this raw material?'),
+        fixture('Referenced deletion warning preserves record boundaries', referencedWarning.includes('will not modify those saved records') && referencedWarning.includes('Name-based suggestions may stop matching') && referencedWarning.includes('frozen last-known material information')),
+        fixture('Raw-material delete succeeds after confirmation', deletionPassed),
+        fixture('Raw-material undo restores the exact record', undoPassed),
+        fixture('Deleted production link becomes dangling with frozen name', danglingPassed),
+        fixture('Delete leaves Library and Projects byte-identical', savedRecordsUnchanged),
+        fixture('Legacy raw fields and unknown categories remain compatible', legacy.customField === 'kept' && categoryDisplayLabel(legacy.category) === 'Special Stock' && !parseInventorySizeMetadata(legacy).thicknessConfidence),
+        fixture('Thickness sort preference survives reload', reloaded.inventoryRawSort === 'thickness-asc'),
+        fixture('Reload preserves raw and finished Inventory records', reloaded.inventory.rawMaterials[0].customField === 'kept' && reloaded.inventory.finishedBatches[0].id === 'batch'),
+        fixture('Merge and Replace preserve Inventory records', importRetentionPassed),
+        fixture('Derived organization is identical for disposable in-memory copies', JSON.stringify(possibleRawMaterialCleanupGroups(cleanupItems)) === JSON.stringify(possibleRawMaterialCleanupGroups(JSON.parse(JSON.stringify(cleanupItems)))))
+      ];
+      const all = runMaterialBrowserCorrectionFixtures().results.concat(results);
+      const passed = all.filter(result => result.pass).length, failed = all.length - passed;
+      console.group('Material browser fixtures'); console.table(all); console.log(`${passed} passed`); console.log(`${failed} failed`); console.groupEnd();
+      return { passed, failed, results: all };
+    }
+    window.runMaterialBrowserFixtures = runInventoryOrganizationFixtures;
     function runLibraryBrowserFixtures() {
       const fixture = (name, pass, actual = '') => ({ name, pass: !!pass, actual });
       const profiles = [
@@ -14486,16 +14670,41 @@
       render();
       showUndoToast(label);
     }
+    function rawMaterialReferenceSummary(item, profiles = state.profiles, projects = state.projects) {
+      const libraryMatches = libraryProfilesForInventory(item, profiles);
+      const projectMatches = projectsForInventory(item, projects, libraryMatches);
+      const productionSettingKeys = new Set();
+      (profiles || []).forEach((profile, profileIndex) => normalizeProductionSettings(profile?.productionSettings).forEach((setting, settingIndex) => {
+        if (setting?.materialCondition?.inventoryItemId === item?.id) productionSettingKeys.add(`${profile?.id || profileIndex}:${setting?.id || settingIndex}`);
+      }));
+      return {
+        libraryProfiles: new Set(libraryMatches.map(match => match?.profile?.id).filter(Boolean)).size,
+        projects: new Set(projectMatches.map(match => match?.project?.id).filter(Boolean)).size,
+        productionSettings: productionSettingKeys.size
+      };
+    }
+    function rawMaterialDeleteWarning(item, summary = rawMaterialReferenceSummary(item)) {
+      const parts = [
+        summary.libraryProfiles ? `${summary.libraryProfiles} Library profile${summary.libraryProfiles === 1 ? '' : 's'}` : '',
+        summary.projects ? `${summary.projects} Project${summary.projects === 1 ? '' : 's'}` : '',
+        summary.productionSettings ? `${summary.productionSettings} Library production setting${summary.productionSettings === 1 ? '' : 's'}` : ''
+      ].filter(Boolean);
+      if (!parts.length) return 'Delete this raw material?';
+      const productionNote = summary.productionSettings ? ' Exact production-setting links will become unavailable while retaining their frozen last-known material information.' : '';
+      return `Delete "${item?.name || 'this raw material'}"? It currently matches ${parts.join(', ')}. Deleting this Inventory item will not modify those saved records. Name-based suggestions may stop matching.${productionNote}`;
+    }
     function delInventory(kind, id, message, label = 'Inventory item') {
-      if (!confirm(`${message} You can undo for a few seconds.`)) return;
-      hideUndoToast();
       const list = inventoryList(kind);
       const index = list.findIndex(x => x.id === id);
+      const item = index >= 0 ? list[index] : null;
+      const confirmation = kind === 'rawMaterials' && item ? rawMaterialDeleteWarning(item) : message;
+      if (!confirm(`${confirmation} You can undo for a few seconds.`)) return;
+      hideUndoToast();
       if (index < 0) return;
-      const [item] = list.splice(index, 1);
-      pendingUndo = { key: 'inventory', inventoryKind: kind, index, item, label };
+      const [removed] = list.splice(index, 1);
+      pendingUndo = { key: 'inventory', inventoryKind: kind, index, item: removed, label };
       if (!persist()) {
-        list.splice(index, 0, item);
+        list.splice(index, 0, removed);
         pendingUndo = null;
         render();
         return;
